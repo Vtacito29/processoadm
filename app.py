@@ -3515,6 +3515,12 @@ def aplicar_filtro_devolvidos_gabinete(consulta):
     )
 
 
+def aplicar_filtro_somente_devolvidos_gabinete(consulta):
+    """Mantem apenas processos marcados como devolvidos ao gabinete."""
+    dados_extra_txt = func.lower(cast(Processo.dados_extra, db.Text))
+    return consulta.filter(dados_extra_txt.like('%"devolvido_gabinete"%true%'))
+
+
 def obter_contagens_por_gerencia():
     """Calcula quantidade de processos ativos por gerencia."""
     contagens = {ger: 0 for ger in GERENCIAS}
@@ -4850,23 +4856,20 @@ def gerencia(nome_gerencia):
             Processo.gerencia == gerencia_alvo, Processo.finalizado_em.isnot(None)
         )
         if gerencia_alvo == "GABINETE":
-            consulta_finalizados = consulta_finalizados.filter(
-                or_(flag_devolvido.is_(None), flag_devolvido == 0)
-            )
+            consulta_finalizados = aplicar_filtro_devolvidos_gabinete(consulta_finalizados)
         consulta_finalizados = aplicar_filtros_processo(consulta_finalizados)
         finalizados = (
             consulta_finalizados.order_by(Processo.finalizado_em.desc()).limit(50).all()
         )
         if pode_ver_devolvidos:
-            devolvidos = (
-                Processo.query.filter(
-                    Processo.gerencia == "GABINETE",
-                    Processo.finalizado_em.is_(None),
-                    flag_devolvido == 1,
-                )
-                .order_by(Processo.atualizado_em.desc())
-                .all()
+            consulta_devolvidos = Processo.query.filter(
+                Processo.gerencia == "GABINETE",
+                Processo.finalizado_em.is_(None),
             )
+            consulta_devolvidos = aplicar_filtro_somente_devolvidos_gabinete(
+                consulta_devolvidos
+            )
+            devolvidos = consulta_devolvidos.order_by(Processo.atualizado_em.desc()).all()
             total_devolvidos = len(devolvidos)
         # Inclui processos finalizados nesta gerencia e tramitados para outra.
         if gerencia_alvo != "SAIDA":
