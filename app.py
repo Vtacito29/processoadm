@@ -66,7 +66,7 @@ IMPORT_CACHE_DIR = os.path.join(BASE_DIR, "tmp_imports")
 IMPORT_CACHE_TTL_MIN = 90
 IMPORT_CACHE: Dict[str, Dict[str, object]] = {}
 OPENPYXL_MIN_VERSION = "3.1.5"
-MAX_IMPORT_FILE_SIZE_MB = 12
+MAX_IMPORT_FILE_SIZE_MB = 50
 IMPORT_COMMIT_BATCH_DEFAULT = 250
 
 
@@ -1049,13 +1049,13 @@ def usuario_eh_admin_principal(usuario: Optional["Usuario"] = None) -> bool:
 
 
 def usuario_pode_conceder_acesso_total(usuario: Optional["Usuario"] = None) -> bool:
-    """Somente o admin principal pode conceder acesso total."""
-    return usuario_eh_admin_principal(usuario)
+    """Permite conceder acesso total para admin principal e acesso total."""
+    return usuario_tem_acesso_total(usuario) or usuario_eh_admin_principal(usuario)
 
 
 def usuario_pode_excluir_usuarios(usuario: Optional["Usuario"] = None) -> bool:
-    """Somente o admin principal pode excluir usuarios."""
-    return usuario_eh_admin_principal(usuario)
+    """Permite excluir usuarios para admin principal e acesso total."""
+    return usuario_tem_acesso_total(usuario) or usuario_eh_admin_principal(usuario)
 
 
 def usuario_pode_editar_gerencia(
@@ -1149,6 +1149,8 @@ def usuario_pode_cadastrar_usuarios(usuario: Optional["Usuario"] = None) -> bool
     usuario_ref = usuario or current_user
     if not usuario_ref or not getattr(usuario_ref, "is_authenticated", False):
         return False
+    if usuario_tem_acesso_total(usuario_ref):
+        return True
     if usuario_eh_admin_principal(usuario_ref):
         return True
     return bool(
@@ -1186,6 +1188,8 @@ def perfis_disponiveis_para_usuario(
         return [
             ("usuario", labels["usuario"]),
             ("gerente", labels["gerente"]),
+            ("admin", labels["admin"]),
+            ("acesso_total", labels["acesso_total"]),
         ]
     if getattr(usuario_ref, "is_gerente", False):
         return [("usuario", labels["usuario"])]
@@ -1906,7 +1910,10 @@ def login():
             if usuario.id == current_user.id:
                 flash("Nao e permitido editar o proprio usuario nesta tela.", "warning")
                 return redirect(url_for("login", form_action="register"))
-            if normalizar_chave(usuario.username or "") == normalizar_chave(DEFAULT_ADMIN_USER or ""):
+            if (
+                normalizar_chave(usuario.username or "") == normalizar_chave(DEFAULT_ADMIN_USER or "")
+                and not usuario_tem_acesso_total(current_user)
+            ):
                 flash("Nao e permitido editar o administrador principal por esta tela.", "warning")
                 return redirect(url_for("login", form_action="register"))
 
@@ -2035,7 +2042,10 @@ def excluir_usuario(usuario_id: int):
     if usuario.id == current_user.id:
         flash("Voce nao pode excluir o proprio usuario.", "warning")
         return redirect(url_for("login", form_action="register"))
-    if normalizar_chave(usuario.username or "") == normalizar_chave(DEFAULT_ADMIN_USER or ""):
+    if (
+        normalizar_chave(usuario.username or "") == normalizar_chave(DEFAULT_ADMIN_USER or "")
+        and not usuario_tem_acesso_total(current_user)
+    ):
         flash("Nao e permitido excluir o admin principal.", "warning")
         return redirect(url_for("login", form_action="register"))
 
@@ -4968,6 +4978,22 @@ def gerencia(nome_gerencia):
             processo.dados_extra = _normalizar_dados_extra(getattr(processo, "dados_extra", None))
 
     historico_finalizados = {}
+
+    def _normalizar_texto_historico(texto: Optional[str]) -> str:
+        return " ".join((texto or "").strip().lower().split())
+
+    def _prioridade_evento_historico(texto: Optional[str]) -> int:
+        texto_norm = _normalizar_texto_historico(texto)
+        if texto_norm.startswith("destino saida"):
+            return 40
+        if "processo encerrado em saida" in texto_norm:
+            return 30
+        if "demanda finalizada" in texto_norm:
+            return 20
+        if "demanda cadastrada" in texto_norm:
+            return 10
+        return 0
+
     for processo in finalizados:
         eventos = []
         gerencia_criacao = origens_saida.get(processo.id) or processo.gerencia
@@ -5030,6 +5056,33 @@ def gerencia(nome_gerencia):
                 eventos_ordenados.append(
                     {"quando": quando_destino, "texto": texto_destino}
                 )
+
+        eventos_unicos = []
+        vistos_eventos = set()
+        for evento in eventos_ordenados:
+            quando = evento.get("quando")
+            if isinstance(quando, datetime):
+                chave_quando = int(quando.timestamp())
+            else:
+                chave_quando = 0
+            chave_evento = (
+                _normalizar_texto_historico(evento.get("texto")),
+                chave_quando,
+            )
+            if chave_evento in vistos_eventos:
+                continue
+            vistos_eventos.add(chave_evento)
+            eventos_unicos.append(evento)
+
+        # Exibe historico do mais recente para o mais antigo.
+        eventos_ordenados = sorted(
+            eventos_unicos,
+            key=lambda e: (
+                e["quando"] or datetime.min,
+                _prioridade_evento_historico(e.get("texto")),
+            ),
+            reverse=True,
+        )
         historico_finalizados[processo.id] = eventos_ordenados
 
     snapshots_finalizados: Dict[int, Dict[str, object]] = {}

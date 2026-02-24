@@ -134,15 +134,25 @@
  <h2 class="h5 mb-1">Gerenciar usuários</h2>
  <p class="text-muted small">Edite dados, gerências e perfil de acesso. Excluir continua disponível nesta seção.</p>
  {% if usuarios_para_gerenciar %}
+ <div class="mb-3">
+ <label class="form-label small" for="filtro-usuarios">Pesquisar usuário</label>
+ <input
+ class="form-control form-control-sm"
+ type="text"
+ id="filtro-usuarios"
+ placeholder="Digite nome, usuário ou e-mail"
+ autocomplete="off"
+ >
+ </div>
  <div class="list-group list-group-flush">
  {% for usuario in usuarios_para_gerenciar %}
- <div class="list-group-item px-0">
+ <div
+ class="list-group-item px-0"
+ data-usuario-filtro="{{ (usuario.nome or usuario.username or '')|lower }} {{ (usuario.username or '')|lower }} {{ (usuario.email or '')|lower }}"
+ >
  <div class="d-flex justify-content-between align-items-start gap-2">
  <div class="small">
  <div class="fw-semibold">{{ usuario.nome or usuario.username }}</div>
- <div class="text-muted">{{ usuario.username }} - {{ usuario.email }}</div>
- <div class="text-muted">Perfil: {{ usuario.perfil }}</div>
- <div class="text-muted">Gerências: {{ usuario.gerencias|join(', ') if usuario.gerencias else '-' }}</div>
  </div>
  <div class="d-flex gap-2">
  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#editarUsuario{{ usuario.id }}" aria-expanded="false">Editar</button>
@@ -204,7 +214,42 @@
  </div>
  </div>
  {% endif %}
+
+ {% if current_user.is_authenticated and not pode_registrar %}
+ <div class="row justify-content-center">
+ <div class="col-md-8 col-lg-6">
+ <div class="card shadow-sm border-0">
+ <div class="card-body p-4 text-center">
+ <h2 class="h5 mb-2">Cadastro de usuários indisponível</h2>
+ <p class="text-muted mb-4">
+ Seu perfil não possui permissão para cadastrar ou gerenciar usuários.
+ </p>
+ <div class="d-flex justify-content-center gap-2 flex-wrap">
+ <a class="btn btn-primary" href="{{ url_for('index') }}">Voltar ao painel</a>
+ <a class="btn btn-outline-secondary" href="{{ url_for('perfil') }}">Meu perfil</a>
+ </div>
+ </div>
+ </div>
+ </div>
+ </div>
+ {% endif %}
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(() => {
+ const inputFiltro = document.getElementById("filtro-usuarios");
+ if (!inputFiltro) return;
+ const itens = Array.from(document.querySelectorAll("[data-usuario-filtro]"));
+ const aplicarFiltro = () => {
+ const termo = (inputFiltro.value || "").toLowerCase().trim();
+ itens.forEach((item) => {
+ const texto = (item.getAttribute("data-usuario-filtro") || "").toLowerCase();
+ const visivel = !termo || texto.includes(termo);
+ item.style.display = visivel ? "" : "none";
+ });
+ };
+ inputFiltro.addEventListener("input", aplicarFiltro);
+})();
+</script>
 </body>
 </html>

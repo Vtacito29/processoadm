@@ -1029,7 +1029,7 @@ const formatadorDataHoraBrasilia = new Intl.DateTimeFormat("pt-BR", {
  };
 
  const ehDestinoSaidaTexto = (texto) =>
- /^Destino SAIDA\b/i.test((texto || "").toString().trim());
+ /^(?:\[[^\]]+\]\s*)?Destino SAIDA\b/i.test((texto || "").toString().trim());
 
  const ehEncerramentoSaidaTexto = (texto) =>
  /processo\s+encerrado\s+em\s+SAIDA/i.test((texto || "").toString());
@@ -1044,6 +1044,13 @@ const prioridadeHistorico = (evento) => {
  if (/demanda\s+cadastrada/i.test(texto)) return 10;
  return 0;
  };
+
+const normalizarTextoHistorico = (texto) =>
+ (texto || "")
+ .toString()
+ .replace(/\s+/g, " ")
+ .trim()
+ .toLowerCase();
 
 const formatarDataHistorico = (evento) => {
  const texto = (evento?.texto || "").toString();
@@ -2072,7 +2079,7 @@ const eventos = [];
  const db = new Date(b.data || 0).getTime();
  return da - db;
  });
- const ordenados = filtrarPorDemanda
+const ordenados = filtrarPorDemanda
  ? ordenadosTodos.filter((mov) => {
  const numeroRef = normalizarSei(mov.numero_sei_ref || "");
  if (numeroRef && numeroRef !== numeroSeiDemanda) return false;
@@ -2085,6 +2092,10 @@ const eventos = [];
  return de === gerenciaDemandaSelecionada || para === gerenciaDemandaSelecionada;
  })
  : ordenadosTodos;
+ const ultimoTimestampMovimentacao = ordenados.reduce(
+ (max, mov) => Math.max(max, timestampEvento(mov?.data)),
+ 0,
+ );
  if (filtrarPorDemanda && !ordenados.length) {
  return [];
  }
@@ -2139,26 +2150,35 @@ texto: `Demanda finalizada em ${gerenciaDemanda} por ${processo.finalizado_por |
 });
 }
 if (!possuiEncerramentoSaidaMov && (demandaSelecionadaHistorico.finalizado_em || processo.finalizado_em)) {
+const baseEncerramento = Math.max(
+ timestampEvento(
+ demandaSelecionadaHistorico.finalizado_em
+ || demandaSelecionadaHistorico.data_saida
+ || processo.finalizado_em
+ || processo.data_saida
+ || demandaSelecionadaHistorico.data_entrada,
+ ),
+ ultimoTimestampMovimentacao,
+ );
 eventos.push({
 quando:
-demandaSelecionadaHistorico.finalizado_em
-|| demandaSelecionadaHistorico.data_saida
-|| processo.finalizado_em
-|| processo.data_saida,
+baseEncerramento || Date.now(),
 texto: `Processo encerrado em SAIDA por ${processo.finalizado_por || "usuario"}.`,
 });
 }
 if (destinoDemanda) {
-const baseDestino = timestampEvento(
-demandaSelecionadaHistorico.finalizado_em
-|| demandaSelecionadaHistorico.data_saida
-|| processo.finalizado_em
-|| processo.data_saida
-|| demandaSelecionadaHistorico.data_entrada
-|| Date.now(),
+const baseDestino = Math.max(
+ timestampEvento(
+ demandaSelecionadaHistorico.finalizado_em
+ || demandaSelecionadaHistorico.data_saida
+ || processo.finalizado_em
+ || processo.data_saida
+ || demandaSelecionadaHistorico.data_entrada,
+ ),
+ ultimoTimestampMovimentacao,
 );
 eventos.push({
-quando: baseDestino,
+quando: (baseDestino || Date.now()) + 1,
 texto: `Destino SAIDA (${gerenciaDemanda}): ${destinoDemanda}.`,
 });
 }
@@ -2268,10 +2288,14 @@ quandoDestino = baseDestino || Date.now();
 eventosOrdenados.push({ quando: quandoDestino, texto: textoDestino });
 }
 } else {
+const ultimoTsAtual = eventosOrdenados.reduce(
+ (max, ev) => Math.max(max, timestampEvento(ev.quando)),
+ 0,
+);
 destinosExtras.forEach((evDestino, idx) => {
 const baseTs = timestampEvento(evDestino.quando) || Date.now();
 const eventoDestino = {
-quando: baseTs,
+quando: Math.max(baseTs, ultimoTsAtual + idx + 1),
 texto: evDestino.texto,
 };
 const chaveDestino = `DEST::${evDestino.chaveDemanda || `${eventoDestino.quando}::${eventoDestino.texto}::${idx}`}`;
@@ -2283,7 +2307,17 @@ eventosOrdenados.push(eventoDestino);
 }
 }
 
-return [...eventosOrdenados].sort((a, b) => {
+const eventosUnicos = [];
+const vistosUnicos = new Set();
+for (const ev of eventosOrdenados) {
+ const ts = timestampEvento(ev?.quando);
+ const chave = `${normalizarTextoHistorico(ev?.texto)}::${Math.floor(ts / 1000)}`;
+ if (vistosUnicos.has(chave)) continue;
+ vistosUnicos.add(chave);
+ eventosUnicos.push(ev);
+}
+
+return [...eventosUnicos].sort((a, b) => {
  const diff = timestampEvento(b.quando) - timestampEvento(a.quando);
  if (diff !== 0) return diff;
  return prioridadeHistorico(b) - prioridadeHistorico(a);

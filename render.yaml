@@ -16,7 +16,7 @@ services:
       - key: RESET_DATABASE_ON_START
         value: "0"
       - key: MAX_IMPORT_FILE_SIZE_MB
-        value: "25"
+        value: "50"
       - key: DATABASE_URL
         fromDatabase:
           name: controle-de-processos-db
