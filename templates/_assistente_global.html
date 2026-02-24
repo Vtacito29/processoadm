@@ -1,0 +1,395 @@
+<style>
+.assistente-flutuante {
+ position: fixed;
+ bottom: 20px;
+ right: 20px;
+ z-index: 1200;
+ border-radius: 50%;
+ width: 56px;
+ height: 56px;
+ display: inline-flex;
+ align-items: center;
+ justify-content: center;
+ box-shadow: 0 12px 30px -10px rgba(15, 23, 42, 0.4);
+ border: 1px solid rgba(15, 23, 42, 0.08);
+}
+.assistente-flutuante i {
+ font-size: 1.2rem;
+}
+.chat-panel {
+ background: #f8fafc;
+ border: 1px solid #e2e8f0;
+ border-radius: 12px;
+ padding: 12px;
+ overflow-y: auto;
+ max-height: 60vh;
+}
+.chat-message {
+ display: flex;
+ margin-bottom: 10px;
+}
+.chat-message .chat-text {
+ padding: 10px 12px;
+ border-radius: 12px;
+ max-width: 100%;
+ background: #e2e8f0;
+ color: #0f172a;
+}
+.chat-message.user {
+ justify-content: flex-end;
+}
+.chat-message.user .chat-text {
+ background: #2563eb;
+ color: #fff;
+}
+.chat-message.bot .chat-text {
+ background: #e2e8f0;
+}
+.chat-form textarea {
+ resize: vertical;
+}
+.chat-text-actions {
+ display: flex;
+ flex-direction: column;
+ gap: 8px;
+}
+.chat-text-actions .chat-actions {
+ display: flex;
+ flex-wrap: wrap;
+ gap: 8px;
+}
+</style>
+
+<button class="btn btn-primary assistente-flutuante" type="button" data-bs-toggle="offcanvas" data-bs-target="#assistenteGlobal" aria-controls="assistenteGlobal" title="Assistente">
+ <i class="bi bi-robot"></i>
+</button>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="assistenteGlobal" aria-labelledby="assistenteGlobalLabel">
+ <div class="offcanvas-header">
+ <div>
+ <h5 class="offcanvas-title" id="assistenteGlobalLabel">Assistente</h5>
+ <p class="text-muted small mb-0">Converse sobre processos e sobre o sistema (dados locais, sem internet).</p>
+ </div>
+ <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
+ </div>
+ <div class="offcanvas-body d-flex flex-column gap-3">
+ <div id="assistenteChatGlobal" class="chat-panel flex-grow-1">
+
+
+    <div class="chat-message bot">
+ <div class="chat-text">Ol! Escreva sua pergunta. Se for sobre um processo espec?fico, informe o n?mero SEI.</div>
+ </div>
+ </div>
+ <form id="formAssistenteGlobal" class="chat-form">
+ <div class="mb-2">
+ <label class="form-label" id="labelNumeroSei">N?mero SEI</label>
+ <input class="form-control" name="numero" id="assistenteNumeroSei" placeholder="Informe o n?mero SEI se a pergunta for sobre um processo espec?fico">
+ <div class="form-text" id="hintNumeroSei">Opcional para perguntas gerais.</div>
+ </div>
+ <div class="mb-2">
+ <label class="form-label">Pergunta</label>
+ <textarea class="form-control" name="pergunta" id="assistentePergunta" rows="2" placeholder="Ex: Qual o prazo e quem est responsvel?"></textarea>
+ </div>
+ <button class="btn btn-primary w-100" type="submit">
+ <i class="bi bi-send"></i> Perguntar
+ </button>
+ </form>
+ </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+ const formAssistente = document.getElementById("formAssistenteGlobal");
+ const chat = document.getElementById("assistenteChatGlobal");
+ const inputNumero = document.getElementById("assistenteNumeroSei");
+ const inputPergunta = document.getElementById("assistentePergunta");
+ const labelNumero = document.getElementById("labelNumeroSei");
+ const hintNumero = document.getElementById("hintNumeroSei");
+ const offcanvasAssistente = document.getElementById("assistenteGlobal");
+ const mensagemInicial =
+ (chat &&
+ chat.querySelector(".chat-message.bot .chat-text") &&
+ chat.querySelector(".chat-message.bot .chat-text").textContent.trim()) ||
+ "Ola! Escreva sua pergunta. Se for sobre um processo especifico, informe o numero SEI.";
+
+ const INACTIVITY_MS = 5 * 60 * 1000;
+ let inatividadeTimer = null;
+ let promptInatividadeEl = null;
+ let offcanvasAberta = false;
+
+ const normalizarTexto = (valor) => {
+ return (valor || "")
+ .toString()
+ .trim()
+ .toLowerCase()
+ .normalize("NFD")
+ .replace(/[\u0300-\u036f]/g, "");
+ };
+
+ const padroesGerais = [
+ /\bquantos?\b/,
+ /\bquantidade\b/,
+ /\btotal\b/,
+ /\bpor\s+gerencia\b/,
+ /\bpor\s+equipe\b/,
+ /\bpor\s+coordenadoria\b/,
+ /\bpor\s+area\b/,
+ /\bpor\s+assunto\b/,
+ /\bpor\s+status\b/,
+ /\bprocessos\b/,
+ /\bgerencias\b/,
+ /\bmedia\b/,
+ /\btempo\s+medio\b/,
+ /\branking\b/,
+ /\blist(ar|a|agem)?\b/,
+ /\bestat\b/,
+ ];
+
+ const padroesEspecificos = [
+ /\bprocesso\b/,
+ /\bsei\b/,
+ /\bnumero\b/,
+ /\bprazo\b/,
+ /\bresponsavel\b/,
+ /\batribu/,
+ /\bstatus\b/,
+ /\bassunto\b/,
+ /\bfinaliz/,
+ /\bmoviment/,
+ /\bhistoric/,
+ /\bentrada\b/,
+ /\bconcessionaria\b/,
+ /\binteressado\b/,
+ ];
+ const padroesAjudaSite = [
+ /\bcomo\b/,
+ /\bonde\b/,
+ /\bmenu\b/,
+ /\bbotao\b/,
+ /\btela\b/,
+ /\bpagina\b/,
+ /\bajuda\b/,
+ /\bfunciona\b/,
+ /\blogin\b/,
+ /\bsenha\b/,
+ /\busuario\b/,
+ /\bpermiss/,
+ /\bperfil\b/,
+ /\bnovo processo\b/,
+ /\bcadastrar\b/,
+ /\bcriar processo\b/,
+ /\beditar\b/,
+ /\bvisualizar\b/,
+ /\batribuir\b/,
+ /\bfinalizar\b/,
+ /\bdevolver\b/,
+ /\breenviar\b/,
+ /\bexportar\b/,
+ /\bimportar\b/,
+ /\bhistoric/,
+ /\bverificar dados\b/,
+ /\bdashboard\b/,
+ /\binicio\b/,
+ /\bgerencia\b/,
+ /\bcampos?\s+extras?\b/,
+ /\bfiltro\b/,
+ /\bbuscar\b/,
+ /\bpesquisar\b/,
+ /\bassistente\b/,
+ /\bmeus processos\b/,
+ /\btempo\s+medio\b/,
+ ];
+
+ const perguntaEhGeral = (texto) => padroesGerais.some((padrao) => padrao.test(texto));
+ const perguntaEhEspecifica = (texto) =>
+ padroesEspecificos.some((padrao) => padrao.test(texto));
+ const perguntaEhAjudaSite = (texto) =>
+ padroesAjudaSite.some((padrao) => padrao.test(texto));
+
+ const perguntaExigeNumero = (pergunta) => {
+ const texto = normalizarTexto(pergunta);
+ if (!texto) return false;
+ if (perguntaEhAjudaSite(texto)) return false;
+ if (perguntaEhGeral(texto)) return false;
+ if (perguntaEhEspecifica(texto)) return true;
+ return false;
+ };
+
+ const atualizarObrigatoriedadeNumero = () => {
+ if (!inputNumero || !inputPergunta) return false;
+ const exigeNumero = perguntaExigeNumero(inputPergunta.value);
+ inputNumero.required = exigeNumero;
+ if (labelNumero) {
+ labelNumero.textContent = exigeNumero ? "Nmero SEI (obrigatrio)" : "Nmero SEI";
+ }
+ if (hintNumero) {
+ hintNumero.textContent = exigeNumero
+ ? "Obrigatrio para perguntas sobre um processo especfico."
+ : "Opcional para perguntas gerais.";
+ }
+ if (!exigeNumero) {
+ inputNumero.classList.remove("is-invalid");
+ }
+ return exigeNumero;
+ };
+
+ function appendMessage(role, text) {
+ if (!chat) return;
+ const wrapper = document.createElement("div");
+ wrapper.className = `chat-message ${role}`;
+ const bubble = document.createElement("div");
+ bubble.className = "chat-text";
+ bubble.textContent = text;
+ wrapper.appendChild(bubble);
+ chat.appendChild(wrapper);
+ chat.scrollTop = chat.scrollHeight;
+ }
+ const limparPromptInatividade = () => {
+ if (promptInatividadeEl) {
+ promptInatividadeEl.remove();
+ promptInatividadeEl = null;
+ }
+ };
+
+ const pararTimerInatividade = () => {
+ if (inatividadeTimer) {
+ clearTimeout(inatividadeTimer);
+ inatividadeTimer = null;
+ }
+ };
+
+ const iniciarTimerInatividade = () => {
+ if (!offcanvasAberta) return;
+ pararTimerInatividade();
+ inatividadeTimer = setTimeout(() => {
+ if (!offcanvasAberta) return;
+ if (promptInatividadeEl) return;
+ if (!chat) return;
+ const wrapper = document.createElement("div");
+ wrapper.className = "chat-message bot";
+ const bubble = document.createElement("div");
+ bubble.className = "chat-text chat-text-actions";
+ const texto = document.createElement("div");
+ texto.textContent =
+ "Voc ficou alguns minutos sem conversar. Encerrar chat ou continuar?";
+ const actions = document.createElement("div");
+ actions.className = "chat-actions";
+ const btnContinuar = document.createElement("button");
+ btnContinuar.type = "button";
+ btnContinuar.className = "btn btn-sm btn-outline-primary";
+ btnContinuar.textContent = "Continuar";
+ const btnEncerrar = document.createElement("button");
+ btnEncerrar.type = "button";
+ btnEncerrar.className = "btn btn-sm btn-outline-danger";
+ btnEncerrar.textContent = "Encerrar chat";
+ actions.appendChild(btnContinuar);
+ actions.appendChild(btnEncerrar);
+ bubble.appendChild(texto);
+ bubble.appendChild(actions);
+ wrapper.appendChild(bubble);
+ chat.appendChild(wrapper);
+ chat.scrollTop = chat.scrollHeight;
+ promptInatividadeEl = wrapper;
+
+ btnContinuar.addEventListener("click", () => {
+ limparPromptInatividade();
+ iniciarTimerInatividade();
+ if (inputPergunta) {
+ inputPergunta.focus();
+ }
+ });
+
+ btnEncerrar.addEventListener("click", () => {
+ limparPromptInatividade();
+ if (chat) {
+ chat.innerHTML = "";
+ appendMessage("bot", mensagemInicial);
+ }
+ if (inputPergunta) {
+ inputPergunta.value = "";
+ }
+ if (inputNumero) {
+ inputNumero.value = "";
+ inputNumero.classList.remove("is-invalid");
+ }
+ atualizarObrigatoriedadeNumero();
+ iniciarTimerInatividade();
+ });
+ }, INACTIVITY_MS);
+ };
+
+ const registrarAtividade = () => {
+ limparPromptInatividade();
+ iniciarTimerInatividade();
+ };
+ if (formAssistente && chat) {
+ formAssistente.addEventListener("submit", async function (ev) {
+ ev.preventDefault();
+ const dados = new FormData(formAssistente);
+ const pergunta = (dados.get("pergunta") || "").trim();
+ const numero = (dados.get("numero") || "").trim();
+ if (!pergunta) return;
+ const exigeNumero = atualizarObrigatoriedadeNumero();
+ if (exigeNumero && !numero) {
+ if (inputNumero) {
+ inputNumero.classList.add("is-invalid");
+ inputNumero.focus();
+ }
+ appendMessage("bot", "Para perguntas sobre um processo especfico, informe o nmero SEI.");
+ return;
+ }
+ registrarAtividade();
+ appendMessage("user", pergunta);
+ if (inputPergunta) {
+ inputPergunta.value = "";
+ }
+ atualizarObrigatoriedadeNumero();
+ appendMessage("bot", "Consultando dados locais...");
+ try {
+ const resp = await fetch("{{ url_for('assistente_responder') }}", {
+ method: "POST",
+ headers: { "Content-Type": "application/json" },
+ body: JSON.stringify({ pergunta, numero }),
+ });
+ const data = await resp.json();
+ const referencia = data.referencia ? ` (referencia: ${data.referencia})` : "";
+ appendMessage("bot", (data.resposta || "Sem resposta") + referencia);
+ registrarAtividade();
+ } catch (err) {
+ console.error(err);
+ registrarAtividade();
+ appendMessage("bot", "No foi possvel consultar agora.");
+ }
+ });
+ }
+ if (inputPergunta) {
+ inputPergunta.addEventListener("input", () => {
+ atualizarObrigatoriedadeNumero();
+ registrarAtividade();
+ });
+ }
+ if (inputNumero) {
+ inputNumero.addEventListener("input", () => {
+ inputNumero.classList.remove("is-invalid");
+ registrarAtividade();
+ });
+ }
+ if (offcanvasAssistente) {
+ offcanvasAssistente.addEventListener("shown.bs.offcanvas", () => {
+ offcanvasAberta = true;
+ registrarAtividade();
+ });
+ offcanvasAssistente.addEventListener("hidden.bs.offcanvas", () => {
+ offcanvasAberta = false;
+ limparPromptInatividade();
+ pararTimerInatividade();
+ });
+ }
+ atualizarObrigatoriedadeNumero();
+});
+</script>
+
+
+
+
+

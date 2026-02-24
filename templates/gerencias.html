@@ -1,0 +1,2812 @@
+﻿<!DOCTYPE html>
+
+
+<html lang="pt-br">
+
+
+<head>
+
+
+ <meta charset="UTF-8">
+
+
+ <title>Painel de Processos - {{ gerencia }}</title>
+
+
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+
+
+ <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+ <link href="{{ url_for('static', filename='css/global.css') }}" rel="stylesheet">
+
+
+ <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+
+
+ <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.4.11/dist/tailwind.min.css" rel="stylesheet">
+
+
+ <link href="{{ url_for('static', filename='css/gerencias.css') }}" rel="stylesheet">
+
+
+</head>
+
+
+<body>
+
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+
+
+ <div class="container-fluid">
+
+
+ <a class="navbar-brand" href="{{ url_for('index') }}">Controle de Processos</a>
+
+
+ <div class="d-flex ms-auto align-items-center gap-2">
+
+
+ <a class="btn btn-outline-light btn-sm" href="{{ url_for('index') }}">
+
+
+ <i class="bi bi-house"></i> Início
+
+
+ </a>
+
+
+ </div>
+
+
+ </div>
+
+
+</nav>
+
+
+
+
+
+<main class="container py-4">
+
+
+ {% set mensagens = get_flashed_messages(with_categories=True) %}
+
+
+ {% if mensagens %}
+
+
+ <div class="mb-3 js-flash-area">
+
+
+ {% for categoria, mensagem in mensagens %}
+
+
+ <div class="alert alert-{{ categoria }} alert-dismissible fade show">
+
+
+ {{ mensagem }}
+
+
+ <button class="btn-close" data-bs-dismiss="alert"></button>
+
+
+ </div>
+
+
+ {% endfor %}
+
+
+ </div>
+ <script>
+ document.addEventListener("DOMContentLoaded", function () {
+ const alerts = document.querySelectorAll(".js-flash-area .alert");
+ if (!alerts.length) return;
+ setTimeout(() => {
+ alerts.forEach((alertEl) => {
+ if (window.bootstrap && window.bootstrap.Alert) {
+ window.bootstrap.Alert.getOrCreateInstance(alertEl).close();
+ } else {
+ alertEl.remove();
+ }
+ });
+ }, 5000);
+ });
+ </script>
+
+
+ {% endif %}
+
+
+
+
+
+ <div class="panel-card">
+
+ {% set lista_coordenadorias = opcoes_coordenadorias|default([]) %}
+ {% set lista_equipes = opcoes_equipes|default([]) %}
+ {% set lista_responsaveis = opcoes_responsaveis|default([]) %}
+
+ <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-3">
+
+
+ <div>
+
+
+ <h1 class="h4 mb-1">Painel de Processos - {{ gerencia }}</h1>
+
+
+ <p class="text-muted mb-0">Visualize processos ativos e finalizados desta gerência.</p>
+
+
+ </div>
+
+
+ <div class="d-flex gap-2">
+
+ {% if current_user.is_authenticated %}
+
+
+ <button class="btn btn-outline-secondary btn-sm position-relative" type="button" data-bs-toggle="offcanvas" data-bs-target="#painelNotificacoes" aria-controls="painelNotificacoes">
+
+
+ <i class="bi bi-bell"></i>
+
+
+ {% if notificacoes_nao_lidas %}
+
+
+ <span id="badgeNotificacoes" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+
+
+ {{ notificacoes_nao_lidas }}
+
+
+ </span>
+
+
+ {% endif %}
+
+
+ </button>
+
+
+ {% endif %}
+
+ {% if pode_configurar_campos or pode_exportar_gerencia %}
+ <div class="dropdown">
+ <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+ <i class="bi bi-three-dots"></i>
+ </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+  {% if pode_configurar_campos %}
+  <li>
+  <a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('gerencia_campos', nome_gerencia=gerencia) }}">
+  <i class="bi bi-sliders"></i>
+  <span>Configurar campos extras</span>
+  </a>
+  </li>
+  {% endif %}
+  {% if pode_exportar_gerencia %}
+  <li>
+  <a class="dropdown-item d-flex align-items-center gap-2" href="#" data-bs-toggle="modal" data-bs-target="#modalExportacao">
+  <i class="bi bi-file-earmark-excel"></i>
+  <span>Exportar Excel</span>
+  </a>
+  </li>
+  {% endif %}
+  </ul>
+ </div>
+ {% endif %}
+
+ </div>
+
+
+ </div>
+
+
+ <ul class="nav nav-tabs panel-tabs mb-3" role="tablist">
+
+
+ <li class="nav-item" role="presentation">
+
+
+ <button class="nav-link{% if aba_ativa == 'interacoes' %} active{% endif %}" id="tab-interacoes" data-bs-toggle="tab" data-bs-target="#conteudo-interacoes" type="button" role="tab">
+
+
+ <i class="bi bi-chat-dots"></i> Interações (Ativos)
+
+
+ </button>
+
+
+ </li>
+
+
+ {% if gerencia != 'SAIDA' %}
+
+
+ <li class="nav-item" role="presentation">
+
+
+ <button class="nav-link{% if aba_ativa == 'arquivos' %} active{% endif %}" id="tab-arquivos" data-bs-toggle="tab" data-bs-target="#conteudo-arquivos" type="button" role="tab">
+
+
+ <i class="bi bi-archive"></i> Arquivos Recentes (Finalizados)
+
+
+ </button>
+
+
+ </li>
+
+
+ {% endif %}
+
+ {% if pode_ver_devolvidos %}
+ <li class="nav-item" role="presentation">
+ <button class="nav-link{% if aba_ativa == 'devolvidos' %} active{% endif %}" id="tab-devolvidos" data-bs-toggle="tab" data-bs-target="#conteudo-devolvidos" type="button" role="tab">
+ <i class="bi bi-arrow-counterclockwise"></i> Processos Devolvidos
+ <span class="badge rounded-pill text-bg-secondary ms-1">{{ total_devolvidos }}</span>
+ </button>
+ </li>
+ {% endif %}
+
+
+ </ul>
+
+
+
+
+
+ <div class="tab-content">
+
+
+ <div class="tab-pane fade{% if aba_ativa == 'interacoes' %} show active{% endif %}" id="conteudo-interacoes" role="tabpanel" aria-labelledby="tab-interacoes">
+
+
+ 
+ <form class="row g-3 align-items-end mb-3" method="get" autocomplete="off">
+ <input type="hidden" name="aba" value="interacoes">
+
+
+ <div class="col-12 col-md-6 col-lg-3">
+
+
+ <label class="form-label">Número SEI</label>
+
+
+ <input class="form-control" type="text" name="sei" value="{{ filtro_sei }}" placeholder="Buscar por número">
+
+
+ </div>
+
+
+ <div class="col-12 col-md-6 col-lg-3">
+
+
+ <label class="form-label">Coordenadoria</label>
+
+
+ <div class="select-search">
+ <input class="form-control" type="text" name="coordenadoria" value="{{ filtro_coordenadoria }}" placeholder="Buscar por coordenadoria" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-options-id="lista_filtro_coordenadoria">
+ <div class="select-dropdown" data-options-id="lista_filtro_coordenadoria"></div>
+ <datalist id="lista_filtro_coordenadoria">
+ {% if filtro_coordenadoria and filtro_coordenadoria not in lista_coordenadorias %}
+ <option value="{{ filtro_coordenadoria }}"></option>
+ {% endif %}
+ {% for opcao in lista_coordenadorias %}
+ <option value="{{ opcao }}"></option>
+ {% endfor %}
+ </datalist>
+ </div>
+
+
+ </div>
+
+
+ <div class="col-12 col-md-6 col-lg-3">
+
+
+ <label class="form-label">Equipe / area</label>
+
+
+ <div class="select-search">
+ <input class="form-control" type="text" name="equipe_area" value="{{ filtro_equipe_area }}" placeholder="Buscar por equipe ou area" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-options-id="lista_filtro_equipe">
+ <div class="select-dropdown" data-options-id="lista_filtro_equipe"></div>
+ <datalist id="lista_filtro_equipe">
+ {% if filtro_equipe_area and filtro_equipe_area not in lista_equipes %}
+ <option value="{{ filtro_equipe_area }}"></option>
+ {% endif %}
+ {% for opcao in lista_equipes %}
+ <option value="{{ opcao }}"></option>
+ {% endfor %}
+ </datalist>
+ </div>
+
+
+ </div>
+
+
+ <div class="col-12 col-md-6 col-lg-3">
+
+
+ <label class="form-label">Responsavel atribuido</label>
+
+
+ <div class="select-search">
+ <input class="form-control" type="text" name="responsavel_equipe" value="{{ filtro_responsavel_equipe }}" placeholder="Todos" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-options-id="lista_filtro_responsavel">
+ <div class="select-dropdown" data-options-id="lista_filtro_responsavel"></div>
+ <datalist id="lista_filtro_responsavel">
+ {% if filtro_responsavel_equipe and filtro_responsavel_equipe not in lista_responsaveis %}
+ <option value="{{ filtro_responsavel_equipe }}"></option>
+ {% endif %}
+ {% for opcao in lista_responsaveis %}
+ <option value="{{ opcao }}"></option>
+ {% endfor %}
+ </datalist>
+ </div>
+
+
+ </div>
+
+
+ <div class="col-12 col-md-3 col-lg-2 d-grid">
+
+
+ <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i> Buscar</button>
+
+
+ </div>
+
+
+ <div class="col-12 col-md-3 col-lg-2 d-grid">
+
+
+ <a class="btn btn-outline-secondary" href="{{ url_for('gerencia', nome_gerencia=gerencia, aba='interacoes') }}">Limpar</a>
+
+
+ </div>
+
+
+ </form>
+
+
+
+
+
+
+ <div class="table-responsive process-list-wrapper mb-3">
+
+
+ <table class="table process-table align-middle">
+
+
+ <thead>
+
+
+ <tr>
+
+
+ <th class="col-check"><div class="resizable">Ações</div></th>
+
+
+ <th><div class="resizable">Número SEI</div></th>
+
+
+ <th><div class="resizable">Data de entrada</div></th>
+
+
+
+
+ <th><div class="resizable">Interessado</div></th>
+
+
+ <th><div class="resizable">Concessionária</div></th>
+
+
+ <th><div class="resizable">{{ 'Gerencias envolvidas' if gerencia == 'SAIDA' else 'Gerencia' }}</div></th>
+
+
+ <th><div class="resizable">Assunto</div></th>
+
+
+ <th><div class="resizable">Status</div></th>
+
+
+ <th><div class="resizable">Prazo</div></th>
+
+
+ <th><div class="resizable">Responsável Adm</div></th>
+
+
+ <th><div class="resizable">Classificacao institucional</div></th>
+
+
+ {% if gerencia == 'SAIDA' %}
+
+
+ <th><div class="resizable">Data de entrada na gerência</div></th>
+
+
+ {% else %}
+
+
+ <th><div class="resizable">Data de entrada no GABINETE</div></th>
+
+
+ {% endif %}
+
+
+ <th><div class="resizable">Descrição melhorada</div></th>
+
+
+ <th><div class="resizable">Coordenadoria</div></th>
+
+
+ <th><div class="resizable">Equipe / Área</div></th>
+
+
+ <th><div class="resizable">Responsável (Equipe)</div></th>
+
+
+ <th><div class="resizable">Tipo de processo</div></th>
+
+
+ <th><div class="resizable">Palavras-chave</div></th>
+
+
+ <th><div class="resizable">Status (Equipe)</div></th>
+
+
+ <th><div class="resizable">Prazo equipe</div></th>
+
+
+ <th><div class="resizable">Observações complementares</div></th>
+
+
+ {% for campo in campos_extra %}
+
+
+ <th><div class="resizable">{{ campo.label }}</div></th>
+
+
+ {% endfor %}
+
+
+ </tr>
+
+ </thead>
+
+
+ <tbody>
+
+
+ {% for processo in processos %}
+ {% set snapshot = {} %}
+
+
+ {% set sufixo = (processo.dados_extra.sufixo if processo.dados_extra else '') or '' %}
+
+
+ {% set numero_display = processo.numero_sei_base ~ sufixo %}
+
+
+ {% set prazo_alerta = processo.prazo and processo.prazo <= hoje %}
+
+
+ <tr class="process-row" data-proc-id="{{ processo.id }}">
+
+
+ <td class="col-acoes">
+ <div class="action-quick icons-only">
+ {% if pode_editar_gerencia %}
+ {% if gerencia == 'SAIDA' %}
+ <a class="icon-btn neutral" href="{{ url_for('editar_processo', processo_id=processo.id, mostrar_ficha=1) }}#ficha-tecnica" title="Visualizar processo">
+ <i class="bi bi-eye"></i>
+ </a>
+ <a class="icon-btn success" href="{{ url_for('editar_processo', processo_id=processo.id) }}#acao-finalizar" title="Finalizar processo">
+ <i class="bi bi-check-circle"></i>
+ </a>
+ <a class="icon-btn warning" href="{{ url_for('editar_processo', processo_id=processo.id, acao='devolver') }}#acao-devolver" title="Devolver processo">
+ <i class="bi bi-arrow-return-left"></i>
+ </a>
+ {% else %}
+ <a class="icon-btn edit" href="{{ url_for('editar_processo', processo_id=processo.id) }}" title="Editar">
+ <i class="bi bi-pencil-square"></i>
+ </a>
+ <form class="action-item-form form-devolver-gabinete" method="post" action="{{ url_for('devolver_para_gabinete', processo_id=processo.id) }}">
+ <input type="hidden" name="motivo" value="">
+ <button class="icon-btn danger btn-devolver-gabinete" type="submit" data-número="{{ numero_display }}" aria-label="Devolver o processo {{ numero_display }} para a aba de devolvidos" title="Devolver para o Gabinete">
+ <i class="bi bi-arrow-counterclockwise"></i>
+ </button>
+ </form>
+ <button class="icon-btn neutral btn-atribuir" type="button" data-proc="{{ processo.id }}" data-número="{{ numero_display }}" data-assigned-name="{{ processo.responsavel_equipe or ((processo.assigned_to.nome or processo.assigned_to.username) if processo.assigned_to else '') }}" data-coordenadoria="{{ processo.coordenadoria or '' }}" data-equipe="{{ processo.equipe_area or '' }}" title="Atribuir">
+ <i class="bi bi-person-plus"></i>
+ </button>
+ {% endif %}
+ {% else %}
+ <a class="icon-btn neutral" href="{{ url_for('editar_processo', processo_id=processo.id, mostrar_ficha=1) }}" title="Visualizar processo">
+ <i class="bi bi-eye"></i>
+ </a>
+ {% endif %}
+ </div>
+ </td>
+
+
+ <td class="fw-semibold text-nowrap numero-sei">{{ numero_display }}</td>
+
+
+<td><div class="pill light">{{ (snapshot.get('data_entrada') or processo.data_entrada)|date_br if (snapshot.get('data_entrada') or processo.data_entrada) else "-" }}</div></td>
+
+
+
+
+<td><div class="text-truncate process-assunto" title="{{ snapshot.get('interessado') or processo.interessado or '-' }}">{{ snapshot.get('interessado') or processo.interessado or "-" }}</div></td>
+
+
+ <td><div class="text-truncate process-assunto" title="{{ snapshot.get('concessionaria') or processo.concessionaria or '-' }}">{{ snapshot.get('concessionaria') or processo.concessionaria or "-" }}</div></td>
+
+
+ <td>
+
+
+ <div class="pill outline gerencias-pill{% if gerencia == 'SAIDA' %} trilhas{% endif %}">
+ {% set gerencias_env = gerencias_envolvidas_map.get(processo.id, []) if gerencias_envolvidas_map else [] %}
+ {% set gerencias_abertas = gerencias_abertas_map.get(processo.id, []) if gerencias_abertas_map else [] %}
+ {% set trilhas_saida = trilhas_saida_map.get(processo.id, []) if trilhas_saida_map else [] %}
+ {% if gerencia == 'SAIDA' %}
+ {% if trilhas_saida %}
+ {% for item in trilhas_saida %}
+ <span class="gerencia-chip">
+ {% if item.partes %}
+ {% for parte in item.partes %}
+ <span class="gerencia-part{% if parte.aberta %} aberta{% endif %}">{{ parte.nome }}</span>{% if not loop.last %}<span class="gerencia-sep"> -> </span>{% endif %}
+ {% endfor %}
+ {% else %}
+ {{ item.texto }}
+ {% endif %}
+ </span>
+ {% endfor %}
+ {% elif gerencias_env %}
+ <span class="gerencia-chip{% if gerencias_abertas %} aberta{% endif %}">{{ gerencias_env|trilha_gerencias }}</span>
+ {% else %}
+ <span class="gerencia-chip">{{ origens_saida.get(processo.id) or processo.gerencia }}</span>
+ {% endif %}
+ {% else %}
+ {% if gerencias_env %}
+ {% for ger in gerencias_env %}
+ <span class="gerencia-chip{% if ger in gerencias_abertas %} aberta{% endif %}">{{ ger }}</span>
+ {% endfor %}
+ {% else %}
+ <span class="gerencia-chip">{{ processo.gerencia }}</span>
+ {% endif %}
+ {% endif %}
+ </div>
+
+
+ </td>
+
+
+ <td><div class="text-truncate process-assunto" title="{{ snapshot.get('assunto') or processo.assunto or '-' }}">{{ snapshot.get('assunto') or processo.assunto or "-" }}</div></td>
+
+
+ <td>
+
+
+ <div class="pill status {{ 'muted' if not processo.status else '' }}">
+
+
+ {{ processo.status or "Em andamento" }}
+
+
+ </div>
+
+
+ </td>
+
+
+ <td>
+
+
+ <div class="pill {{ 'danger' if prazo_alerta else 'secondary' }}">
+
+
+ {{ processo.prazo|date_br if processo.prazo else "Sem prazo" }}
+
+
+ </div>
+
+
+ </td>
+
+
+ <td>
+
+
+ {% set planilhador = processo.responsavel_adm
+
+
+ or (processo.assigned_to.nome if processo.assigned_to else None)
+
+
+ or (processo.assigned_to.username if processo.assigned_to else None)
+
+
+ %}
+
+
+ <div class="process-chip ghost" title="{{ planilhador or 'Nao informado' }}">
+
+
+ <div class="chip-avatar muted">{{ (planilhador or '?')[0]|upper }}</div>
+
+
+ <div class="chip-body">
+
+
+ <div class="chip-title">{{ planilhador or "Nao informado" }}</div>
+
+
+ <div class="chip-sub">Responsavel Adm{% if processo.responsavel_equipe %} | Atribuido para {{ processo.responsavel_equipe }}{% endif %}</div>
+
+
+ </div>
+
+
+ </div>
+
+
+ </td>
+
+
+ <td>{{ processo.classificacao_institucional or '-' }}</td>
+
+
+ {% if gerencia == 'SAIDA' %}
+
+
+ <td>{{ calcular_data_entrada_na_gerencia(processo, gerencia)|date_br if calcular_data_entrada_na_gerencia(processo, gerencia) else '-' }}</td>
+
+
+ {% else %}
+
+
+ <td>{{ calcular_data_entrada_na_gerencia(processo, 'GABINETE')|date_br if calcular_data_entrada_na_gerencia(processo, 'GABINETE') else '-' }}</td>
+
+
+ {% endif %}
+
+
+ <td><div class="text-truncate process-assunto" title="{{ processo.descricao_melhorada or '-' }}">{{ processo.descricao_melhorada or '-' }}</div></td>
+
+
+ <td>{{ processo.coordenadoria or "-" }}</td>
+
+
+ <td>{{ processo.equipe_area or "-" }}</td>
+
+
+ <td>{{ processo.responsavel_equipe or "-" }}</td>
+
+
+ <td>{{ processo.tipo_processo or "-" }}</td>
+
+
+ <td>{{ processo.palavras_chave or "-" }}</td>
+
+
+ <td>
+
+
+ <div class="pill status {{ 'muted' if not processo.status else '' }}">
+
+
+ {{ processo.status or "Em andamento" }}
+
+
+ </div>
+
+
+ </td>
+
+
+ <td>
+
+
+ <div class="pill secondary">
+
+
+ {{ processo.prazo_equipe|date_br if processo.prazo_equipe else "Sem prazo" }}
+
+
+ </div>
+
+
+ </td>
+
+
+ <td><div class="text-truncate process-assunto" title="{{ processo.observacoes_complementares or '-' }}">{{ processo.observacoes_complementares or "-" }}</div></td>
+
+
+ {% for campo in campos_extra %}
+
+
+ {% set extra_valor = (processo.dados_extra or {}).get(campo.slug) %}
+
+
+ {% if not extra_valor and campo.slug == 'tipodeprocesso' %}
+
+
+ {% set extra_valor = processo.tipo_processo %}
+
+
+ {% endif %}
+
+
+ <td><div class="text-truncate process-assunto" title="{{ extra_valor or '-' }}">{{ extra_valor or '-' }}</div></td>
+
+
+ {% endfor %}
+
+
+ </tr>
+
+
+ {% else %}
+
+
+ <tr>
+
+
+ <td colspan="{{ 21 + (campos_extra|length) }}" class="text-center text-muted py-4">Nenhum processo ativo nesta gerência.</td>
+
+
+ </tr>
+
+
+ {% endfor %}
+
+
+ </tbody>
+
+
+ </table>
+
+
+ </div>
+
+
+
+
+
+ <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 pagination-bar">
+
+
+ <div>
+
+
+ {% if paginacao and paginacao.total %}
+
+
+ <small class="text-muted">Exibindo {{ processos|length }} de {{ paginacao.total }} processos</small>
+
+
+ {% endif %}
+
+
+ </div>
+
+
+ {% if paginacao %}
+
+
+ <nav>
+
+
+ <ul class="pagination pagination-sm mb-0">
+
+
+ <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+
+
+ <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=paginacao.prev_num, sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, aba='interacoes') }}">Anterior</a>
+
+
+ </li>
+
+
+ <li class="page-item active"><span class="page-link">{{ paginacao.page }}</span></li>
+
+
+ <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+
+
+ <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=paginacao.next_num, sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, aba='interacoes') }}">Próxima</a>
+
+
+ </li>
+
+
+ </ul>
+
+
+ </nav>
+
+
+ {% endif %}
+
+
+ </div>
+
+
+ </div>
+
+
+
+
+
+ {% if gerencia != 'SAIDA' %}
+
+
+ <div class="tab-pane fade{% if aba_ativa == 'arquivos' %} show active{% endif %}" id="conteudo-arquivos" role="tabpanel" aria-labelledby="tab-arquivos">
+
+
+ <form class="row g-3 align-items-end mb-3" method="get" autocomplete="off">
+ <input type="hidden" name="aba" value="arquivos">
+
+
+ <div class="col-12 col-md-6 col-lg-3">
+
+
+ <label class="form-label">Número SEI</label>
+
+
+ <input class="form-control" type="text" name="sei" value="{{ filtro_sei }}" placeholder="Buscar por número">
+
+
+ </div>
+
+
+ <div class="col-12 col-md-6 col-lg-3">
+
+
+ <label class="form-label">Coordenadoria</label>
+
+
+ <div class="select-search">
+ <input class="form-control" type="text" name="coordenadoria" value="{{ filtro_coordenadoria }}" placeholder="Buscar por coordenadoria" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-options-id="lista_filtro_coordenadoria_finalizados">
+ <div class="select-dropdown" data-options-id="lista_filtro_coordenadoria_finalizados"></div>
+ <datalist id="lista_filtro_coordenadoria_finalizados">
+ {% if filtro_coordenadoria and filtro_coordenadoria not in lista_coordenadorias %}
+ <option value="{{ filtro_coordenadoria }}"></option>
+ {% endif %}
+ {% for opcao in lista_coordenadorias %}
+ <option value="{{ opcao }}"></option>
+ {% endfor %}
+ </datalist>
+ </div>
+
+
+ </div>
+
+
+ <div class="col-12 col-md-6 col-lg-3">
+
+
+ <label class="form-label">Equipe / area</label>
+
+
+ <div class="select-search">
+ <input class="form-control" type="text" name="equipe_area" value="{{ filtro_equipe_area }}" placeholder="Buscar por equipe ou area" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-options-id="lista_filtro_equipe_finalizados">
+ <div class="select-dropdown" data-options-id="lista_filtro_equipe_finalizados"></div>
+ <datalist id="lista_filtro_equipe_finalizados">
+ {% if filtro_equipe_area and filtro_equipe_area not in lista_equipes %}
+ <option value="{{ filtro_equipe_area }}"></option>
+ {% endif %}
+ {% for opcao in lista_equipes %}
+ <option value="{{ opcao }}"></option>
+ {% endfor %}
+ </datalist>
+ </div>
+
+
+ </div>
+
+
+ <div class="col-12 col-md-6 col-lg-3">
+
+
+ <label class="form-label">Responsavel atribuido</label>
+
+
+ <div class="select-search">
+ <input class="form-control" type="text" name="responsavel_equipe" value="{{ filtro_responsavel_equipe }}" placeholder="Todos" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-options-id="lista_filtro_responsavel_finalizados">
+ <div class="select-dropdown" data-options-id="lista_filtro_responsavel_finalizados"></div>
+ <datalist id="lista_filtro_responsavel_finalizados">
+ {% if filtro_responsavel_equipe and filtro_responsavel_equipe not in lista_responsaveis %}
+ <option value="{{ filtro_responsavel_equipe }}"></option>
+ {% endif %}
+ {% for opcao in lista_responsaveis %}
+ <option value="{{ opcao }}"></option>
+ {% endfor %}
+ </datalist>
+ </div>
+
+
+ </div>
+
+
+ <div class="col-12 col-md-3 col-lg-2 d-grid">
+
+
+ <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i> Buscar</button>
+
+
+ </div>
+
+
+ <div class="col-12 col-md-3 col-lg-2 d-grid">
+
+
+ <a class="btn btn-outline-secondary" href="{{ url_for('gerencia', nome_gerencia=gerencia, aba='arquivos') }}">Limpar</a>
+
+
+ </div>
+
+
+ </form>
+
+
+ <div class="table-responsive process-list-wrapper mb-3">
+
+
+ <table class="table process-table align-middle">
+
+
+ <thead>
+
+
+ <tr>
+
+
+ <th class="col-check"><input class="form-check-input" type="checkbox" disabled></th>
+
+
+ <th><div class="resizable">Número SEI</div></th>
+
+
+ <th><div class="resizable">Data de entrada</div></th>
+
+
+ <th><div class="resizable">Finalizado em</div></th>
+
+
+ <th><div class="resizable">Interessado</div></th>
+
+
+ <th><div class="resizable">Concessionária</div></th>
+
+
+ <th><div class="resizable">{{ 'Gerencias envolvidas' if gerencia == 'SAIDA' else 'Gerencia' }}</div></th>
+
+
+ <th><div class="resizable">Assunto</div></th>
+
+
+ <th><div class="resizable">Status</div></th>
+
+
+ <th><div class="resizable">Responsável Adm</div></th>
+
+
+ <th><div class="resizable">Classificacao institucional</div></th>
+
+
+ {% if gerencia == 'SAIDA' %}
+
+
+ <th><div class="resizable">Data de entrada na gerência</div></th>
+
+
+ {% else %}
+
+
+ <th><div class="resizable">Data de entrada no GABINETE</div></th>
+
+
+ {% endif %}
+
+
+ <th><div class="resizable">Descrição melhorada</div></th>
+
+
+ <th><div class="resizable">Coordenadoria</div></th>
+
+
+ <th><div class="resizable">Equipe / Área</div></th>
+
+
+ <th><div class="resizable">Responsável (Equipe)</div></th>
+
+
+ <th><div class="resizable">Tipo de processo</div></th>
+
+
+ <th><div class="resizable">Palavras-chave</div></th>
+
+
+ <th><div class="resizable">Status (Equipe)</div></th>
+
+
+ <th><div class="resizable">Prazo equipe</div></th>
+
+
+ <th><div class="resizable">Observações complementares</div></th>
+
+
+ {% for campo in campos_extra %}
+
+
+ <th><div class="resizable">{{ campo.label }}</div></th>
+
+
+ {% endfor %}
+
+
+ </tr>
+
+
+ </thead>
+
+
+ <tbody>
+
+
+ {% for processo in finalizados %}
+ {% set snapshot = (snapshots_finalizados.get(processo.id) if snapshots_finalizados else {}) or {} %}
+ {% set snapshot_extras = snapshot.get('extras') if snapshot else None %}
+ {% set snapshot_status = snapshot.get('status') if snapshot else None %}
+ {% set snapshot_prazo_equipe = snapshot.get('prazo_equipe') if snapshot else None %}
+ {% set snapshot_obs = snapshot.get('observacoes_complementares') if snapshot else None %}
+
+
+ {% set sufixo = (processo.dados_extra.sufixo if processo.dados_extra else '') or '' %}
+
+
+ {% set numero_display = processo.numero_sei_base ~ sufixo %}
+
+
+ <tr class="process-row" data-proc-id="{{ processo.id }}">
+
+
+ <td class="col-check">
+
+
+ <div class="d-flex align-items-center gap-2">
+
+
+ <div class="d-flex gap-1">
+
+
+ <button class="btn btn-sm btn-outline-primary btn-toggle-ficha" type="button" data-ficha-target="ficha-finalizado-{{ processo.id }}" data-proc-id="{{ processo.id }}" aria-expanded="false" aria-label="Ficha técnica" title="Ficha técnica">
+
+
+ <i class="bi bi-journal-text"></i>
+
+
+ </button>
+
+
+ <button class="btn btn-sm btn-outline-secondary btn-toggle-hist" type="button" data-hist-target="hist{{ processo.id }}" data-proc-id="{{ processo.id }}" aria-expanded="false" aria-label="Ver histórico" title="Ver histórico">
+
+
+ <i class="bi bi-clock-history"></i>
+
+
+ </button>
+
+
+ </div>
+
+
+ </div>
+
+
+ </td>
+
+
+ <td class="fw-semibold text-nowrap numero-sei">{{ numero_display }}</td>
+
+
+ <td><div class="pill light">{{ processo.data_entrada|date_br if processo.data_entrada else "-" }}</div></td>
+
+
+ <td><div class="pill secondary">{{ processo.finalizado_em.strftime('%d/%m/%Y') if processo.finalizado_em else '-' }}</div></td>
+
+
+ <td><div class="text-truncate process-assunto" title="{{ processo.interessado or '-' }}">{{ processo.interessado or "-" }}</div></td>
+
+
+ <td><div class="text-truncate process-assunto" title="{{ processo.concessionaria or '-' }}">{{ processo.concessionaria or "-" }}</div></td>
+
+
+ <td>
+
+
+ <div class="pill outline gerencias-pill{% if gerencia == 'SAIDA' %} trilhas{% endif %}">
+ {% set gerencias_env = gerencias_envolvidas_map.get(processo.id, []) if gerencias_envolvidas_map else [] %}
+ {% set gerencias_abertas = gerencias_abertas_map.get(processo.id, []) if gerencias_abertas_map else [] %}
+ {% set trilhas_saida = trilhas_saida_map.get(processo.id, []) if trilhas_saida_map else [] %}
+ {% if gerencia == 'SAIDA' %}
+ {% if trilhas_saida %}
+ {% for item in trilhas_saida %}
+ <span class="gerencia-chip{% if item.aberta %} aberta{% endif %}">{{ item.texto }}</span>
+ {% endfor %}
+ {% elif gerencias_env %}
+ <span class="gerencia-chip{% if gerencias_abertas %} aberta{% endif %}">{{ gerencias_env|trilha_gerencias }}</span>
+ {% else %}
+ <span class="gerencia-chip">{{ processo.gerencia }}</span>
+ {% endif %}
+ {% else %}
+ {% if gerencias_env %}
+ {% for ger in gerencias_env %}
+ <span class="gerencia-chip{% if ger in gerencias_abertas %} aberta{% endif %}">{{ ger }}</span>
+ {% endfor %}
+ {% elif processo.gerencia == 'SAIDA' and gerencia != 'SAIDA' %}
+ <span class="gerencia-chip">{{ gerencia }}</span>
+ {% else %}
+ <span class="gerencia-chip">{{ processo.gerencia }}</span>
+ {% endif %}
+ {% endif %}
+ </div>
+
+
+ </td>
+
+
+ <td><div class="text-truncate process-assunto" title="{{ processo.assunto or '-' }}">{{ processo.assunto or "-" }}</div></td>
+
+
+ <td><div class="pill status">{{ snapshot_status or processo.status or "Finalizado" }}</div></td>
+
+
+ <td>
+
+
+ {% set planilhador = snapshot.get('planilhado_por')
+ or snapshot.get('responsavel_adm')
+ or processo.responsavel_adm
+ or (processo.assigned_to.nome if processo.assigned_to else None)
+ or (processo.assigned_to.username if processo.assigned_to else None)
+ %}
+
+
+ <div class="process-chip ghost" title="{{ planilhador or 'Nao informado' }}">
+
+
+ <div class="chip-avatar muted">{{ (planilhador or '?')[0]|upper }}</div>
+
+
+ <div class="chip-body">
+
+
+ <div class="chip-title">{{ planilhador or "Nao informado" }}</div>
+
+
+ <div class="chip-sub">Responsavel Adm{% if processo.responsavel_equipe %} | Atribuido para {{ processo.responsavel_equipe }}{% endif %}</div>
+
+
+ </div>
+
+
+ </div>
+
+
+ </td>
+
+
+ <td>{{ snapshot.get('classificacao_institucional') or processo.classificacao_institucional or '-' }}</td>
+
+
+ {% if gerencia == 'SAIDA' %}
+
+
+ <td>{{ calcular_data_entrada_na_gerencia(processo, gerencia)|date_br if calcular_data_entrada_na_gerencia(processo, gerencia) else '-' }}</td>
+
+
+ {% else %}
+
+
+ <td>{{ calcular_data_entrada_na_gerencia(processo, 'GABINETE')|date_br if calcular_data_entrada_na_gerencia(processo, 'GABINETE') else '-' }}</td>
+
+
+ {% endif %}
+
+
+ <td><div class="text-truncate process-assunto" title="{{ snapshot.get('descricao_melhorada') or processo.descricao_melhorada or '-' }}">{{ snapshot.get('descricao_melhorada') or processo.descricao_melhorada or '-' }}</div></td>
+
+
+ <td>{{ snapshot.get('coordenadoria') or processo.coordenadoria or "-" }}</td>
+
+
+ <td>{{ snapshot.get('equipe_area') or processo.equipe_area or "-" }}</td>
+
+
+ <td>{{ snapshot.get('responsavel_equipe') or processo.responsavel_equipe or "-" }}</td>
+
+
+ <td>{{ snapshot.get('tipo_processo') or processo.tipo_processo or "-" }}</td>
+
+
+ <td>{{ snapshot.get('palavras_chave') or processo.palavras_chave or "-" }}</td>
+
+
+ <td><div class="pill status {{ 'muted' if not (snapshot_status or processo.status) else '' }}">{{ snapshot_status or processo.status or "Finalizado" }}</div></td>
+
+
+ <td><div class="pill secondary">{{ snapshot_prazo_equipe|date_br if snapshot_prazo_equipe else (processo.prazo_equipe|date_br if processo.prazo_equipe else "Sem prazo") }}</div></td>
+
+
+ <td><div class="text-truncate process-assunto" title="{{ snapshot_obs or processo.observacoes_complementares or '-' }}">{{ snapshot_obs or processo.observacoes_complementares or "-" }}</div></td>
+
+
+ {% for campo in campos_extra %}
+
+
+ {% set extra_valor = (snapshot_extras or processo.dados_extra or {}).get(campo.slug) %}
+
+
+ {% if not extra_valor and campo.slug == 'tipodeprocesso' %}
+
+
+ {% set extra_valor = processo.tipo_processo %}
+
+
+ {% endif %}
+
+
+ <td><div class="text-truncate process-assunto" title="{{ extra_valor or '-' }}">{{ extra_valor or '-' }}</div></td>
+
+
+ {% endfor %}
+
+
+ </tr>
+
+
+ <tr class="ficha-tecnica-row d-none ficha-finalizados" id="ficha-finalizado-{{ processo.id }}" data-proc-id="{{ processo.id }}">
+
+
+ <td colspan="{{ 21 + (campos_extra|length) }}">
+
+
+ <div class="ficha-tecnica-wrapper">
+
+
+ <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+
+
+ <div class="ficha-tecnica-title">Ficha técnica</div>
+
+
+ <div class="d-flex flex-wrap align-items-center gap-2">
+
+
+ <span class="badge bg-light text-muted border">Processo {{ numero_display }}</span>
+
+
+ {% if processo.finalizado_em %}
+
+
+ <span class="badge bg-success-subtle text-success border">Finalizado {{ processo.finalizado_em|date_br }}</span>
+
+
+ {% endif %}
+
+
+ {% if processo.data_entrada %}
+
+
+ <span class="badge bg-info-subtle text-info border">Entrada {{ processo.data_entrada|date_br }}</span>
+
+
+ {% endif %}
+
+
+ </div>
+
+
+ </div>
+
+
+ <div class="row g-3">
+
+
+ <div class="col-md-6 col-lg-4">
+
+
+ <div class="resumo-box">
+
+
+ <span class="resumo-label">Assunto</span>
+
+
+ <span class="resumo-value">{{ snapshot.get('assunto') or processo.assunto or "-" }}</span>
+
+
+ </div>
+
+
+ </div>
+
+
+ <div class="col-md-6 col-lg-4">
+
+
+ <div class="resumo-box">
+
+
+ <span class="resumo-label">Interessado</span>
+
+
+ <span class="resumo-value">{{ snapshot.get('interessado') or processo.interessado or "-" }}</span>
+
+
+ </div>
+
+
+ </div>
+
+
+ <div class="col-md-6 col-lg-4">
+
+
+ <div class="resumo-box">
+
+
+ <span class="resumo-label">Concessionária</span>
+
+
+ <span class="resumo-value">{{ snapshot.get('concessionaria') or processo.concessionaria or "-" }}</span>
+
+
+ </div>
+
+
+ </div>
+
+
+ <div class="col-md-6 col-lg-4">
+
+
+ <div class="resumo-box">
+
+
+ <span class="resumo-label">Gerência</span>
+
+
+ <span class="resumo-value">
+
+
+ {% if processo.gerencia == 'SAIDA' and gerencia != 'SAIDA' %}
+
+
+ {{ gerencia }}
+
+
+ {% else %}
+
+
+ {{ processo.gerencia or "-" }}
+
+
+ {% endif %}
+
+
+ </span>
+
+
+ </div>
+
+
+ </div>
+
+
+ <div class="col-md-6 col-lg-4">
+
+
+ <div class="resumo-box">
+
+
+ <span class="resumo-label">Coordenadoria</span>
+
+
+ <span class="resumo-value">{{ snapshot.get('coordenadoria') or processo.coordenadoria or "-" }}</span>
+
+
+ </div>
+
+
+ </div>
+
+
+ <div class="col-md-6 col-lg-4">
+
+
+ <div class="resumo-box">
+
+
+ <span class="resumo-label">Equipe / Área</span>
+
+
+ <span class="resumo-value">{{ snapshot.get('equipe_area') or processo.equipe_area or "-" }}</span>
+
+
+ </div>
+
+
+ </div>
+
+
+ <div class="col-md-6 col-lg-4">
+
+
+ <div class="resumo-box">
+
+
+ <span class="resumo-label">Responsável equipe</span>
+
+
+ <span class="resumo-value">{{ snapshot.get('responsavel_equipe') or processo.responsavel_equipe or "-" }}</span>
+
+
+ </div>
+
+
+ </div>
+
+
+ <div class="col-md-6 col-lg-4">
+
+
+ <div class="resumo-box">
+
+
+ <span class="resumo-label">Palavras-chave</span>
+
+
+ <span class="resumo-value">{{ snapshot.get('palavras_chave') or processo.palavras_chave or "-" }}</span>
+
+
+ </div>
+
+
+ </div>
+
+
+ <div class="col-md-6 col-lg-4">
+
+
+ <div class="resumo-box">
+
+
+ <span class="resumo-label">Tipo de processo</span>
+
+
+ <span class="resumo-value">{{ snapshot.get('tipo_processo') or processo.tipo_processo or "-" }}</span>
+
+
+ </div>
+
+
+ </div>
+
+
+ <div class="col-md-6 col-lg-4">
+
+
+ <div class="resumo-box">
+
+
+ <span class="resumo-label">Responsável Adm</span>
+
+
+ <span class="resumo-value">{{ snapshot.get('responsavel_adm') or processo.responsavel_adm or "-" }}</span>
+
+
+ </div>
+
+
+ </div>
+
+
+ <div class="col-md-6 col-lg-4">
+
+
+ <div class="resumo-box">
+
+
+ <span class="resumo-label">Status</span>
+
+
+ <span class="resumo-value">{{ snapshot_status or processo.status or "Finalizado" }}</span>
+
+
+ </div>
+
+
+ </div>
+
+
+ <div class="col-12">
+
+
+ <div class="resumo-box">
+
+
+ <span class="resumo-label">Observações</span>
+
+
+ <span class="resumo-value">{{ (snapshot_obs or snapshot.get('observacao') or processo.observacoes_complementares or processo.observacao or 'Nenhuma observacao registrada.')|replace('\n', '<br>')|safe }}</span>
+
+
+ </div>
+
+
+ </div>
+
+
+ {% for campo in campos_extra %}
+
+
+ {% set extra_valor = (snapshot_extras or processo.dados_extra or {}).get(campo.slug) %}
+
+
+ {% if not extra_valor and campo.slug == 'tipodeprocesso' %}
+
+
+ {% set extra_valor = processo.tipo_processo %}
+
+
+ {% endif %}
+
+
+ {% if extra_valor %}
+
+
+ <div class="col-md-6 col-lg-4">
+
+
+ <div class="resumo-box">
+
+
+ <span class="resumo-label">{{ campo.label }}</span>
+
+
+ <span class="resumo-value">{{ extra_valor }}</span>
+
+
+ </div>
+
+
+ </div>
+
+
+ {% endif %}
+
+
+ {% endfor %}
+
+
+ </div>
+
+
+ </div>
+
+
+ </td>
+
+
+ </tr>
+
+
+ <tr class="collapse history-row" id="hist{{ processo.id }}" data-proc-id="{{ processo.id }}">
+
+
+ <td colspan="{{ 21 + (campos_extra|length) }}">
+
+
+ <div class="timeline">
+
+
+ {% for evento in historico_finalizados.get(processo.id, []) %}
+
+
+ <div class="timeline-item">
+
+
+ <div class="timeline-dot"></div>
+
+
+ <div>
+
+
+ <div class="fw-semibold text-muted small">{{ evento.quando.strftime('%d/%m/%Y %H:%M') if evento.quando else '-' }}</div>
+
+
+ <div>{{ evento.texto }}</div>
+
+
+ </div>
+
+
+ </div>
+
+
+ {% else %}
+
+
+ <div class="text-muted">Nenhum histórico encontrado.</div>
+
+
+ {% endfor %}
+
+
+ </div>
+
+
+ </td>
+
+
+ </tr>
+
+
+ {% else %}
+
+
+ <tr>
+
+
+ <td colspan="{{ 21 + (campos_extra|length) }}" class="text-center text-muted py-4">Nenhum processo finalizado nesta gerência.</td>
+
+
+ </tr>
+
+
+ {% endfor %}
+
+
+ </tbody>
+
+
+ </table>
+
+
+ </div>
+
+
+ </div>
+
+
+ {% endif %}
+ {% if pode_ver_devolvidos %}
+ <div class="tab-pane fade{% if aba_ativa == 'devolvidos' %} show active{% endif %}" id="conteudo-devolvidos" role="tabpanel" aria-labelledby="tab-devolvidos">
+ <div class="table-responsive process-list-wrapper mb-3">
+ <table class="table process-table align-middle">
+ <thead>
+ <tr>
+ <th>Número SEI</th>
+ <th>Data de entrada</th>
+ <th>Assunto</th>
+ <th>Interessado</th>
+ <th>Origem da devolução</th>
+ <th>Motivo da devolução</th>
+ <th>Acoes</th>
+ </tr>
+ </thead>
+ <tbody>
+ {% for processo in devolvidos %}
+ {% set dados_dev = processo.dados_extra or {} %}
+ <tr>
+ {% set sufixo = (processo.dados_extra.sufixo if processo.dados_extra else '') or '' %}
+ {% set numero_display = processo.numero_sei_base ~ sufixo %}
+ <td class="fw-semibold text-nowrap">{{ numero_display }}</td>
+ <td>{{ processo.data_entrada|date_br if processo.data_entrada else "-" }}</td>
+ <td><div class="text-truncate process-assunto" title="{{ processo.assunto or '-' }}">{{ processo.assunto or "-" }}</div></td>
+ <td><div class="text-truncate process-assunto" title="{{ processo.interessado or '-' }}">{{ processo.interessado or "-" }}</div></td>
+ <td>{{ dados_dev.get("devolucao_origem") or "-" }}</td>
+ <td><div class="text-truncate process-assunto" title="{{ dados_dev.get('devolucao_motivo') or '-' }}">{{ dados_dev.get("devolucao_motivo") or "-" }}</div></td>
+ <td>
+ <div class="d-flex flex-wrap gap-2">
+ <a class="btn btn-sm btn-primary" href="{{ url_for('reenviar_processo_devolvido', processo_id=processo.id) }}">Reenviar</a>
+ <form method="post" action="{{ url_for('acao_processo_devolvido', processo_id=processo.id) }}">
+ <input type="hidden" name="acao" value="excluir">
+ <button type="submit" class="btn btn-sm btn-outline-danger btn-excluir-devolvido" data-número="{{ numero_display }}">Excluir</button>
+ </form>
+ </div>
+ </td>
+ </tr>
+ {% else %}
+ <tr>
+ <td colspan="7" class="text-center text-muted py-4">Nenhum processo devolvido no Gabinete.</td>
+ </tr>
+ {% endfor %}
+ </tbody>
+ </table>
+ </div>
+ </div>
+ {% endif %}
+
+
+
+ </div>
+
+
+ </div>
+
+
+</main>
+
+<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100;">
+
+
+ <div id="toastNotificacao" class="toast align-items-center" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="6000" data-mensagem="{{ notificacao_unread.mensagem if notificacao_unread else '' }}">
+
+
+ <div class="toast-header">
+
+
+ <i class="bi bi-bell-fill me-2 text-primary"></i>
+
+
+ <strong class="me-auto">Notificacao</strong>
+
+
+ <small>{{ notificacao_unread.criada_em.strftime('%d/%m/%Y %H:%M') if notificacao_unread and notificacao_unread.criada_em else '' }}</small>
+
+
+ <button type="button" class="btn-close ms-2 mb-1" data-bs-dismiss="toast" aria-label="Fechar"></button>
+
+
+ </div>
+
+
+ <div class="toast-body">
+
+
+ {{ notificacao_unread.mensagem if notificacao_unread else '' }}
+
+
+ </div>
+
+
+ </div>
+
+
+</div>
+
+<!-- Painel de notificacoes -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="painelNotificacoes" aria-labelledby="painelNotificacoesLabel">
+
+
+ <div class="offcanvas-header">
+
+
+ <div>
+
+
+ <h5 class="offcanvas-title" id="painelNotificacoesLabel">Notificacoes</h5>
+
+
+ <p class="text-muted small mb-0">Avisos enviados quando um processo e atribuido.</p>
+
+
+ </div>
+
+
+ <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button>
+
+
+ </div>
+
+
+ <div class="offcanvas-body">
+
+
+ {% if notificacoes_recentes %}
+
+
+ <div class="list-group">
+
+
+ {% for notif in notificacoes_recentes %}
+
+
+ <div class="list-group-item d-flex align-items-start gap-3 {% if not notif.lida %}bg-light{% endif %}">
+
+
+ <div class="text-primary"><i class="bi bi-bell-fill"></i></div>
+
+
+ <div class="flex-grow-1">
+
+
+ <div class="fw-semibold">{{ notif.mensagem }}</div>
+
+
+ <div class="text-muted small">{{ notif.criada_em.strftime('%d/%m/%Y %H:%M') if notif.criada_em else '' }}</div>
+
+
+ {% if notif.processo %}
+
+
+ <div class="small text-muted">Processo: {{ notif.processo.numero_sei_base }}</div>
+
+
+ {% endif %}
+
+
+ </div>
+
+
+ {% if not notif.lida %}
+
+
+ <form method="post" action="{{ url_for('gerenciar_notificacoes') }}" class="ms-auto">
+
+
+ <input type="hidden" name="acao" value="marcar">
+
+
+ <input type="hidden" name="id" value="{{ notif.id }}">
+
+
+ <button class="btn btn-sm btn-outline-secondary" type="submit" title="Marcar como lida">
+
+
+ <i class="bi bi-check2"></i>
+
+
+ </button>
+
+
+ </form>
+
+
+ {% endif %}
+
+
+ </div>
+
+
+ {% endfor %}
+
+
+ </div>
+
+
+ <form class="mt-3 d-grid" method="post" action="{{ url_for('gerenciar_notificacoes') }}">
+
+
+ <input type="hidden" name="acao" value="marcar_todas">
+
+
+ <button class="btn btn-outline-secondary" type="submit">Marcar todas como lidas</button>
+
+
+ </form>
+
+
+ {% else %}
+
+
+ <p class="text-muted mb-0">Nenhuma notificacao por aqui ainda.</p>
+
+
+ {% endif %}
+
+
+ </div>
+
+
+</div>
+
+
+
+
+{% if pode_editar_gerencia %}
+<!-- Modal para atribuir a outro usuario -->
+
+
+<div class="modal fade" id="modalAtribuirOutro" tabindex="-1" aria-hidden="true">
+
+
+ <div class="modal-dialog">
+
+
+ <form class="modal-content" method="post" id="formAtribuirOutro" data-action-template="{{ url_for('atribuir_processo', processo_id=999999) }}">
+
+
+ <div class="modal-header">
+
+
+ <div>
+
+
+ <h5 class="modal-title">Atribuir processo</h5>
+
+
+ <div class="text-muted small" id="textoProcessoSelecionado">Processo selecionado</div>
+
+
+ </div>
+
+
+ <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+
+
+ </div>
+
+
+ <div class="modal-body">
+
+
+ <input type="hidden" name="acao" id="acaoAtribuirHidden" value="atribuir">
+
+
+ <input type="hidden" name="destino" value="{{ gerencia }}">
+
+ <div class="alert alert-info py-2 px-3 small mb-3" id="statusAtribuicaoModal">
+ Processo sem atribuicao no momento.
+ </div>
+
+
+ <div class="mb-3">
+
+
+ <label class="form-label">Atribuir para</label>
+
+
+ <select class="form-select" name="destinatario_id" id="destinatarioSelect" required>
+
+
+ <option value="" disabled selected hidden>Selecione um usuario</option>
+
+
+ {% for usuario in usuarios_disponiveis %}
+
+
+ <option value="{{ usuario.id }}" data-coordenadoria="{{ usuario.coordenadoria or '' }}" data-equipe="{{ usuario.equipe_area or '' }}" data-nome="{{ usuario.nome or usuario.username }}" data-username="{{ usuario.username }}">{{ usuario.nome }} ({{ usuario.username }})</option>
+
+
+ {% endfor %}
+
+
+ </select>
+
+
+ </div>
+
+
+ </div>
+
+
+ <div class="modal-footer">
+
+
+ <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+
+ <button type="button" class="btn btn-outline-danger d-none" id="btnDesatribuirModal">Desatribuir</button>
+
+ <button type="submit" class="btn btn-primary" id="btnConfirmarAtribuicaoModal">Confirmar atribuicao</button>
+
+
+ </div>
+
+
+ </form>
+
+
+ </div>
+
+
+</div>
+{% endif %}
+
+<!-- Modal para informar motivo da devolucao ao Gabinete -->
+<div class="modal fade" id="modalDevolverGabinete" tabindex="-1" aria-hidden="true">
+ <div class="modal-dialog">
+ <div class="modal-content">
+ <div class="modal-header">
+ <div>
+ <h5 class="modal-title">Devolver para o Gabinete</h5>
+ <div class="text-muted small" id="textoDevolverSelecionado">Informe o motivo da devolucao.</div>
+ </div>
+ <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+ </div>
+ <div class="modal-body">
+ <div class="mb-3">
+ <label class="form-label">Motivo da devolucao</label>
+ <textarea class="form-control" id="motivoDevolucaoInput" rows="3" placeholder="Descreva o motivo"></textarea>
+ <div class="invalid-feedback">Informe o motivo da devolucao.</div>
+ </div>
+ </div>
+ <div class="modal-footer">
+ <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+ <button type="button" class="btn btn-danger" id="btnConfirmarDevolucao">Confirmar devolucao</button>
+ </div>
+ </div>
+ </div>
+</div>
+
+<!-- Modal para confirmar exclusao de processo devolvido -->
+<div class="modal fade" id="modalExcluirDevolvido" tabindex="-1" aria-hidden="true">
+ <div class="modal-dialog">
+ <div class="modal-content">
+ <div class="modal-header">
+ <div>
+ <h5 class="modal-title">Excluir processo devolvido</h5>
+ <div class="text-muted small" id="textoExcluirSelecionado">Tem certeza de que desejá excluir?</div>
+ </div>
+ <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+ </div>
+ <div class="modal-body">
+ <p class="mb-0">Depois de apagado, o processo não poderá ser recuperado.</p>
+ </div>
+ <div class="modal-footer">
+ <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+ <button type="button" class="btn btn-danger" id="btnConfirmarExclusao">Excluir definitivamente</button>
+ </div>
+ </div>
+ </div>
+</div>
+
+
+{% if pode_configurar_campos %}
+
+
+<div class="modal fade" id="modalExportacao" tabindex="-1" aria-hidden="true">
+
+
+ <div class="modal-dialog modal-lg">
+
+
+ <div class="modal-content">
+
+
+ <form method="post" action="{{ url_for('exportar_gerencia', nome_gerencia=gerencia) }}">
+
+
+ <div class="modal-header">
+
+
+ <h5 class="modal-title">Exportar processos em Excel</h5>
+
+
+ <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+
+
+ </div>
+
+
+ <div class="modal-body">
+
+
+ <div class="mb-3">
+
+
+ <label class="form-label d-block">Escopo</label>
+
+
+ <div class="d-flex gap-3 flex-wrap">
+
+
+ <div class="form-check">
+
+
+ <input class="form-check-input" type="radio" name="escopo" id="escopoAtivos" value="ativos" checked>
+
+
+ <label class="form-check-label" for="escopoAtivos">Apenas ativos</label>
+
+
+ </div>
+
+
+ <div class="form-check">
+
+
+ <input class="form-check-input" type="radio" name="escopo" id="escopoFinalizados" value="finalizados">
+
+
+ <label class="form-check-label" for="escopoFinalizados">Apenas finalizados</label>
+
+
+ </div>
+
+
+ <div class="form-check">
+
+
+ <input class="form-check-input" type="radio" name="escopo" id="escopoTodos" value="todos">
+
+
+ <label class="form-check-label" for="escopoTodos">Ativos e finalizados</label>
+
+
+ </div>
+
+
+ </div>
+
+
+ </div>
+
+
+ <div class="mb-3">
+
+
+ <label class="form-label d-block">Colunas</label>
+
+
+ <div class="row g-2">
+
+
+ {% set colunas_base = [
+
+
+ ('numero_sei', 'Numero SEI'),
+
+
+ ('assunto', 'Assunto'),
+
+
+ ('interessado', 'Interessado'),
+
+
+ ('concessionaria', 'Concessionaria'),
+
+
+ ('gerencia', 'Gerencia'),
+
+
+ ('data_entrada', 'Data de entrada'),
+
+
+ ('prazo', 'Prazo SUROD'),
+
+
+ ('status', 'Status'),
+
+
+ ('prazo_equipe', 'Prazo equipe'),
+
+
+ ('responsavel_adm', 'Responsavel Adm'),
+
+
+ ('coordenadoria', 'Coordenadoria'),
+
+
+ ('equipe_area', 'Equipe / ?rea'),
+
+
+ ('responsavel_equipe', 'Responsavel (Equipe)'),
+
+
+ ('tipo_processo', 'Tipo de processo'),
+
+
+ ('palavras_chave', 'Palavras-chave'),
+
+
+ ('observacoes_complementares', 'Observacoes complementares'),
+
+
+ ('finalizado_em', 'Finalizado em')
+
+
+ ] %}
+
+
+ {% for valor, label in colunas_base %}
+
+
+ <div class="col-md-4">
+
+
+ <div class="form-check">
+
+
+ <input class="form-check-input" type="checkbox" name="colunas" id="coluna_{{ valor }}" value="{{ valor }}" {% if valor in ['numero_sei','assunto','gerencia','status'] %}checked{% endif %}>
+
+
+ <label class="form-check-label" for="coluna_{{ valor }}">{{ label }}</label>
+
+
+ </div>
+
+
+ </div>
+
+
+ {% endfor %}
+
+
+ {% if campos_extra %}
+
+
+ <div class="col-12 mt-2">
+
+
+ <div class="small text-muted">Campos extras desta gerência</div>
+
+
+ </div>
+
+
+ {% for campo in campos_extra %}
+
+
+ <div class="col-md-4">
+
+
+ <div class="form-check">
+
+
+ <input class="form-check-input" type="checkbox" name="colunas" id="coluna_extra_{{ campo.slug }}" value="extra:{{ campo.slug }}">
+
+
+ <label class="form-check-label" for="coluna_extra_{{ campo.slug }}">{{ campo.label }}</label>
+
+
+ </div>
+
+
+ </div>
+
+
+ {% endfor %}
+
+
+ {% endif %}
+
+
+ </div>
+
+
+ </div>
+
+
+ <div class="alert alert-info small mb-0">
+
+
+ Selecione as colunas desejádas. Campos extras são exportados apenas desta gerência.
+
+
+ </div>
+
+
+ </div>
+
+
+ <div class="modal-footer">
+
+
+ <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+
+
+ <button type="submit" class="btn btn-success">Baixar Excel</button>
+
+
+ </div>
+
+
+ </form>
+
+
+ </div>
+
+
+ </div>
+
+
+</div>
+
+
+{% endif %}
+
+
+
+
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+ const normalizarTexto = (valor) => {
+ return (valor || "")
+ .toString()
+ .trim()
+ .toLowerCase()
+ .normalize("NFD")
+ .replace(/[\u0300-\u036f]/g, "");
+ };
+
+ const formAtribuir = document.getElementById("formAtribuirOutro");
+ const modalAtribuir = document.getElementById("modalAtribuirOutro");
+ const textoSelecionado = document.getElementById("textoProcessoSelecionado");
+ const actionTemplate = formAtribuir ? formAtribuir.dataset.actionTemplate : "";
+ const acaoAtribuirHidden = document.getElementById("acaoAtribuirHidden");
+ const statusAtribuicaoModal = document.getElementById("statusAtribuicaoModal");
+ const btnDesatribuirModal = document.getElementById("btnDesatribuirModal");
+ const btnConfirmarAtribuicaoModal = document.getElementById("btnConfirmarAtribuicaoModal");
+ const destinatarioSelect = document.getElementById("destinatarioSelect");
+ const modalDevolver = document.getElementById("modalDevolverGabinete");
+ const textoDevolverSelecionado = document.getElementById("textoDevolverSelecionado");
+ const motivoDevolucaoInput = document.getElementById("motivoDevolucaoInput");
+ const btnConfirmarDevolucao = document.getElementById("btnConfirmarDevolucao");
+ let formDevolverAtual = null;
+ const modalExcluirDevolvido = document.getElementById("modalExcluirDevolvido");
+ const textoExcluirSelecionado = document.getElementById("textoExcluirSelecionado");
+ const btnConfirmarExclusao = document.getElementById("btnConfirmarExclusao");
+ let formExcluirAtual = null;
+ const mapaResponsaveisEquipe = {{ opcoes_responsaveis_por_equipe|default({})|tojson }};
+ const mapaEquipesCoord = {{ opcoes_equipes_por_coordenadoria|default({})|tojson }};
+ const responsaveisGerencia = {{ opcoes_responsaveis|default([])|tojson }};
+ const mapaResponsaveisEquipeNorm = {};
+ const mapaEquipesCoordNorm = {};
+ Object.keys(mapaResponsaveisEquipe || {}).forEach((chave) => {
+ mapaResponsaveisEquipeNorm[normalizarTexto(chave)] = mapaResponsaveisEquipe[chave] || [];
+ });
+ Object.keys(mapaEquipesCoord || {}).forEach((chave) => {
+ mapaEquipesCoordNorm[normalizarTexto(chave)] = mapaEquipesCoord[chave] || [];
+ });
+
+ document.querySelectorAll(".btn-devolver-gabinete").forEach((btn) => {
+ btn.addEventListener("click", (event) => {
+ event.preventDefault();
+ formDevolverAtual = btn.closest("form");
+ if (motivoDevolucaoInput) {
+ motivoDevolucaoInput.value = "";
+ motivoDevolucaoInput.classList.remove("is-invalid");
+ }
+ if (textoDevolverSelecionado) {
+ const numero = btn.dataset.numero || "";
+ textoDevolverSelecionado.textContent = numero
+ ? `Processo: ${numero}`
+ : "Informe o motivo da devolucao.";
+ }
+ if (modalDevolver) {
+ const instancia = bootstrap.Modal.getOrCreateInstance(modalDevolver);
+ instancia.show();
+ }
+ });
+ });
+
+ if (btnConfirmarDevolucao) {
+ btnConfirmarDevolucao.addEventListener("click", () => {
+ if (!formDevolverAtual) return;
+ const motivo = (motivoDevolucaoInput?.value || "").trim();
+ if (!motivo) {
+ if (motivoDevolucaoInput) {
+ motivoDevolucaoInput.classList.add("is-invalid");
+ motivoDevolucaoInput.focus();
+ }
+ return;
+ }
+ const hiddenMotivo = formDevolverAtual.querySelector('input[name="motivo"]');
+ if (hiddenMotivo) hiddenMotivo.value = motivo;
+ formDevolverAtual.submit();
+ });
+ }
+
+ document.querySelectorAll(".btn-excluir-devolvido").forEach((btn) => {
+ btn.addEventListener("click", (event) => {
+ event.preventDefault();
+ formExcluirAtual = btn.closest("form");
+ if (textoExcluirSelecionado) {
+ const numero = btn.dataset.numero || "";
+ textoExcluirSelecionado.textContent = numero
+ ? `Processo: ${numero}`
+ : "Tem certeza de que deseja excluir?";
+ }
+ if (modalExcluirDevolvido) {
+ const instancia = bootstrap.Modal.getOrCreateInstance(modalExcluirDevolvido);
+ instancia.show();
+ }
+ });
+ });
+
+ if (btnConfirmarExclusao) {
+ btnConfirmarExclusao.addEventListener("click", () => {
+ if (!formExcluirAtual) return;
+ formExcluirAtual.submit();
+ });
+ }
+
+ const filtrarDestinatarios = (coordenadoria, equipe) => {
+ if (!destinatarioSelect) return;
+ const limparExtras = () => {
+ Array.from(destinatarioSelect.querySelectorAll("option[data-extra=\"1\"]")).forEach((opt) => opt.remove());
+ };
+ const coletarPermitidos = () => {
+ const coordNorm = normalizarTexto(coordenadoria);
+ const equipeNorm = normalizarTexto(equipe);
+ if (equipeNorm) {
+ return (mapaResponsaveisEquipeNorm[equipeNorm] || []).slice();
+ }
+ if (coordNorm) {
+ const equipes = mapaEquipesCoordNorm[coordNorm] || [];
+ let nomes = [];
+ equipes.forEach((eq) => {
+ nomes = nomes.concat(mapaResponsaveisEquipeNorm[normalizarTexto(eq)] || []);
+ });
+ return nomes;
+ }
+ return null;
+ };
+ const coordNorm = normalizarTexto(coordenadoria);
+ const equipeNorm = normalizarTexto(equipe);
+ const nomesPermitidos = coletarPermitidos() || [];
+ const setPermitidos = new Set(
+ (nomesPermitidos || []).map((nome) => normalizarTexto(nome))
+ );
+ const aplicarFiltro = Boolean(coordNorm || equipeNorm);
+ limparExtras();
+ Array.from(destinatarioSelect.options).forEach((opt) => {
+ if (!opt.value) return;
+ const isExtra = opt.dataset.extra === "1";
+ const optNome = normalizarTexto(opt.dataset.nome || "");
+ const optUser = normalizarTexto(opt.dataset.username || "");
+ const optCoord = normalizarTexto(opt.dataset.coordenadoria || "");
+ const optEquipe = normalizarTexto(opt.dataset.equipe || "");
+ const correspondeLista = !aplicarFiltro || setPermitidos.has(optNome) || setPermitidos.has(optUser);
+ const correspondeUsuario =
+ !aplicarFiltro
+ || (equipeNorm && optEquipe === equipeNorm)
+ || (coordNorm && optCoord === coordNorm);
+ const corresponde = isExtra ? correspondeLista : (correspondeUsuario || correspondeLista);
+ opt.hidden = !corresponde;
+ opt.disabled = !corresponde;
+ });
+ const existentes = new Set();
+ Array.from(destinatarioSelect.options).forEach((opt) => {
+ if (!opt.value || opt.hidden) return;
+ existentes.add(normalizarTexto(opt.dataset.nome || ""));
+ existentes.add(normalizarTexto(opt.dataset.username || ""));
+ });
+ const nomesExtras = aplicarFiltro ? (nomesPermitidos || []) : responsaveisGerencia;
+ (nomesExtras || []).forEach((nome) => {
+ const chave = normalizarTexto(nome);
+ if (!chave || existentes.has(chave)) return;
+ const opt = document.createElement("option");
+ opt.value = `lista:${nome}`;
+ opt.disabled = false;
+ opt.dataset.extra = "1";
+ opt.dataset.nome = nome;
+ opt.dataset.username = "";
+ opt.textContent = `${nome} (sem usuario)`;
+ destinatarioSelect.appendChild(opt);
+ });
+ destinatarioSelect.value = "";
+ };
+
+ const obterOpcoes = (listId) => {
+ const datalist = listId ? document.getElementById(listId) : null;
+ if (!datalist) return [];
+ return Array.from(datalist.querySelectorAll("option"))
+ .map((opt) => opt.value)
+ .filter(Boolean);
+ };
+
+ const deduplicar = (opcoes) => Array.from(new Set(opcoes));
+
+ const renderizarOpcoes = (dropdown, opcoes) => {
+ dropdown.innerHTML = "";
+ opcoes.forEach((opcao) => {
+ const botao = document.createElement("button");
+ botao.type = "button";
+ botao.className = "select-option";
+ botao.textContent = opcao;
+ botao.dataset.value = opcao;
+ dropdown.appendChild(botao);
+ });
+ };
+
+ const configurarSelectSearch = (wrapper) => {
+ const input = wrapper.querySelector("input[data-options-id]");
+ const dropdown = wrapper.querySelector(".select-dropdown");
+ if (!input || !dropdown) return;
+
+ const listId = input.dataset.optionsId || dropdown.dataset.optionsId;
+ if (!listId) return;
+
+ input.setAttribute("role", "combobox");
+ input.setAttribute("aria-autocomplete", "list");
+ input.setAttribute("aria-expanded", "false");
+ dropdown.setAttribute("role", "listbox");
+
+ const abrirDropdown = () => {
+ const opcoes = deduplicar(obterOpcoes(listId));
+ if (!opcoes.length) return;
+ dropdown.classList.add("show");
+ input.setAttribute("aria-expanded", "true");
+ };
+
+ const fecharDropdown = () => {
+ dropdown.classList.remove("show");
+ input.setAttribute("aria-expanded", "false");
+ };
+
+ const filtrarOpcoes = () => {
+ const termo = normalizarTexto(input.value);
+ const opcoes = deduplicar(obterOpcoes(listId));
+ const opcoesNormalizadas = opcoes.map((opcao) => normalizarTexto(opcao));
+ const filtradas = opcoes.filter((opcao, indice) => {
+ if (!termo) return true;
+ return opcoesNormalizadas[indice].includes(termo);
+ });
+ renderizarOpcoes(dropdown, filtradas);
+ if (filtradas.length) {
+ abrirDropdown();
+ } else {
+ fecharDropdown();
+ }
+ };
+
+ input.addEventListener("focus", filtrarOpcoes);
+ input.addEventListener("input", filtrarOpcoes);
+ input.addEventListener("keydown", (event) => {
+ if (event.key === "Escape") {
+ fecharDropdown();
+ }
+ });
+
+ dropdown.addEventListener("mousedown", (event) => {
+ const opcao = event.target.closest(".select-option");
+ if (!opcao) return;
+ event.preventDefault();
+ input.value = opcao.dataset.value || opcao.textContent || "";
+ input.dispatchEvent(new Event("input", { bubbles: true }));
+ input.dispatchEvent(new Event("change", { bubbles: true }));
+ fecharDropdown();
+ });
+
+ document.addEventListener("click", (event) => {
+ if (!wrapper.contains(event.target)) {
+ fecharDropdown();
+ }
+ });
+ };
+
+ document.querySelectorAll(".select-search").forEach((wrapper) => {
+ configurarSelectSearch(wrapper);
+ });
+
+ const alinharInicio = (elemento) => {
+ const wrapper = elemento ? elemento.closest(".process-list-wrapper") : null;
+ if (wrapper) {
+ wrapper.scrollTo({ left: 0, behavior: "smooth" });
+ }
+ if (elemento) {
+ elemento.scrollIntoView({ behavior: "smooth", block: "start", inline: "start" });
+ }
+ };
+
+ const mostrarTodosProcessos = () => {
+ document.querySelectorAll(".process-row").forEach((linha) => linha.classList.remove("d-none"));
+ document.querySelectorAll(".ficha-tecnica-row").forEach((linha) => {
+ linha.classList.add("d-none");
+ const botao = document.querySelector(`[data-ficha-target="${linha.id}"]`);
+ if (botao) {
+ botao.setAttribute("aria-expanded", "false");
+ }
+ });
+ document.querySelectorAll(".history-row").forEach((linha) => {
+ linha.classList.remove("d-none");
+ const instancia = bootstrap.Collapse.getInstance(linha);
+ if (instancia) {
+ instancia.hide();
+ }
+ linha.classList.remove("show");
+ linha.classList.add("collapse");
+ });
+ document.querySelectorAll(".btn-toggle-hist").forEach((botao) => botao.setAttribute("aria-expanded", "false"));
+ };
+
+ const ocultarHistoricos = () => {
+ document.querySelectorAll(".history-row").forEach((linha) => {
+ const instancia = bootstrap.Collapse.getInstance(linha);
+ if (instancia) {
+ instancia.hide();
+ }
+ linha.classList.remove("show");
+ linha.classList.add("collapse");
+ });
+ document.querySelectorAll(".btn-toggle-hist").forEach((botao) => botao.setAttribute("aria-expanded", "false"));
+ };
+
+ const ocultarFichas = () => {
+ document.querySelectorAll(".ficha-tecnica-row").forEach((linha) => {
+ linha.classList.add("d-none");
+ const botao = document.querySelector(`[data-ficha-target="${linha.id}"]`);
+ if (botao) {
+ botao.setAttribute("aria-expanded", "false");
+ }
+ });
+ };
+
+ const filtrarParaProcesso = (procId) => {
+ if (!procId) return;
+ document.querySelectorAll(".process-row").forEach((linha) => {
+ linha.classList.toggle("d-none", linha.dataset.procId !== procId);
+ });
+ document.querySelectorAll(".ficha-tecnica-row").forEach((linha) => {
+ if (linha.dataset.procId !== procId) {
+ linha.classList.add("d-none");
+ } else {
+ linha.classList.remove("d-none");
+ }
+ });
+ document.querySelectorAll(".history-row").forEach((linha) => {
+ if (linha.dataset.procId !== procId) {
+ linha.classList.add("d-none");
+ } else {
+ linha.classList.remove("d-none");
+ }
+ });
+ };
+
+ const alternarFicha = (alvoId, procId) => {
+ if (!alvoId) return;
+ const linha = document.getElementById(alvoId);
+ if (!linha) return;
+ const estavaAberta = !linha.classList.contains("d-none");
+ ocultarHistoricos();
+ ocultarFichas();
+ if (estavaAberta) {
+ mostrarTodosProcessos();
+ return;
+ }
+ filtrarParaProcesso(procId);
+ linha.classList.remove("d-none");
+ const botaoAtual = document.querySelector(`[data-ficha-target="${alvoId}"]`);
+ if (botaoAtual) {
+ botaoAtual.setAttribute("aria-expanded", "true");
+ }
+ alinharInicio(linha);
+ };
+
+ document.querySelectorAll(".btn-toggle-ficha").forEach((botaoFicha) => {
+ botaoFicha.addEventListener("click", (event) => {
+ event.preventDefault();
+ event.stopPropagation();
+ alternarFicha(botaoFicha.dataset.fichaTarget, botaoFicha.dataset.procId);
+ });
+ });
+
+ const alternarHistorico = (alvoId, procId) => {
+ if (!alvoId) return;
+ const linha = document.getElementById(alvoId);
+ if (!linha) return;
+ const instancia = bootstrap.Collapse.getOrCreateInstance(linha, { toggle: false });
+ const estavaAberto = linha.classList.contains("show");
+ ocultarHistoricos();
+ ocultarFichas();
+ if (estavaAberto) {
+ mostrarTodosProcessos();
+ return;
+ }
+ filtrarParaProcesso(procId);
+ linha.classList.remove("d-none");
+ instancia.show();
+ const botao = document.querySelector(`[data-hist-target="${alvoId}"]`);
+ if (botao) {
+ botao.setAttribute("aria-expanded", "true");
+ }
+ alinharInicio(linha);
+ };
+
+ document.querySelectorAll(".btn-toggle-hist").forEach((botaoHist) => {
+ botaoHist.addEventListener("click", (event) => {
+ event.preventDefault();
+ event.stopPropagation();
+ alternarHistorico(botaoHist.dataset.histTarget, botaoHist.dataset.procId);
+ });
+ });
+
+ document.querySelectorAll(".btn-atribuir").forEach(function (btn) {
+ btn.addEventListener("click", function () {
+ const procId = btn.dataset.proc;
+ const numero = btn.dataset.numero || "";
+ const assignedName = (btn.dataset.assignedName || "").trim();
+ const coordProc = btn.dataset.coordenadoria || "";
+ const equipeProc = btn.dataset.equipe || "";
+ const possuiAtribuicao = assignedName.length > 0;
+  if (formAtribuir && actionTemplate && procId) {
+  formAtribuir.reset();
+  formAtribuir.action = actionTemplate.replace("999999", procId);
+  if (acaoAtribuirHidden) acaoAtribuirHidden.value = "atribuir";
+  if (destinatarioSelect) destinatarioSelect.required = true;
+  }
+  if (destinatarioSelect) {
+  filtrarDestinatarios(coordProc, equipeProc);
+  }
+  if (textoSelecionado) {
+  textoSelecionado.textContent = numero ? "Processo: " + numero : "Processo selecionado";
+  }
+  if (statusAtribuicaoModal) {
+  statusAtribuicaoModal.textContent = possuiAtribuicao
+  ? `Ja atribuido para ${assignedName}.`
+  : "Processo sem atribuicao no momento.";
+  statusAtribuicaoModal.className = possuiAtribuicao
+  ? "alert alert-warning py-2 px-3 small mb-3"
+  : "alert alert-info py-2 px-3 small mb-3";
+  }
+  if (btnDesatribuirModal) {
+  btnDesatribuirModal.classList.toggle("d-none", !possuiAtribuicao);
+  }
+  if (btnConfirmarAtribuicaoModal) {
+  btnConfirmarAtribuicaoModal.textContent = possuiAtribuicao
+  ? "Reatribuir"
+  : "Confirmar atribuicao";
+  }
+  if (modalAtribuir) {
+  const modalInstance = bootstrap.Modal.getOrCreateInstance(modalAtribuir);
+  modalInstance.show();
+  }
+ });
+ });
+
+ if (btnDesatribuirModal && formAtribuir) {
+ btnDesatribuirModal.addEventListener("click", function () {
+ if (acaoAtribuirHidden) acaoAtribuirHidden.value = "liberar";
+ if (destinatarioSelect) destinatarioSelect.required = false;
+ formAtribuir.submit();
+ });
+ }
+
+ // Marca notificacoes como lidas ao abrir o painel
+ const painelNotificacoes = document.getElementById("painelNotificacoes");
+ const badgeNotificacoes = document.getElementById("badgeNotificacoes");
+ if (painelNotificacoes) {
+ painelNotificacoes.addEventListener("shown.bs.offcanvas", async () => {
+ try {
+ const resp = await fetch("{{ url_for('gerenciar_notificacoes') }}", {
+ method: "POST",
+ headers: { "Content-Type": "application/x-www-form-urlencoded" },
+ body: "acao=marcar_todas",
+ credentials: "same-origin",
+ });
+ if (resp.ok && badgeNotificacoes) {
+ badgeNotificacoes.remove();
+ }
+ } catch (err) {
+ console.error("Nao foi possivel marcar notificacoes como lidas.", err);
+ }
+ });
+ }
+
+ const toastEl = document.getElementById("toastNotificacao");
+ if (toastEl && toastEl.dataset.mensagem && toastEl.dataset.mensagem.trim() !== "") {
+ const toast = bootstrap.Toast.getOrCreateInstance(toastEl);
+ toast.show();
+ }
+
+});
+</script>
+
+
+{% include "_assistente_global.html" %}
+</body>
+
+</html>
+
+
+
+
+
+

@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: controle-de-processos
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn "app:create_app()" --bind 0.0.0.0:$PORT
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.10
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SITE_EM_CONFIGURACAO
+        value: "0"
+      - key: RESET_DATABASE_ON_START
+        value: "0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: controle-de-processos-db
+          property: connectionString
+
+databases:
+  - name: controle-de-processos-db
+    plan: free
