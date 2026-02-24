@@ -3010,6 +3010,12 @@ def _normalizar_snapshot(snapshot):
     return snapshot
 
 
+def _normalizar_dados_extra(dados_extra):
+    """Garante dicionario para dados extras mesmo em bases legadas (texto JSON)."""
+    normalizado = _normalizar_snapshot(dados_extra)
+    return normalizado if isinstance(normalizado, dict) else {}
+
+
 def coletar_gerencias_envolvidas(processo: Processo) -> List[str]:
     """Retorna a trilha de gerencias pelas quais o processo passou."""
     vistos = set()
@@ -4678,7 +4684,7 @@ def gerencia(nome_gerencia):
                     ]
                 gerencias_validas = set()
                 for item in relacionados_grupo:
-                    extras_item = item.dados_extra or {}
+                    extras_item = _normalizar_dados_extra(item.dados_extra)
                     if extras_item.get("devolvido_gabinete"):
                         continue
                     for ger in coletar_gerencias_envolvidas(item):
@@ -4692,7 +4698,7 @@ def gerencia(nome_gerencia):
                 gerencias_env = set()
                 gerencias_abertas = set()
                 for item in relacionados_grupo:
-                    extras_item = item.dados_extra or {}
+                    extras_item = _normalizar_dados_extra(item.dados_extra)
                     if extras_item.get("devolvido_gabinete"):
                         continue
                     gerencias_item = extras_item.get("gerencias_escolhidas") or []
@@ -4728,7 +4734,7 @@ def gerencia(nome_gerencia):
                 trilhas_por_chave: Dict[str, Dict[str, object]] = {}
                 for item in relacionados_grupo:
                     trilha_itens: List[str] = []
-                    extras_item = item.dados_extra or {}
+                    extras_item = _normalizar_dados_extra(item.dados_extra)
                     if extras_item.get("devolvido_gabinete"):
                         continue
                     gerencias_item = extras_item.get("gerencias_escolhidas") or []
@@ -4956,6 +4962,10 @@ def gerencia(nome_gerencia):
             )
             if request.args.get("ack_meus_processos"):
                 session["meus_processos_visto"] = meus_processos_total_usuario
+
+    for lista_proc in (processos, finalizados, devolvidos):
+        for processo in lista_proc:
+            processo.dados_extra = _normalizar_dados_extra(getattr(processo, "dados_extra", None))
 
     historico_finalizados = {}
     for processo in finalizados:
