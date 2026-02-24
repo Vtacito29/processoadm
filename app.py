@@ -48,7 +48,7 @@ from flask_login import (
     logout_user,
 )
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import func, inspect, text, or_
+from sqlalchemy import func, inspect, text, or_, cast
 from sqlalchemy.orm import joinedload, selectinload
 from werkzeug.security import check_password_hash, generate_password_hash
 # removed upload feature
@@ -3506,8 +3506,13 @@ def inicializar():
 
 def aplicar_filtro_devolvidos_gabinete(consulta):
     """Remove processos marcados como devolvidos do gabinete."""
-    flag_devolvido = Processo.dados_extra["devolvido_gabinete"].as_boolean()
-    return consulta.filter(or_(flag_devolvido.is_(None), flag_devolvido.is_(False)))
+    dados_extra_txt = func.lower(cast(Processo.dados_extra, db.Text))
+    return consulta.filter(
+        or_(
+            Processo.dados_extra.is_(None),
+            ~dados_extra_txt.like('%"devolvido_gabinete"%true%'),
+        )
+    )
 
 
 def obter_contagens_por_gerencia():
@@ -4614,12 +4619,11 @@ def gerencia(nome_gerencia):
         return itens[inicio:fim], PaginacaoSimples()
 
     if not SITE_EM_CONFIGURACAO:
-        flag_devolvido = Processo.dados_extra["devolvido_gabinete"].as_boolean()
         consulta = Processo.query.filter(
             Processo.gerencia == gerencia_alvo, Processo.finalizado_em.is_(None)
         )
         if gerencia_alvo == "GABINETE":
-            consulta = consulta.filter(or_(flag_devolvido.is_(None), flag_devolvido.is_(False)))
+            consulta = aplicar_filtro_devolvidos_gabinete(consulta)
         consulta = aplicar_filtros_processo(consulta)
 
         if gerencia_alvo == "SAIDA":
