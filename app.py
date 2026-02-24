@@ -67,6 +67,7 @@ IMPORT_CACHE_TTL_MIN = 90
 IMPORT_CACHE: Dict[str, Dict[str, object]] = {}
 OPENPYXL_MIN_VERSION = "3.1.5"
 MAX_IMPORT_FILE_SIZE_MB = 12
+IMPORT_COMMIT_BATCH_DEFAULT = 250
 
 
 def _env_int(nome: str, padrao: int) -> int:
@@ -178,6 +179,7 @@ AUTO_CORRIGIR_DADOS_ON_START = (
     in {"1", "true", "on", "yes"}
 )
 MAX_IMPORT_FILE_SIZE_BYTES = max(1, _env_int("MAX_IMPORT_FILE_SIZE_MB", MAX_IMPORT_FILE_SIZE_MB)) * 1024 * 1024
+IMPORT_COMMIT_BATCH_SIZE = max(1, _env_int("IMPORT_COMMIT_BATCH_SIZE", IMPORT_COMMIT_BATCH_DEFAULT))
 
 ILUSTRACAO_FORMATOS_SUPORTADOS = (".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif")
 CAMPO_EXTRA_TIPOS = {
@@ -1693,6 +1695,18 @@ class CampoExtra(db.Model):
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+class ImportacaoTemp(db.Model):
+    """Armazena arquivos temporarios de importacao para sobreviver a reinicios."""
+
+    __tablename__ = "importacoes_temp"
+
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    nome_arquivo = db.Column(db.String(255), nullable=False)
+    conteudo = db.Column(db.LargeBinary, nullable=False)
+    criado_em = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+
 class Notificacao(db.Model):
     """Avisos simples direcionados a um usuario."""
 
@@ -2201,6 +2215,15 @@ def _limpar_cache_importacao() -> None:
                 os.remove(caminho)
             except OSError:
                 pass
+    try:
+        removidos = (
+            ImportacaoTemp.query.filter(ImportacaoTemp.criado_em < limite)
+            .delete(synchronize_session=False)
+        )
+        if removidos:
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 def _diretorios_importacao_temp() -> List[str]:
@@ -2235,12 +2258,43 @@ def _registrar_importacao_temp(arquivo) -> Optional[str]:
     _limpar_cache_importacao()
     ext = os.path.splitext(arquivo.filename)[1] or ".xlsx"
     token = secrets.token_urlsafe(16)
+    conteudo_bytes = b""
+    try:
+        stream = getattr(arquivo, "stream", None)
+        if stream is not None:
+            posicao = stream.tell()
+            stream.seek(0, os.SEEK_SET)
+            conteudo_bytes = stream.read() or b""
+            stream.seek(posicao, os.SEEK_SET)
+    except Exception:
+        conteudo_bytes = b""
+
+    if conteudo_bytes:
+        try:
+            db.session.add(
+                ImportacaoTemp(
+                    token=token,
+                    nome_arquivo=arquivo.filename,
+                    conteudo=conteudo_bytes,
+                    criado_em=datetime.utcnow(),
+                )
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            logger.exception("Erro ao salvar importacao temporaria no banco.")
+
     destinos = _diretorios_importacao_temp()
     ultimo_erro = None
     for base in destinos:
         try:
             os.makedirs(base, exist_ok=True)
             caminho = os.path.join(base, f"{token}{ext}")
+            try:
+                if getattr(arquivo, "stream", None) is not None:
+                    arquivo.stream.seek(0, os.SEEK_SET)
+            except Exception:
+                pass
             arquivo.save(caminho)
             IMPORT_CACHE[token] = {
                 "caminho": caminho,
@@ -2251,6 +2305,13 @@ def _registrar_importacao_temp(arquivo) -> Optional[str]:
         except Exception as exc:
             ultimo_erro = exc
             logger.exception("Erro ao salvar arquivo temporario de importacao em %s", base)
+    if conteudo_bytes:
+        IMPORT_CACHE[token] = {
+            "caminho": None,
+            "criado_em": datetime.utcnow(),
+            "nome": arquivo.filename,
+        }
+        return token
     if ultimo_erro:
         return None
     return None
@@ -2285,13 +2346,36 @@ def _obter_importacao_temp(token: str) -> Optional[Dict[str, object]]:
         return info
 
     caminho = _localizar_arquivo_importacao(token)
-    if not caminho:
-        return None
+    if caminho:
+        info = {
+            "caminho": caminho,
+            "criado_em": datetime.utcnow(),
+            "nome": os.path.basename(caminho),
+        }
+        IMPORT_CACHE[token] = info
+        return info
 
+    registro = ImportacaoTemp.query.filter_by(token=token).first()
+    if not registro or not registro.conteudo:
+        return None
+    ext = os.path.splitext(registro.nome_arquivo or "")[1] or ".xlsx"
+    caminho_recuperado = None
+    for base in _diretorios_importacao_temp():
+        try:
+            os.makedirs(base, exist_ok=True)
+            caminho_recuperado = os.path.join(base, f"{token}{ext}")
+            with open(caminho_recuperado, "wb") as arquivo:
+                arquivo.write(registro.conteudo)
+            break
+        except Exception:
+            caminho_recuperado = None
+            continue
+    if not caminho_recuperado:
+        return None
     info = {
-        "caminho": caminho,
+        "caminho": caminho_recuperado,
         "criado_em": datetime.utcnow(),
-        "nome": os.path.basename(caminho),
+        "nome": registro.nome_arquivo or os.path.basename(caminho_recuperado),
     }
     IMPORT_CACHE[token] = info
     return info
@@ -2314,6 +2398,11 @@ def _remover_importacao_temp(token: str) -> None:
             os.remove(caminho_disco)
         except OSError:
             pass
+    try:
+        ImportacaoTemp.query.filter_by(token=token).delete(synchronize_session=False)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 def _sugerir_mapeamento_importacao(colunas: List[str]) -> Dict[str, str]:
@@ -4104,6 +4193,7 @@ def importar_excel():
             extras_colunas[col] = campo_extra
 
     importados = 0
+    pendentes_lote = 0
     invalidos = []
     responsavel_padrao = current_user.nome or current_user.username or "USUARIO"
 
@@ -4161,6 +4251,21 @@ def importar_excel():
         if data:
             return datetime.combine(data, datetime.min.time())
         return None
+
+    def _commit_lote_importacao() -> bool:
+        """Confirma o lote atual de importacao no banco."""
+        nonlocal importados, pendentes_lote
+        if pendentes_lote <= 0:
+            return True
+        try:
+            db.session.commit()
+            importados += pendentes_lote
+            pendentes_lote = 0
+            return True
+        except Exception as exc:
+            db.session.rollback()
+            app.logger.exception("Erro ao salvar lote da importacao: %s", exc)
+            return False
 
     for idx, row in df.iterrows():
         linha_num = idx + 2
@@ -4338,17 +4443,17 @@ def importar_excel():
                     criado_em=finalizado_em,
                 )
             )
-        importados += 1
+        pendentes_lote += 1
+        if pendentes_lote >= IMPORT_COMMIT_BATCH_SIZE:
+            if not _commit_lote_importacao():
+                flash("Falha ao salvar a importacao no banco de dados.", "danger")
+                _remover_importacao_temp(token)
+                return redirect(url_for("importar_excel"))
 
-    if importados:
-        try:
-            db.session.commit()
-        except Exception as exc:
-            db.session.rollback()
-            app.logger.exception("Erro ao salvar importacao: %s", exc)
-            flash("Falha ao salvar a importacao no banco de dados.", "danger")
-            _remover_importacao_temp(token)
-            return redirect(url_for("importar_excel"))
+    if not _commit_lote_importacao():
+        flash("Falha ao salvar a importacao no banco de dados.", "danger")
+        _remover_importacao_temp(token)
+        return redirect(url_for("importar_excel"))
 
     _remover_importacao_temp(token)
 
