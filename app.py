@@ -2186,6 +2186,31 @@ def _limpar_cache_importacao() -> None:
                 pass
 
 
+def _diretorios_importacao_temp() -> List[str]:
+    """Lista destinos de arquivos temporarios da importacao."""
+    return [
+        IMPORT_CACHE_DIR,
+        os.path.join(tempfile.gettempdir(), "controle_processos_imports"),
+    ]
+
+
+def _localizar_arquivo_importacao(token: str) -> Optional[str]:
+    """Procura arquivo temporario em disco quando cache em memoria nao existe."""
+    if not token:
+        return None
+    prefixo = f"{token}."
+    for base in _diretorios_importacao_temp():
+        try:
+            if not os.path.isdir(base):
+                continue
+            for nome in os.listdir(base):
+                if nome.startswith(prefixo):
+                    return os.path.join(base, nome)
+        except OSError:
+            continue
+    return None
+
+
 def _registrar_importacao_temp(arquivo) -> Optional[str]:
     """Salva arquivo temporario e retorna um token de referencia."""
     if not arquivo or not arquivo.filename:
@@ -2193,10 +2218,7 @@ def _registrar_importacao_temp(arquivo) -> Optional[str]:
     _limpar_cache_importacao()
     ext = os.path.splitext(arquivo.filename)[1] or ".xlsx"
     token = secrets.token_urlsafe(16)
-    destinos = [
-        IMPORT_CACHE_DIR,
-        os.path.join(tempfile.gettempdir(), "controle_processos_imports"),
-    ]
+    destinos = _diretorios_importacao_temp()
     ultimo_erro = None
     for base in destinos:
         try:
@@ -2221,7 +2243,21 @@ def _obter_importacao_temp(token: str) -> Optional[Dict[str, object]]:
     """Recupera informacoes do arquivo temporario de importacao."""
     if not token:
         return None
-    return IMPORT_CACHE.get(token)
+    info = IMPORT_CACHE.get(token)
+    if info and info.get("caminho") and os.path.exists(str(info.get("caminho"))):
+        return info
+
+    caminho = _localizar_arquivo_importacao(token)
+    if not caminho:
+        return None
+
+    info = {
+        "caminho": caminho,
+        "criado_em": datetime.utcnow(),
+        "nome": os.path.basename(caminho),
+    }
+    IMPORT_CACHE[token] = info
+    return info
 
 
 def _remover_importacao_temp(token: str) -> None:
@@ -2233,6 +2269,12 @@ def _remover_importacao_temp(token: str) -> None:
     if caminho:
         try:
             os.remove(caminho)
+        except OSError:
+            pass
+    caminho_disco = _localizar_arquivo_importacao(token)
+    if caminho_disco:
+        try:
+            os.remove(caminho_disco)
         except OSError:
             pass
 
@@ -3334,8 +3376,8 @@ def inicializar():
 
 def aplicar_filtro_devolvidos_gabinete(consulta):
     """Remove processos marcados como devolvidos do gabinete."""
-    flag_devolvido = Processo.dados_extra["devolvido_gabinete"].as_boolean()
-    return consulta.filter(or_(flag_devolvido.is_(None), flag_devolvido.is_(False)))
+    flag_devolvido = func.json_extract(Processo.dados_extra, "$.devolvido_gabinete")
+    return consulta.filter(or_(flag_devolvido.is_(None), flag_devolvido == 0))
 
 
 def obter_contagens_por_gerencia():
@@ -4171,7 +4213,6 @@ def importar_excel():
             processo.classificacao_institucional = classificacao
 
         db.session.add(processo)
-        db.session.flush()
 
         # Para linhas importadas sem trilha historica, cria uma trilha minima consistente
         # usando as datas da planilha (cadastro -> finalizacao gerencia -> encerramento geral).
@@ -4415,12 +4456,12 @@ def gerencia(nome_gerencia):
         return itens[inicio:fim], PaginacaoSimples()
 
     if not SITE_EM_CONFIGURACAO:
-        flag_devolvido = Processo.dados_extra["devolvido_gabinete"].as_boolean()
+        flag_devolvido = func.json_extract(Processo.dados_extra, "$.devolvido_gabinete")
         consulta = Processo.query.filter(
             Processo.gerencia == gerencia_alvo, Processo.finalizado_em.is_(None)
         )
         if gerencia_alvo == "GABINETE":
-            consulta = consulta.filter(or_(flag_devolvido.is_(None), flag_devolvido.is_(False)))
+            consulta = consulta.filter(or_(flag_devolvido.is_(None), flag_devolvido == 0))
         consulta = aplicar_filtros_processo(consulta)
 
         if gerencia_alvo == "SAIDA":
@@ -4648,7 +4689,7 @@ def gerencia(nome_gerencia):
         )
         if gerencia_alvo == "GABINETE":
             consulta_finalizados = consulta_finalizados.filter(
-                or_(flag_devolvido.is_(None), flag_devolvido.is_(False))
+                or_(flag_devolvido.is_(None), flag_devolvido == 0)
             )
         consulta_finalizados = aplicar_filtros_processo(consulta_finalizados)
         finalizados = (
@@ -4659,7 +4700,7 @@ def gerencia(nome_gerencia):
                 Processo.query.filter(
                     Processo.gerencia == "GABINETE",
                     Processo.finalizado_em.is_(None),
-                    flag_devolvido.is_(True),
+                    flag_devolvido == 1,
                 )
                 .order_by(Processo.atualizado_em.desc())
                 .all()
