@@ -66,6 +66,18 @@ IMPORT_CACHE_DIR = os.path.join(BASE_DIR, "tmp_imports")
 IMPORT_CACHE_TTL_MIN = 90
 IMPORT_CACHE: Dict[str, Dict[str, object]] = {}
 OPENPYXL_MIN_VERSION = "3.1.5"
+MAX_IMPORT_FILE_SIZE_MB = 12
+
+
+def _env_int(nome: str, padrao: int) -> int:
+    """Le inteiro de variavel de ambiente com fallback seguro."""
+    valor = os.environ.get(nome)
+    if valor is None:
+        return padrao
+    try:
+        return int(str(valor).strip())
+    except (TypeError, ValueError):
+        return padrao
 
 IMPORT_FIELDS = [
     ("numero_sei", "Número SEI"),
@@ -161,6 +173,11 @@ RESET_DATABASE_ON_START = (
     os.environ.get("RESET_DATABASE_ON_START", "0").strip().lower()
     in {"1", "true", "on", "yes"}
 )
+AUTO_CORRIGIR_DADOS_ON_START = (
+    os.environ.get("AUTO_CORRIGIR_DADOS_ON_START", "0").strip().lower()
+    in {"1", "true", "on", "yes"}
+)
+MAX_IMPORT_FILE_SIZE_BYTES = max(1, _env_int("MAX_IMPORT_FILE_SIZE_MB", MAX_IMPORT_FILE_SIZE_MB)) * 1024 * 1024
 
 ILUSTRACAO_FORMATOS_SUPORTADOS = (".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif")
 CAMPO_EXTRA_TIPOS = {
@@ -2239,6 +2256,26 @@ def _registrar_importacao_temp(arquivo) -> Optional[str]:
     return None
 
 
+def _tamanho_upload_bytes(arquivo) -> int:
+    """Retorna tamanho do upload em bytes quando possivel."""
+    if not arquivo:
+        return 0
+    tamanho = getattr(arquivo, "content_length", None)
+    if isinstance(tamanho, int) and tamanho > 0:
+        return tamanho
+    stream = getattr(arquivo, "stream", None)
+    if stream is None:
+        return 0
+    try:
+        posicao = stream.tell()
+        stream.seek(0, os.SEEK_END)
+        total = stream.tell()
+        stream.seek(posicao, os.SEEK_SET)
+        return int(total) if total and total > 0 else 0
+    except Exception:
+        return 0
+
+
 def _obter_importacao_temp(token: str) -> Optional[Dict[str, object]]:
     """Recupera informacoes do arquivo temporario de importacao."""
     if not token:
@@ -3366,12 +3403,16 @@ def inicializar():
     db.create_all()
     garantir_colunas_extra()
     garantir_usuario_padrao()
-    promover_usuarios_acesso_total()
-    preencher_planilhador_padrao()
-
-    corrigidos = corrigir_gerencias_sem_cadastro()
-    if corrigidos:
-        app.logger.info("Gerncias atualizadas automaticamente: %s.", corrigidos)
+    if AUTO_CORRIGIR_DADOS_ON_START:
+        promover_usuarios_acesso_total()
+        preencher_planilhador_padrao()
+        corrigidos = corrigir_gerencias_sem_cadastro()
+        if corrigidos:
+            app.logger.info("Gerncias atualizadas automaticamente: %s.", corrigidos)
+    else:
+        app.logger.info(
+            "AUTO_CORRIGIR_DADOS_ON_START=0 -> pulando normalizacoes pesadas no startup."
+        )
 
 
 def aplicar_filtro_devolvidos_gabinete(consulta):
@@ -3875,6 +3916,18 @@ def importar_excel():
             arquivo = request.files.get("arquivo")
             if not arquivo or not arquivo.filename:
                 flash("Selecione um arquivo Excel para importar.", "warning")
+                return redirect(url_for("importar_excel"))
+            tamanho_upload = _tamanho_upload_bytes(arquivo)
+            if tamanho_upload and tamanho_upload > MAX_IMPORT_FILE_SIZE_BYTES:
+                limite_mb = int(MAX_IMPORT_FILE_SIZE_BYTES / (1024 * 1024))
+                tamanho_mb = round(tamanho_upload / (1024 * 1024), 2)
+                flash(
+                    (
+                        f"Arquivo muito grande ({tamanho_mb} MB). "
+                        f"Limite atual: {limite_mb} MB."
+                    ),
+                    "warning",
+                )
                 return redirect(url_for("importar_excel"))
 
             token = _registrar_importacao_temp(arquivo)
