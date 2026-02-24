@@ -3334,8 +3334,8 @@ def inicializar():
 
 def aplicar_filtro_devolvidos_gabinete(consulta):
     """Remove processos marcados como devolvidos do gabinete."""
-    flag_devolvido = func.json_extract(Processo.dados_extra, "$.devolvido_gabinete")
-    return consulta.filter(or_(flag_devolvido.is_(None), flag_devolvido == 0))
+    flag_devolvido = Processo.dados_extra["devolvido_gabinete"].as_boolean()
+    return consulta.filter(or_(flag_devolvido.is_(None), flag_devolvido.is_(False)))
 
 
 def obter_contagens_por_gerencia():
@@ -4415,12 +4415,12 @@ def gerencia(nome_gerencia):
         return itens[inicio:fim], PaginacaoSimples()
 
     if not SITE_EM_CONFIGURACAO:
-        flag_devolvido = func.json_extract(Processo.dados_extra, "$.devolvido_gabinete")
+        flag_devolvido = Processo.dados_extra["devolvido_gabinete"].as_boolean()
         consulta = Processo.query.filter(
             Processo.gerencia == gerencia_alvo, Processo.finalizado_em.is_(None)
         )
         if gerencia_alvo == "GABINETE":
-            consulta = consulta.filter(or_(flag_devolvido.is_(None), flag_devolvido == 0))
+            consulta = consulta.filter(or_(flag_devolvido.is_(None), flag_devolvido.is_(False)))
         consulta = aplicar_filtros_processo(consulta)
 
         if gerencia_alvo == "SAIDA":
@@ -4648,7 +4648,7 @@ def gerencia(nome_gerencia):
         )
         if gerencia_alvo == "GABINETE":
             consulta_finalizados = consulta_finalizados.filter(
-                or_(flag_devolvido.is_(None), flag_devolvido == 0)
+                or_(flag_devolvido.is_(None), flag_devolvido.is_(False))
             )
         consulta_finalizados = aplicar_filtros_processo(consulta_finalizados)
         finalizados = (
@@ -4659,7 +4659,7 @@ def gerencia(nome_gerencia):
                 Processo.query.filter(
                     Processo.gerencia == "GABINETE",
                     Processo.finalizado_em.is_(None),
-                    flag_devolvido == 1,
+                    flag_devolvido.is_(True),
                 )
                 .order_by(Processo.atualizado_em.desc())
                 .all()
