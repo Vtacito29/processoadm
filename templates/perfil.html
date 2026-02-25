@@ -1,0 +1,102 @@
+﻿<!DOCTYPE html>
+<!--
+ Template: perfil.html
+ Proposito: Edicao dos dados do usuario logado.
+ Variaveis esperadas: current_user, gerências e mensagens flash.
+-->
+<html lang="pt-br">
+<head>
+ <meta charset="UTF-8">
+ <title>Meu Perfil - Controle de Processos</title>
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+ <link href="{{ url_for('static', filename='css/global.css') }}" rel="stylesheet">
+</head>
+<body class="bg-light">
+<div class="container py-5">
+ <div class="row justify-content-center">
+ <div class="col-md-7 col-lg-5">
+ <div class="card shadow-sm border-0">
+ <div class="card-body p-4">
+ <h1 class="h5 mb-2 text-center">Editar perfil</h1>
+ <p class="text-muted small text-center mb-4">Atualize os dados exibidos no sistema.</p>
+ {% with mensagens = get_flashed_messages(with_categories=True) %}
+ {% if mensagens %}
+ {% for categoria, mensagem in mensagens %}
+ <div class="alert alert-{{ categoria }} alert-dismissible fade show" role="alert">
+ {{ mensagem }}
+ <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+ </div>
+ {% endfor %}
+ {% endif %}
+ {% endwith %}
+ <form method="post">
+ <div class="mb-3">
+ <label class="form-label" for="nome">Nome completo</label>
+ <input class="form-control" type="text" id="nome" name="nome" required value="{{ current_user.nome or '' }}">
+ </div>
+ <div class="mb-3">
+ <label class="form-label" for="email">E-mail</label>
+ <input class="form-control" type="email" id="email" name="email" required value="{{ current_user.email or '' }}">
+ </div>
+ <div class="mb-3">
+ <label class="form-label" for="username">Usuário</label>
+ <input class="form-control" type="text" id="username" name="username" required value="{{ current_user.username }}">
+ </div>
+ <div class="mb-3">
+ <label class="form-label" for="gerencia">Gerência</label>
+ <select class="form-select" id="gerencia" name="gerencia" {% if not current_user.acesso_total %}required{% endif %}>
+ {% if current_user.acesso_total %}
+ <option value="" {% if not current_user.gerencia_padrao %}selected{% endif %}>Sem gerência</option>
+ {% endif %}
+ {% for g in gerencias %}
+ <option value="{{ g }}" {% if current_user.gerencia_padrao == g %}selected{% endif %}>{{ g }}</option>
+ {% endfor %}
+ </select>
+ </div>
+ <div class="mb-3">
+ <label class="form-label" for="coordenadoria">Coordenadoria</label>
+ <input class="form-control" type="text" id="coordenadoria" name="coordenadoria" value="{{ current_user.coordenadoria or '' }}" {% if not current_user.acesso_total %}required{% endif %}>
+ </div>
+ <div class="mb-3">
+ <label class="form-label" for="equipe_area">Equipe / Setor</label>
+ <input class="form-control" type="text" id="equipe_area" name="equipe_area" value="{{ current_user.equipe_area or '' }}" {% if not current_user.acesso_total %}required{% endif %}>
+ </div>
+{% if current_user.acesso_total %}
+<p class="text-muted small">Usuários com acesso total podem deixar coordenadoria/equipe em branco.</p>
+{% endif %}
+ <hr class="my-4">
+ <div class="mb-3">
+ <label class="form-label" for="senha_atual">Confirme sua senha atual</label>
+ <input class="form-control" type="password" id="senha_atual" name="senha_atual" required>
+ <div class="form-text">Obrigatório para salvar qualquer alteração.</div>
+ </div>
+ <div class="mb-3">
+ <label class="form-label" for="senha_nova">Nova senha (opcional)</label>
+ <input class="form-control" type="password" id="senha_nova" name="senha_nova">
+ </div>
+ <div class="mb-3">
+ <label class="form-label" for="senha_confirma">Confirme a nova senha</label>
+ <input class="form-control" type="password" id="senha_confirma" name="senha_confirma">
+ </div>
+ <p class="text-muted small mb-0">Se não quiser trocar a senha, deixe os campos em branco.</p>
+ <p class="text-muted small">Ou use a tela de <a href="{{ url_for('trocar_senha') }}">Trocar senha</a>.</p>
+ <div class="d-grid gap-2">
+ <button class="btn btn-primary" type="submit">Salvar alterações</button>
+ <a class="btn btn-outline-secondary" href="{{ url_for('index') }}">Voltar ao painel</a>
+ </div>
+ </form>
+ </div>
+ </div>
+ </div>
+ </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+
+
+
+
+
+

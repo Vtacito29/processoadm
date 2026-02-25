@@ -1,0 +1,211 @@
+/* Plano de fundo generico da tela de cadastro */
+body {
+    background-color: #f0f2f5;
+}
+
+/* Cartao central onde fica o formulario */
+.card-form {
+    max-width: 960px;
+    margin: 3rem auto;
+    border-radius: 1rem;
+    box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.1);
+}
+
+/* Titulo das secoes complementares */
+.section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #0d6efd;
+    margin-top: 1.5rem;
+}
+
+/* Grid de selecao de gerencias (chips clicaveis) */
+.gerencia-picker {
+    background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 0.85rem;
+    padding: 1rem;
+}
+
+.gerencia-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.6rem;
+}
+
+.gerencia-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    border: 1px solid #d5d9e1;
+    background: #ffffff;
+    border-radius: 0.85rem;
+    padding: 0.75rem 0.9rem;
+    text-align: left;
+    font-weight: 600;
+    color: #2c3748;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.gerencia-chip:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0.75rem 1.5rem rgba(0, 0, 0, 0.06);
+    border-color: #bfc7d4;
+}
+
+.gerencia-chip.disabled,
+.gerencia-chip:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+    box-shadow: none;
+    transform: none;
+}
+
+.gerencia-chip.disabled:hover,
+.gerencia-chip:disabled:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: #d5d9e1;
+}
+
+.gerencia-chip.active {
+    background: #0d6efd;
+    color: #ffffff;
+    border-color: #0d6efd;
+    box-shadow: 0 0.75rem 1.75rem rgba(13, 110, 253, 0.25);
+}
+
+.chip-order {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 999px;
+    border: 1px solid #d5d9e1;
+    background: #f8fafc;
+    color: #6c757d;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.gerencia-chip.active .chip-order {
+    background: #ffffff;
+    color: #0d6efd;
+    border-color: rgba(255, 255, 255, 0.85);
+}
+
+.gerencia-picker .form-text {
+    margin-bottom: 0;
+}
+
+.gerencia-picker-feedback {
+    border-style: dashed;
+    border-color: #f5c8a8;
+}
+
+.select-search {
+    position: relative;
+}
+
+.select-search .form-control {
+    padding-right: 2.25rem;
+}
+
+.select-search::after {
+    content: "v";
+    position: absolute;
+    right: 0.85rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6c757d;
+    pointer-events: none;
+    font-size: 0.85rem;
+}
+
+.select-dropdown {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: calc(100% + 0.35rem);
+    background: #ffffff;
+    border: 1px solid #ced4da;
+    border-radius: 0.6rem;
+    box-shadow: 0 1rem 2rem rgba(15, 23, 42, 0.12);
+    max-height: 240px;
+    overflow-y: auto;
+    z-index: 1060;
+    padding: 0.25rem 0;
+    display: none;
+}
+
+.select-dropdown.show {
+    display: block;
+}
+
+.select-option {
+    width: 100%;
+    background: transparent;
+    border: 0;
+    padding: 0.5rem 0.9rem;
+    text-align: left;
+    font-size: 0.95rem;
+    color: #1f2937;
+}
+
+.select-option:hover,
+.select-option:focus {
+    background: #e9f2ff;
+    color: #0d6efd;
+}
+
+.select-option:focus {
+    outline: none;
+}
+
+.select-search datalist {
+    display: none;
+}
+
+.resumo-box {
+    background: #f8fafc;
+    border-radius: 0.9rem;
+    border: 1px solid #e2e8f0;
+    padding: 1rem 1.25rem;
+    min-height: 100%;
+    box-shadow: 0 10px 22px -18px rgba(15, 23, 42, 0.35);
+}
+
+
+.resumo-label {
+    display: block;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    color: #64748b;
+}
+
+.resumo-value {
+    display: block;
+    margin-top: 0.35rem;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.ficha-tecnica-wrapper {
+    background: #f8fafc;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    border-radius: 1rem;
+    padding: 1.25rem;
+    box-shadow: 0 12px 26px -20px rgba(15, 23, 42, 0.35);
+    width: 100%;
+    max-width: none;
+}
+
+.ficha-tecnica-title {
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: -0.01em;
+    color: #0f172a;
+}

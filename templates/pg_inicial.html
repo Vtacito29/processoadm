@@ -1,0 +1,674 @@
+﻿<!DOCTYPE html>
+<!--
+ Template: pg_inicial.html
+ Proposito: Dashboard principal com vitrine de gerências, filtros e lista paginada.
+ Variaveis esperadas:
+ - processos, paginacao: lista e paginacao de processos em andamento
+ - contagens: dict gerência->total de processos ativos
+ - imagens_gerências, imagem_gerência_padrao: paths para ilustracoes
+ - metricas: indicadores gerais (andamento, finalizados, tempo medio)
+ - filtro_gerência, filtro_sei: filtros aplicados via querystring
+ - now, now_plus_7: datas auxiliares para destacar prazos
+ - SITE_EM_CONFIGURACAO, current_user: controle de exibicao e perfil
+-->
+<html lang="pt-br">
+<head>
+ <meta charset="UTF-8">
+ <title>Controle de Processos - Dashboard</title>
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+ <link href="{{ url_for('static', filename='css/global.css') }}" rel="stylesheet">
+ <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+ <link href="{{ url_for('static', filename='css/pg_inicial.css') }}" rel="stylesheet">
+</head>
+<body>
+<!-- Barra principal com navegacao e acoes rapidas -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+ <div class="container-fluid">
+ <a class="navbar-brand fw-semibold" href="{{ url_for('index') }}">Controle de Processos</a>
+ <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarConteudo">
+ <span class="navbar-toggler-icon"></span>
+ </button>
+ <div class="collapse navbar-collapse justify-content-end" id="navbarConteudo">
+ <ul class="navbar-nav align-items-lg-center gap-lg-3">
+ <li class="nav-item">
+ <a class="btn btn-outline-light btn-sm" href="{{ url_for('verificar_dados') }}">Histórico de Processos</a>
+ </li>
+ {% if current_user.is_authenticated %}
+ <li class="nav-item">
+ <a class="btn btn-outline-light btn-sm position-relative" href="{{ url_for('gerencia', nome_gerencia=gerencia_padrao_usuario or 'GABINETE', responsavel_id=current_user.id, ack_meus_processos=1) }}">
+ Meus Processos
+ {% if meus_processos_novos %}
+ <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+ {{ meus_processos_novos }}
+ </span>
+ {% endif %}
+ </a>
+ </li>
+ {% endif %}
+ {% if current_user.is_authenticated %}
+ <li class="nav-item dropdown">
+ <button class="btn btn-outline-light btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+ Perfil
+ </button>
+ <div class="dropdown-menu dropdown-menu-end p-0 overflow-hidden">
+ <div class="px-3 py-2 small">
+ <div class="fw-semibold">{{ current_user.nome or current_user.username }}</div>
+ <div class="text-muted">Login: {{ current_user.username }}</div>
+ <div class="text-muted">{{ current_user.email or '-' }}</div>
+ <div class="text-muted">Gerência: {{ current_user.gerencia_padrao or '-' }}</div>
+ <div class="text-muted">
+ Perfil:
+ {% if current_user.is_admin %}Assessoria{% elif current_user.acesso_total %}Acesso total{% elif current_user.is_gerente %}Gerente{% else %}Usuário{% endif %}
+ </div>
+ </div>
+ <div class="dropdown-divider my-0"></div>
+ <a class="dropdown-item small" href="{{ url_for('perfil') }}">Editar perfil</a>
+ <a class="dropdown-item small" href="{{ url_for('trocar_senha') }}">Trocar senha</a>
+ {% if current_user.is_admin or current_user.acesso_total %}
+ <a class="dropdown-item small" href="{{ url_for('login', form_action='register') }}">Cadastrar usuario</a>
+ {% endif %}
+ <a class="dropdown-item text-danger small" href="{{ url_for('logout') }}">Sair</a>
+ </div>
+ </li>
+ {% else %}
+ <li class="nav-item">
+ <a class="btn btn-outline-light btn-sm" href="{{ url_for('login') }}">Entrar</a>
+ </li>
+ {% endif %}
+ </ul>
+ </div>
+ </div>
+</nav>
+
+<!-- Conteudo principal com vitrine de gerências e lista paginada -->
+<main>
+ <!-- Faixa hero em largura total com resumo e acoes rapidas -->
+ <section class="hero-banner">
+ <div class="container hero">
+ <div class="row align-items-center gy-3">
+ <div class="col-12 col-lg-8">
+ <h1 class="hero-title mb-1">Monitoramento de Processos</h1>
+ <p class="hero-subtitle mb-0">Visualize, acompanhe prazos e acesse rapidamente cada gerência.</p>
+ </div>
+ <div class="col-12 col-lg-4">
+ <div class="hero-actions d-flex flex-wrap gap-2 justify-content-lg-end">
+ {% if SITE_EM_CONFIGURACAO %}
+ <button class="btn btn-hero btn-hero-secondary" type="button" disabled>
+ <i class="bi bi-hourglass-split me-1"></i> Disponível em breve
+ </button>
+ {% elif current_user.is_authenticated and pode_cadastrar_processo %}
+ <a class="btn btn-hero btn-hero-primary" href="{{ url_for('novo_processo') }}">
+ <i class="bi bi-plus-circle me-1"></i> Novo processo
+ </a>
+ {% elif not current_user.is_authenticated %}
+ <a class="btn btn-hero btn-hero-secondary" href="{{ url_for('login') }}">
+ <i class="bi bi-box-arrow-in-right me-1"></i> Entrar
+ </a>
+ {% endif %}
+ </div>
+ </div>
+ </div>
+ {% if SITE_EM_CONFIGURACAO %}
+ <div class="alert alert-info mt-4 mb-0">
+ Estamos preparando o novo banco de dados. Assim que os processos forem carregados,
+ os indicadores aparecero automaticamente aqui.
+ </div>
+ {% elif metricas %}
+ <div class="hero-metrics mt-4">
+ <div class="hero-metric hero-metric-btn" role="button" tabindex="0" data-anchor="#tabelaProcessos" data-filtro="ativos">
+ <span class="metric-label">Em andamento</span>
+ <span class="metric-value">{{ metricas.andamento }}</span>
+ </div>
+ <div class="hero-metric hero-metric-btn" role="button" tabindex="0" data-anchor="#tabelaProcessos" data-filtro="finalizados">
+ <span class="metric-label">Finalizados</span>
+ <span class="metric-value">{{ metricas.finalizados }}</span>
+ </div>
+ <div class="hero-metric">
+ <span class="metric-label">Tempo m&eacute;dio</span>
+ <span class="metric-value">
+ {% if metricas.tempo_medio_dias is not none %}
+ {{ metricas.tempo_medio_dias | round(1) }} dias
+ {% else %}
+ --
+ {% endif %}
+ </span>
+ </div>
+ </div>
+ {% endif %}
+ </div>
+ </section>
+
+ <div class="container my-4">
+ <!-- Bloco de alertas e mensagens flash -->
+ {% set _ = get_flashed_messages(with_categories=True) %}
+
+ <!-- Cards com a contagem de processos por gerência -->
+ {% if SITE_EM_CONFIGURACAO %}
+ <section class="mb-4">
+ <div class="alert alert-secondary mb-0">
+ As áreas e contagens serão exibidas aqui assim que conectarmos o banco de dados oficial.
+ </div>
+ </section>
+ {% else %}
+ <section class="mb-4">
+ <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-4">
+ {% for nome, total in contagens.items() %}
+ <div class="col">
+ {% set imagem = imagens_gerencias.get(nome) or imagem_gerencia_padrao %}
+ <div class="card card-gerencia h-100 position-relative">
+ <div class="card-media">
+ <img src="{{ url_for('static', filename='img/' ~ imagem) }}" alt="Ilustracao da gerência {{ nome }}" loading="lazy">
+ </div>
+ <div class="card-body">
+ <div class="d-flex justify-content-between align-items-center mb-2">
+ <h5 class="card-title mb-0">{{ nome }}</h5>
+ <span class="badge bg-primary rounded-pill fs-6">{{ total }}</span>
+ </div>
+ <p class="text-muted mb-3">Processos ativos nesta gerência.</p>
+ <!-- Botao para abrir a listagem detalhada da gerência selecionada -->
+ <a class="btn btn-sm btn-outline-primary stretched-link" href="{{ url_for('gerencia', nome_gerencia=nome) }}">Acessar</a>
+ </div>
+ </div>
+ </div>
+ {% endfor %}
+ <div class="col">
+ {% set imagem_saida = imagens_gerencias.get('SAIDA') or imagem_gerencia_padrao %}
+ <div class="card card-gerencia card-saida h-100 border-success position-relative">
+ <div class="card-media">
+ <img src="{{ url_for('static', filename='img/' ~ imagem_saida) }}" alt="Ilustracao etapa de revisão" loading="lazy">
+ </div>
+ <div class="card-body">
+ <div class="d-flex justify-content-between align-items-center mb-2">
+ <h5 class="card-title mb-0">Revisão / SAÍDA</h5>
+ <span class="badge bg-success rounded-pill fs-6">{{ contagem_saida }}</span>
+ </div>
+ <p class="text-muted mb-3">Checkpoint final para validar e encerrar processos.</p>
+ <a class="btn btn-sm btn-success stretched-link" href="{{ url_for('gerencia', nome_gerencia='SAIDA') }}">Conferir e finalizar</a>
+ </div>
+ </div>
+ </div>
+ </div>
+ </section>
+ {% endif %}
+
+ <!-- Filtros de pesquisa e tabela paginada com processos abertos -->
+ {% if SITE_EM_CONFIGURACAO %}
+ <section class="table-container text-center">
+ <div class="py-5">
+ <p class="lead mb-1">Os processos serão exibidos aqui.</p>
+ <p class="text-muted mb-0">Estamos iniciando um novo ciclo e ainda não há dados cadastrados.</p>
+ </div>
+ </section>
+ {% else %}
+ <section class="table-container">
+ <div id="tabelaProcessos"></div>
+ <form class="row g-3 align-items-end mb-4" method="get" id="filtros" action="{{ url_for('index') }}#filtros">
+ <div class="col-12 col-md-4 col-xl-3">
+ <label class="form-label">Filtrar por Gerência</label>
+ <select class="form-select" name="gerencia">
+ <option value="">Todas</option>
+ {% for g in GERENCIAS %}
+ <option value="{{ g }}" {% if filtro_gerencia == g %}selected{% endif %}>{{ g }}</option>
+ {% endfor %}
+ </select>
+ </div>
+ <div class="col-12 col-md-4 col-xl-3">
+ <label class="form-label">Número SEI</label>
+ <input class="form-control" type="text" name="sei" value="{{ filtro_sei }}" placeholder="Buscar por número">
+ </div>
+ <div class="col-12 col-md-4 col-xl-2">
+ <label class="form-label">Prazo</label>
+ <select class="form-select" name="prazo">
+ <option value="">Geral</option>
+ <option value="vencido" {% if filtro_prazo == "vencido" %}selected{% endif %}>Vencidos</option>
+ <option value="proximo" {% if filtro_prazo == "proximo" %}selected{% endif %}>Próximo do vencimento</option>
+ <option value="em_dia" {% if filtro_prazo == "em_dia" %}selected{% endif %}>Em dia</option>
+ </select>
+ </div>
+ <div class="col-6 col-md-3 col-xl-2 d-grid">
+ <button class="btn btn-primary" type="submit">
+ <i class="bi bi-search"></i> Buscar
+ </button>
+ </div>
+ <div class="col-6 col-md-3 col-xl-1 d-grid">
+ <a class="btn btn-outline-secondary" href="{{ url_for('index') }}#filtros">
+ Limpar
+ </a>
+ </div>
+ <div class="col-12 col-md-6 col-xl-1 d-flex justify-content-end">
+ <div class="dropdown">
+ <button class="btn btn-outline-secondary" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Mais ações">
+ <i class="bi bi-three-dots-vertical"></i>
+ </button>
+ <ul class="dropdown-menu dropdown-menu-end">
+ {% if pode_importar_global %}
+ <li>
+ <a class="dropdown-item" href="{{ url_for('importar_excel') }}">
+ <i class="bi bi-upload"></i> Importar Excel
+ </a>
+ </li>
+ {% endif %}
+ <li>
+ <button class="dropdown-item" type="button" onclick="window.location.reload()">
+ <i class="bi bi-arrow-clockwise"></i> Atualizar
+ </button>
+ </li>
+ {% if pode_exportar_global %}
+ <li>
+ <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#modalExportacaoGeral">
+ <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+ </button>
+ </li>
+ {% endif %}
+ </ul>
+ </div>
+ </div>
+ </form>
+ <!-- Lista paginada de processos ativos -->
+ <div class="table-responsive process-list-wrapper">
+ <table class="table process-table align-middle">
+ <thead>
+ <tr>
+ <th class="col-acoes">Ações</th>
+ <th>Número SEI</th>
+ <th>Data de entrada</th>
+ <th>Interessado</th>
+ <th>Concessionária</th>
+ <th>Gerência</th>
+ <th>Assunto</th>
+ <th>Prazo</th>
+ <th>Responsável Adm</th>
+ </tr>
+ </thead>
+ <tbody>
+ {% for processo in processos %}
+ {% set prazo_alerta = processo.prazo and processo.prazo <= now_plus_7 %}
+ {% set sufixo = (processo.dados_extra.sufixo if processo.dados_extra else '') or '' %}
+ {% set numero_display = processo.numero_sei_base ~ sufixo %}
+ <tr class="process-row process-row-home" data-proc-id="{{ processo.id }}">
+ <td class="col-acoes text-center">
+ <div class="d-flex gap-1 justify-content-center">
+ <button class="btn btn-sm btn-outline-primary btn-toggle-ficha-home" type="button" data-ficha-target="ficha-home-{{ processo.id }}" data-proc-id="{{ processo.id }}" aria-expanded="false" aria-label="Abrir ficha técnica" title="Abrir ficha técnica">
+ <i class="bi bi-plus-lg"></i>
+ </button>
+ </div>
+ </td>
+ <td class="fw-semibold text-nowrap numero-sei">
+ {{ numero_display }}
+ </td>
+ <td>
+ <div class="pill light">{{ processo.data_entrada|date_br if processo.data_entrada else "-" }}</div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.interessado or '-' }}">
+ {{ processo.interessado or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.concessionaria or '-' }}">
+ {{ processo.concessionaria or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="pill outline">{{ processo.gerencia }}</div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.assunto or '-' }}">
+ {{ processo.assunto or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="pill {{ 'danger' if prazo_alerta else 'secondary' }}">
+ {{ processo.prazo|date_br if processo.prazo else "Sem prazo" }}
+ </div>
+ </td>
+ <td>
+ {% set planilhador = processo.responsavel_adm
+ or (processo.assigned_to.nome if processo.assigned_to else None)
+ or (processo.assigned_to.username if processo.assigned_to else None)
+ %}
+ <div class="process-chip ghost">
+ <div class="chip-avatar muted">{{ (planilhador or '?')[0]|upper }}</div>
+ <div class="chip-body">
+ <div class="chip-title">{{ planilhador or "N?o informado" }}</div>
+ <div class="chip-sub">Responsável Adm</div>
+ </div>
+ </div>
+ </td>
+ </tr>
+
+ <tr class="ficha-tecnica-row ficha-home-row d-none" id="ficha-home-{{ processo.id }}" data-proc-id="{{ processo.id }}">
+ <td colspan="9">
+ <div class="ficha-tecnica-wrapper">
+ <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+ <div class="ficha-tecnica-title">Ficha técnica</div>
+ <div class="d-flex flex-wrap align-items-center gap-2">
+ <span class="badge bg-light text-muted border">Processo {{ numero_display }}</span>
+ {% if processo.data_entrada %}
+ <span class="badge bg-info-subtle text-info border">Entrada {{ processo.data_entrada|date_br }}</span>
+ {% endif %}
+ {% if processo.prazo %}
+ <span class="badge bg-warning-subtle text-warning border">Prazo {{ processo.prazo|date_br }}</span>
+ {% endif %}
+ </div>
+ </div>
+ <div class="row g-3">
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box">
+ <span class="resumo-label">Assunto</span>
+ <span class="resumo-value">{{ processo.assunto or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box">
+ <span class="resumo-label">Interessado</span>
+ <span class="resumo-value">{{ processo.interessado or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box">
+ <span class="resumo-label">Concessionária</span>
+ <span class="resumo-value">{{ processo.concessionaria or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box">
+ <span class="resumo-label">Gerência</span>
+ <span class="resumo-value">{{ processo.gerencia or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box">
+ <span class="resumo-label">Coordenadoria</span>
+ <span class="resumo-value">{{ processo.coordenadoria or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box">
+ <span class="resumo-label">Equipe / Área</span>
+ <span class="resumo-value">{{ processo.equipe_area or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box">
+ <span class="resumo-label">Atribuir para</span>
+ <span class="resumo-value">{{ processo.responsavel_equipe or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box">
+ <span class="resumo-label">Palavras-chave</span>
+ <span class="resumo-value">{{ processo.palavras_chave or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box">
+ <span class="resumo-label">Tipo de processo</span>
+ <span class="resumo-value">{{ processo.tipo_processo or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box">
+ <span class="resumo-label">Status</span>
+ <span class="resumo-value">{{ processo.status or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box">
+ <span class="resumo-label">Responsável Adm</span>
+ <span class="resumo-value">{{ processo.responsavel_adm or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-12">
+ <div class="resumo-box">
+ <span class="resumo-label">Observações</span>
+ <span class="resumo-value">{{ (processo.observacoes_complementares or processo.observacao or 'Nenhuma observa??o registrada.')|replace('\n', '<br>')|safe }}</span>
+ </div>
+ </div>
+ </div>
+ </div>
+ </td>
+ </tr>
+ {% else %}
+ <tr>
+ <td colspan="9" class="text-center text-muted py-4">
+ Nenhum processo encontrado com os filtros atuais.
+ </td>
+ </tr>
+ {% endfor %}
+ </tbody>
+ </table>
+ </div>
+
+ <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+ <div>
+ {% if paginacao.total %}
+ <small class="text-muted">Exibindo {{ processos|length }} de {{ paginacao.total }} processos</small>
+ {% endif %}
+ </div>
+ <nav>
+ <ul class="pagination pagination-sm mb-0">
+ <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('index', page=paginacao.prev_num, gerencia=filtro_gerencia, sei=filtro_sei, prazo=filtro_prazo) }}#filtros">Anterior</a>
+ </li>
+ <li class="page-item active">
+ <span class="page-link">{{ paginacao.page }}</span>
+ </li>
+ <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('index', page=paginacao.next_num, gerencia=filtro_gerencia, sei=filtro_sei, prazo=filtro_prazo) }}#filtros">Próxima</a>
+ </li>
+ </ul>
+ </nav>
+ </div>
+ </section>
+ {% endif %}
+ </div>
+</main>
+
+{% if not SITE_EM_CONFIGURACAO and pode_exportar_global %}
+<div class="modal fade" id="modalExportacaoGeral" tabindex="-1" aria-hidden="true">
+ <div class="modal-dialog modal-lg">
+ <div class="modal-content">
+ <form method="post" action="{{ url_for('exportar_geral') }}">
+ <div class="modal-header">
+ <h5 class="modal-title">Exportar processos (geral)</h5>
+ <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+ </div>
+ <div class="modal-body">
+ <div class="row g-3">
+ <div class="col-md-6">
+ <label class="form-label">Gerência</label>
+ <select class="form-select" name="gerencia">
+ <option value="">Todas</option>
+ {% for g in GERENCIAS %}
+ <option value="{{ g }}">{{ g }}</option>
+ {% endfor %}
+ </select>
+ <div class="form-text">Opcional: filtre uma gerência especifica.</div>
+ </div>
+ <div class="col-md-6">
+ <label class="form-label d-block">Escopo</label>
+ <div class="d-flex gap-3 flex-wrap">
+ <div class="form-check">
+ <input class="form-check-input" type="radio" name="escopo" id="geralAtivos" value="ativos" checked>
+ <label class="form-check-label" for="geralAtivos">Apenas ativos</label>
+ </div>
+ <div class="form-check">
+ <input class="form-check-input" type="radio" name="escopo" id="geralFinalizados" value="finalizados">
+ <label class="form-check-label" for="geralFinalizados">Apenas finalizados</label>
+ </div>
+ <div class="form-check">
+ <input class="form-check-input" type="radio" name="escopo" id="geralTodos" value="todos">
+ <label class="form-check-label" for="geralTodos">Ativos e finalizados</label>
+ </div>
+ </div>
+ </div>
+ </div>
+ <hr class="my-3">
+ <label class="form-label d-block">Colunas</label>
+ <div class="row g-2">
+ {% set colunas_base = [
+ ('numero_sei', 'Numero SEI'),
+ ('assunto', 'Assunto'),
+ ('interessado', 'Interessado'),
+ ('concessionaria', 'Concessionaria'),
+ ('gerencia', 'Gerencia'),
+ ('data_entrada', 'Data de entrada'),
+ ('prazo', 'Prazo SUROD'),
+ ('status', 'Status'),
+ ('prazo_equipe', 'Prazo equipe'),
+ ('responsavel_adm', 'Responsavel Adm'),
+ ('coordenadoria', 'Coordenadoria'),
+ ('equipe_area', 'Equipe / Area'),
+ ('responsavel_equipe', 'Responsavel (Equipe)'),
+ ('tipo_processo', 'Tipo de processo'),
+ ('palavras_chave', 'Palavras-chave'),
+ ('observacoes_complementares', 'Observacoes complementares'),
+ ('finalizado_em', 'Finalizado em')
+ ] %}
+ {% for valor, label in colunas_base %}
+ <div class="col-md-4">
+ <div class="form-check">
+ <input class="form-check-input" type="checkbox" name="colunas" id="colunaGeral_{{ valor }}" value="{{ valor }}" {% if valor in ['numero_sei','assunto','gerencia','status'] %}checked{% endif %}>
+ <label class="form-check-label" for="colunaGeral_{{ valor }}">{{ label }}</label>
+ </div>
+ </div>
+ {% endfor %}
+ </div>
+ {% if extras_por_gerencia %}
+ <hr class="my-3">
+ <div class="mb-2 fw-semibold small text-muted">Campos extras por gerência</div>
+ <div class="row g-2">
+ {% for g, extras in extras_por_gerencia.items() %}
+ {% if extras %}
+ <div class="col-12">
+ <div class="text-uppercase small fw-semibold text-muted">{{ g }}</div>
+ </div>
+ {% for campo in extras %}
+ <div class="col-md-4">
+ <div class="form-check">
+ <input class="form-check-input" type="checkbox" name="colunas" id="colunaExtraGeral_{{ g }}_{{ campo.slug }}" value="extra:{{ g }}:{{ campo.slug }}">
+ <label class="form-check-label" for="colunaExtraGeral_{{ g }}_{{ campo.slug }}">{{ campo.label }}</label>
+ </div>
+ </div>
+ {% endfor %}
+ {% endif %}
+ {% endfor %}
+ </div>
+ {% endif %}
+ <div class="alert alert-info small mt-3 mb-0">
+ Campos extras sao exportados apenas para processos da gerência correspondente.
+ </div>
+ </div>
+ <div class="modal-footer">
+ <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+ <button type="submit" class="btn btn-success">Baixar Excel</button>
+ </div>
+ </form>
+ </div>
+ </div>
+</div>
+{% endif %}
+
+{% include "_assistente_global.html" %}
+
+<footer class="text-center text-muted py-3">
+ &copy; {{ current_year }} SUROD - Controle de Processos.
+ {% if current_user.is_authenticated and not SITE_EM_CONFIGURACAO %}
+ {% endif %}
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+ // Scroll da hero para a tabela
+ document.querySelectorAll(".hero-metric-btn").forEach(function (btn) {
+ btn.addEventListener("click", function () {
+ const alvo = document.querySelector(btn.dataset.anchor || "#tabelaProcessos");
+ if (alvo) {
+ alvo.scrollIntoView({ behavior: "smooth", block: "start" });
+ }
+ });
+ btn.addEventListener("keypress", function (ev) {
+ if (ev.key === "Enter" || ev.key === " ") {
+ ev.preventDefault();
+ btn.click();
+ }
+ });
+ });
+
+ const alinharInicioHome = (elemento) => {
+ const wrapper = elemento ? elemento.closest(".process-list-wrapper") : null;
+ if (wrapper) {
+ wrapper.scrollTo({ left: 0, behavior: "smooth" });
+ }
+ if (elemento) {
+ elemento.scrollIntoView({ behavior: "smooth", block: "start", inline: "start" });
+ }
+ };
+
+ const ocultarFichasHome = () => {
+ document.querySelectorAll(".ficha-home-row").forEach((linha) => {
+ linha.classList.add("d-none");
+ const botao = document.querySelector(`[data-ficha-target="${linha.id}"]`);
+ if (botao) botao.setAttribute("aria-expanded", "false");
+ });
+ };
+
+ const mostrarTodosProcessosHome = () => {
+ document.querySelectorAll(".process-row-home").forEach((linha) => linha.classList.remove("d-none"));
+ document.querySelectorAll(".ficha-home-row").forEach((linha) => linha.classList.add("d-none"));
+ };
+
+ const filtrarParaProcessoHome = (procId) => {
+ document.querySelectorAll(".process-row-home").forEach((linha) => {
+ linha.classList.toggle("d-none", linha.dataset.procId !== procId);
+ });
+ document.querySelectorAll(".ficha-home-row").forEach((linha) => {
+ linha.classList.toggle("d-none", linha.dataset.procId !== procId);
+ });
+ };
+
+ const alternarFichaHome = (alvoId, procId) => {
+ const linha = document.getElementById(alvoId);
+ if (!linha) return;
+ const aberta = !linha.classList.contains("d-none");
+ ocultarFichasHome();
+ if (aberta) {
+ mostrarTodosProcessosHome();
+ return;
+ }
+ filtrarParaProcessoHome(procId);
+ linha.classList.remove("d-none");
+ const botaoAtual = document.querySelector(`[data-ficha-target="${alvoId}"]`);
+ if (botaoAtual) botaoAtual.setAttribute("aria-expanded", "true");
+ alinharInicioHome(linha);
+ };
+
+ document.querySelectorAll(".btn-toggle-ficha-home").forEach((botaoFicha) => {
+ botaoFicha.addEventListener("click", (event) => {
+ event.preventDefault();
+ event.stopPropagation();
+ alternarFichaHome(botaoFicha.dataset.fichaTarget, botaoFicha.dataset.procId);
+ });
+ });
+
+});
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+

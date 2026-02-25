@@ -1,0 +1,2597 @@
+﻿<!DOCTYPE html>
+<!--
+ Template: verificar_dados.html
+ Proposito: Painel de processos finalizados com filtros analiticos e metricas.
+ Variaveis esperadas:
+ - opcoes: valores distintos para selects (gerências, coordenadorias, equipes, interessados)
+ - filtros: dicionario com filtros aplicados (gerência, coordenadoria, equipe, interessado, número_sei, datas)
+ - processos: lista de Processos finalizados (para tabela)
+ - processos_data: versão serializada com movimentações (para export/gráficos)
+ - metricas: totais e tempo medio (processos)
+ - metricas_demandas: totais e tempo medio (demandas)
+ - SITE_EM_CONFIGURACAO, current_user: controle de exibicao e perfil
+-->
+<html lang="pt-br">
+<head>
+ <meta charset="UTF-8">
+ <title>Verificar Dados - Controle de Processos</title>
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+ <link href="{{ url_for('static', filename='css/global.css') }}" rel="stylesheet">
+ <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+ <link href="{{ url_for('static', filename='css/verificar_dados.css') }}" rel="stylesheet">
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+ <div class="container-fluid">
+ <a class="navbar-brand fw-semibold" href="{{ url_for('index') }}">Controle de Processos</a>
+ <div class="ms-auto d-flex gap-2 align-items-center">
+ <a class="btn btn-outline-light btn-sm" href="{{ url_for('index') }}">Início</a>
+ {% if current_user.is_authenticated %}
+ <div class="dropdown">
+ <button class="btn btn-outline-light btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+ Perfil
+ </button>
+ <div class="dropdown-menu dropdown-menu-end p-0 overflow-hidden">
+ <div class="px-3 py-2 small">
+ <div class="fw-semibold">{{ current_user.nome or current_user.username }}</div>
+ <div class="text-muted">Login: {{ current_user.username }}</div>
+ <div class="text-muted">{{ current_user.email or '-' }}</div>
+ <div class="text-muted">Gerência: {{ current_user.gerencia_padrao or '-' }}</div>
+ <div class="text-muted">
+ Perfil:
+ {% if current_user.is_admin %}Assessoria{% elif current_user.acesso_total %}Acesso total{% elif current_user.is_gerente %}Gerente{% else %}Usuário{% endif %}
+ </div>
+ </div>
+ <div class="dropdown-divider my-0"></div>
+ <a class="dropdown-item small" href="{{ url_for('perfil') }}">Editar perfil</a>
+ <a class="dropdown-item small" href="{{ url_for('trocar_senha') }}">Trocar senha</a>
+ <a class="dropdown-item text-danger small" href="{{ url_for('logout') }}">Sair</a>
+ </div>
+ </div>
+ {% else %}
+ <a class="btn btn-outline-light btn-sm" href="{{ url_for('login') }}">Entrar</a>
+ {% endif %}
+ </div>
+ </div>
+</nav>
+
+{% if SITE_EM_CONFIGURACAO %}
+<main class="my-5 verify-container">
+ <div class="card border-0 shadow-sm p-5 text-center">
+ <h1 class="h4 mb-3">Painel em preparacao</h1>
+ <p class="text-muted mb-0">
+ Os relatórios e históricos de processos estarão disponíveis assim que o novo banco de dados for carregado.
+ </p>
+ </div>
+</main>
+{% else %}
+<section class="analytics-hero verify-hero">
+ <div class="container hero-grid">
+ <div class="hero-copy">
+ <p class="eyebrow">Painel Operacional</p>
+ <div class="hero-headline">
+ <div>
+ <h1 class="hero-title mb-2">Monitoramento dos processos finalizados</h1>
+ <p class="hero-subtitle mb-0">Use filtros dinamicos e explore os detalhes de cada processo nas abas ao lado.</p>
+ </div>
+ <div class="hero-tabs btn-group" role="group" aria-label="Painel processos e demandas">
+ <input type="radio" class="btn-check" name="visaoFinalizados" id="visaoResumo" value="resumo" autocomplete="off" checked>
+ <label class="btn btn-outline-light btn-sm" for="visaoResumo">Painel de processos</label>
+ <input type="radio" class="btn-check" name="visaoFinalizados" id="visaoDemanda" value="demanda" autocomplete="off">
+ <label class="btn btn-outline-light btn-sm" for="visaoDemanda">Painel demandas</label>
+ </div>
+ </div>
+
+ <div class="hero-panels">
+ <form class="analytics-filters hero-filters filters-panel" method="get">
+ <div class="filters-head">
+ <div>
+ <span class="filters-kicker">Filtros principais</span>
+ <h2 class="filters-title">Refine a busca</h2>
+ <p class="filters-subtitle">Combine gerência, equipes e datas para isolar os processos.</p>
+ </div>
+ <div class="filters-quick">
+ <span class="filters-quick-label">Filtro rapido por gerência</span>
+ <div class="filters-quick-group">
+ <button class="btn btn-outline-light btn-sm quick-gerencia" type="button" data-gerencia="">
+ Geral
+ </button>
+ {% for item in opcoes.gerencias %}
+ <button class="btn btn-outline-light btn-sm quick-gerencia" type="button" data-gerencia="{{ item }}">
+ {{ item }}
+ </button>
+ {% endfor %}
+ </div>
+ </div>
+ </div>
+ <div class="row g-3 filters-grid">
+ <div class="col-12 col-md-6 col-xl-3">
+ <label class="form-label">Gerência</label>
+ <select class="form-select" id="filtroGerenciaSelect" name="gerencia">
+ <option value="">Todas</option>
+ {% for item in opcoes.gerencias %}
+ <option value="{{ item }}" {% if filtros.gerencia == item %}selected{% endif %}>{{ item }}</option>
+ {% endfor %}
+ </select>
+ </div>
+ <div class="col-12 col-md-6 col-xl-3">
+ <label class="form-label">Coordenadoria</label>
+ <select class="form-select" name="coordenadoria">
+ <option value="">Todas</option>
+ {% for item in opcoes.coordenadorias %}
+ <option value="{{ item }}" {% if filtros.coordenadoria == item %}selected{% endif %}>{{ item }}</option>
+ {% endfor %}
+ </select>
+ </div>
+ <div class="col-12 col-md-6 col-xl-3">
+ <label class="form-label">Equipe</label>
+ <select class="form-select" name="equipe">
+ <option value="">Todas</option>
+ {% for item in opcoes.equipes %}
+ <option value="{{ item }}" {% if filtros.equipe == item %}selected{% endif %}>{{ item }}</option>
+ {% endfor %}
+ </select>
+ </div>
+ <div class="col-12 col-md-6 col-xl-3">
+ <label class="form-label">Interessado</label>
+ <select class="form-select" name="interessado">
+ <option value="">Todos</option>
+ {% for item in opcoes.interessados %}
+ <option value="{{ item }}" {% if filtros.interessado == item %}selected{% endif %}>{{ item }}</option>
+ {% endfor %}
+ </select>
+ </div>
+ <div class="col-12 col-md-6 col-xl-3">
+ <label class="form-label">Número SEI</label>
+ <input class="form-control" type="text" name="numero_sei" value="{{ filtros.numero_sei }}" placeholder="Buscar por número SEI">
+ </div>
+ <div class="col-6 col-md-3 col-xl-2">
+ <label class="form-label">Data inicial</label>
+ <input class="form-control" type="date" name="data_inicio" value="{{ filtros.data_inicio }}">
+ </div>
+ <div class="col-6 col-md-3 col-xl-2">
+ <label class="form-label">Data final</label>
+ <input class="form-control" type="date" name="data_fim" value="{{ filtros.data_fim }}">
+ </div>
+ <div class="col-12 col-md-6 col-xl-3 ms-xl-auto filters-actions">
+ <button class="btn quick-gerencia active" type="submit">
+ <i class="bi bi-filter"></i> Aplicar
+ </button>
+ <button class="btn quick-gerencia" type="button" id="btnLimparFiltros">
+ Limpar
+ </button>
+ </div>
+ </div>
+ </form>
+ <aside class="hero-summary">
+ <div class="summary-header">
+ <span class="summary-kicker">Informacoes</span>
+ <h2 class="summary-title">Indicadores do periodo</h2>
+ <p class="summary-subtitle">Visao consolidada do fluxo de processos.</p>
+ </div>
+  <div class="hero-metrics">
+ <div class="metric-card metric-highlight">
+ <span class="metric-label" data-label-finalizados="Total de processos" data-label-demandas="Total de demandas">Total de processos</span>
+ <span class="metric-value" data-valor-finalizados="{{ metricas.total_processos }}" data-valor-demandas="{{ metricas_demandas.total_processos }}">{{ metricas.total_processos }}</span>
+ <span class="metric-foot" data-foot-finalizados="Banco consolidado" data-foot-demandas="Banco consolidado">Banco consolidado</span>
+ </div>
+ <div class="metric-card">
+ <span class="metric-label" data-label-finalizados="Em andamento" data-label-demandas="Em andamento">Em andamento</span>
+ <span class="metric-value" data-valor-finalizados="{{ metricas.andamento }}" data-valor-demandas="{{ metricas_demandas.andamento }}">{{ metricas.andamento }}</span>
+ <span class="metric-foot" data-foot-finalizados="Gerencias com carga" data-foot-demandas="Gerencias com carga">Gerências com carga</span>
+ </div>
+ <div class="metric-card">
+ <span class="metric-label" data-label-finalizados="Finalizados" data-label-demandas="Demandas finalizadas">Finalizados</span>
+ <span class="metric-value" data-valor-finalizados="{{ metricas.finalizados }}" data-valor-demandas="{{ metricas_demandas.finalizados }}">{{ metricas.finalizados }}</span>
+ <span class="metric-foot" data-foot-finalizados="Encerrados no periodo" data-foot-demandas="Encerradas no periodo">Encerrados no periodo</span>
+ </div>
+ <div class="metric-card">
+ <span class="metric-label" data-label-finalizados="Tempo medio" data-label-demandas="Tempo medio">Tempo medio</span>
+ <span class="metric-value" data-valor-finalizados="{{ metricas.tempo_medio_legenda }}" data-valor-demandas="{{ metricas_demandas.tempo_medio_legenda }}">{{ metricas.tempo_medio_legenda }}</span>
+ <span class="metric-foot" data-foot-finalizados="Da entrada ao encerramento" data-foot-demandas="Da entrada ao encerramento">Da entrada ao encerramento</span>
+ </div>
+ </div>
+ <div class="summary-note">Clique em um processo para ver o historico completo.</div>
+ </aside>
+ </div>
+ </div>
+ </div>
+</section>
+
+<main class="my-5 verify-container">
+ <div class="card border-0 shadow-sm rounded-4 p-4 verify-panel">
+ <div class="d-flex justify-content-between align-items-center mb-3">
+ <div>
+ <h2 class="h5 mb-0 fw-semibold" id="tituloPainelTabela" data-finalizados="Processos finalizados" data-demandas="Demandas finalizadas">Processos finalizados</h2>
+ <small class="text-muted" id="subtituloPainelTabela" data-finalizados="Consolidado: um registro por processo finalizado." data-demandas="Consolidado: um registro por demanda finalizada.">Consolidado: um registro por processo finalizado.</small>
+ </div>
+ <div class="d-flex align-items-center gap-2">
+ <span class="badge bg-primary" id="contadorProcessos">{{ processos|length }} registros</span>
+ <span class="badge bg-secondary d-none" id="contadorDemandas">{{ demandas|length }} registros</span>
+ </div>
+ </div>
+   <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+ <div class="btn-group" role="group" aria-label="Tabela processos e demandas">
+ <input type="radio" class="btn-check" name="visaoTabela" id="visaoTabelaResumo" value="resumo" autocomplete="off" checked>
+ <label class="btn btn-outline-primary" for="visaoTabelaResumo">Processos Finalizados</label>
+ <input type="radio" class="btn-check" name="visaoTabela" id="visaoTabelaDemanda" value="demanda" autocomplete="off">
+ <label class="btn btn-outline-secondary" for="visaoTabelaDemanda">Demandas Finalizadas</label>
+ </div>
+ <div class="d-flex align-items-center gap-2 d-none" id="acoesSelecao">
+ <span class="text-muted small">Ações</span>
+ <button class="btn btn-link btn-sm px-0 d-none" type="button" id="btnLimparSelecao">Limpar seleção</button>
+ <button class="btn btn-outline-secondary btn-sm" type="button" id="btnVerFicha" disabled>Ver ficha</button>
+ <button class="btn btn-outline-secondary btn-sm" type="button" id="btnVerHistorico" disabled>Ver histórico</button>
+ </div>
+ </div>
+ <div id="tabelaProcessosWrapper" class="table-responsive process-list-wrapper">
+ <table class="table process-table align-middle lista-processos" id="tabelaProcessos">
+ <thead>
+ <tr>
+ <th>Número SEI</th>
+ <th>Data de entrada</th>
+ <th>Data da finalizacao</th>
+ <th>Interessado</th>
+ <th>Concessionária</th>
+ <th>Gerências envolvidas</th>
+ <th>Destino saída</th>
+ <th>Assunto</th>
+ <th>Status</th>
+ <th>Prazo</th>
+ <th>Responsável Adm</th>
+ <th>Classificacao institucional</th>
+ <th>Data de entrada na gerência</th>
+ <th>Descricao melhorada</th>
+ <th>Coordenadoria</th>
+ <th>Equipe / ?rea</th>
+ <th>Responsavel (Equipe)</th>
+ <th>Tipo de processo</th>
+ <th>Palavras-chave</th>
+ <th>Status (Equipe)</th>
+ <th>Prazo equipe</th>
+ <th>Observações complementares</th>
+ {% for campo in campos_extra_saida %}
+ <th>{{ campo.label }}</th>
+ {% endfor %}
+ </tr>
+ </thead>
+ <tbody>
+ {% if processos %}
+ {% for processo in processos %}
+ {% set sufixo = (processo.dados_extra.sufixo if processo.dados_extra else '') or '' %}
+ {% set numero_display = processo.numero_sei_base ~ sufixo %}
+ {% set planilhador = processo.planilhador or processo.responsavel_adm %}
+ {% set status_val = processo.status or "Finalizado" %}
+ <tr class="process-row {% if processo.grupo_retorno %}processo-retorno{% endif %}" data-processo="{{ processo.numero_sei }}" data-demanda-idx="{{ loop.index0 }}">
+ <td class="fw-semibold text-nowrap numero-sei">{{ numero_display }}</td>
+ <td>
+ {% set pares_datas = processo.pares_datas or [] %}
+ {% set datas_entrada = [] %}
+ {% if pares_datas %}
+ {% for par in pares_datas %}
+ {% set _ = datas_entrada.append(par) %}
+ {% endfor %}
+ {% elif processo.data_entrada_display %}
+ {% for data_item in processo.data_entrada_display.split(' | ') %}
+ {% set _ = datas_entrada.append({'entrada_str': data_item, 'cor': 'pareado-1'}) %}
+ {% endfor %}
+ {% elif processo.data_entrada %}
+ {% set _ = datas_entrada.append({'entrada_str': processo.data_entrada|date_br, 'cor': 'pareado-1'}) %}
+ {% endif %}
+ <div class="data-entry-stack" title="{{ processo.data_entrada_display or (processo.data_entrada|date_br if processo.data_entrada else '-') }}">
+ {% if datas_entrada %}
+ {% for data_item in datas_entrada %}
+ <span class="data-entry-chip {{ data_item.cor }}">{{ data_item.entrada_str }}</span>
+ {% endfor %}
+ {% else %}
+ <span class="data-entry-chip pareado-1">-</span>
+ {% endif %}
+ </div>
+ </td>
+ <td>
+ {% set datas_final = processo.pares_datas or [] %}
+ <div class="data-entry-stack" title="{{ processo.finalizado_em.strftime('%d/%m/%Y') if processo.finalizado_em else '-' }}">
+ {% if datas_final %}
+ {% for par in datas_final %}
+ <span class="data-entry-chip final-chip {{ par.cor }}">{{ par.finalizacao_str }}</span>
+ {% endfor %}
+ {% else %}
+ <span class="data-entry-chip final-chip pareado-1">{{ processo.finalizado_em.strftime('%d/%m/%Y') if processo.finalizado_em else "-" }}</span>
+ {% endif %}
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.interessado or '-' }}">
+ {{ processo.interessado or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.concessionaria or '-' }}">
+ {{ processo.concessionaria or "-" }}
+ </div>
+ </td>
+  <td>
+ {% set trilha_gerencias = (processo.gerencia or processo.gerencia_origem or "-").split('->') %}
+ <div class="gerencia-trilha" title="{{ processo.gerencia or processo.gerencia_origem or '-' }}">
+ {% for ger in trilha_gerencias %}
+ <span class="gerencia-node">{{ ger|trim }}</span>
+ {% endfor %}
+ </div>
+  </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.destino_saida or '-' }}">
+ {{ processo.destino_saida or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.assunto or '-' }}">
+ {{ processo.assunto or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="pill status {{ 'muted' if not status_val else '' }}">{{ status_val }}</div>
+ </td>
+ <td>
+ <div class="pill secondary">{{ processo.prazo|date_br if processo.prazo else "Sem prazo" }}</div>
+ </td>
+ <td>
+ <div class="process-chip ghost">
+ <div class="chip-avatar muted">{{ (planilhador or '?')[0]|upper }}</div>
+ <div class="chip-body">
+ <div class="chip-title">{{ planilhador or "Nao informado" }}</div>
+ <div class="chip-sub">Responsável Adm</div>
+ </div>
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.classificacao_institucional or '-' }}">
+ {{ processo.classificacao_institucional or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="pill light">{{ processo.data_entrada_gerencia|date_br if processo.data_entrada_gerencia else "-" }}</div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.descricao_melhorada or '-' }}">
+ {{ processo.descricao_melhorada or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.coordenadoria or '-' }}">
+ {{ processo.coordenadoria or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.equipe_area or '-' }}">
+ {{ processo.equipe_area or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.responsavel_equipe or '-' }}">
+ {{ processo.responsavel_equipe or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.tipo_processo or '-' }}">
+ {{ processo.tipo_processo or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.palavras_chave or '-' }}">
+ {{ processo.palavras_chave or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="pill status {{ 'muted' if not processo.status_equipe and not status_val else '' }}">
+ {{ processo.status_equipe or status_val }}
+ </div>
+ </td>
+ <td>
+ <div class="pill secondary">{{ processo.prazo_equipe|date_br if processo.prazo_equipe else "Sem prazo" }}</div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.observacoes_complementares or '-' }}">
+ {{ processo.observacoes_complementares or "-" }}
+ </div>
+ </td>
+ {% for campo in campos_extra_saida %}
+ {% set extra_valor = (processo.dados_extra or {}).get(campo.slug) %}
+ {% if not extra_valor and campo.slug == 'tipodeprocesso' %}
+ {% set extra_valor = processo.tipo_processo %}
+ {% endif %}
+ <td>
+ <div class="text-truncate process-assunto" title="{{ extra_valor or '-' }}">
+ {{ extra_valor or "-" }}
+ </div>
+ </td>
+ {% endfor %}
+ </tr>
+ {% endfor %}
+ {% else %}
+ <tr>
+ <td colspan="{{ 22 + (campos_extra_saida|length) }}" class="text-center text-muted py-4">
+ Nenhum processo finalizado encontrado com os filtros atuais.
+ </td>
+ </tr>
+ {% endif %}
+ </tbody>
+ </table>
+ <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-2 show-more-bar">
+ <small class="text-muted" id="infoProcessosLimite"></small>
+ <div class="d-flex gap-2">
+ <button class="btn btn-outline-secondary btn-sm" type="button" id="btnLimparFiltrosColProcessos">Limpar filtros</button>
+ <button class="btn btn-outline-primary btn-sm" type="button" id="btnMaisProcessos">Mostrar mais</button>
+ </div>
+ </div>
+ </div>
+ <div id="tabelaDemandasWrapper" class="d-none process-list-wrapper">
+ <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2 show-more-bar">
+ <small class="text-muted" id="infoDemandasLimite"></small>
+ <div class="d-flex gap-2">
+ <button class="btn btn-outline-secondary btn-sm" type="button" id="btnLimparFiltrosColDemandas">Limpar filtros</button>
+ <button class="btn btn-outline-primary btn-sm" type="button" id="btnMaisDemandas">Mostrar mais</button>
+ </div>
+ </div>
+ 
+ <table class="table process-table align-middle" id="tabelaDemandas">
+ <thead>
+ <tr>
+ <th>Número SEI</th>
+ <th>Data de entrada</th>
+ <th>Data da finalizacao</th>
+ <th>Interessado</th>
+ <th>Concessionária</th>
+ <th>Gerência</th>
+ <th>Destino saída</th>
+ <th>Assunto</th>
+ <th>Status</th>
+ <th>Prazo</th>
+ <th>Responsável Adm</th>
+ <th>Classificacao institucional</th>
+ <th>Data de entrada na gerência</th>
+ <th>Descricao melhorada</th>
+ <th>Coordenadoria</th>
+ <th>Equipe / ?rea</th>
+ <th>Responsavel (Equipe)</th>
+ <th>Tipo de processo</th>
+ <th>Palavras-chave</th>
+ <th>Status (Equipe)</th>
+ <th>Prazo equipe</th>
+ <th>Observações complementares</th>
+ {% for campo in campos_extra_saida %}
+ <th>{{ campo.label }}</th>
+ {% endfor %}
+ </tr>
+ </thead>
+ <tbody>
+ {% if demandas %}
+ {% for processo in demandas %}
+ {% set sufixo = (processo.dados_extra.sufixo if processo.dados_extra else '') or '' %}
+ {% set numero_display = processo.numero_sei_base ~ sufixo %}
+ {% set planilhador = processo.planilhador or processo.responsavel_adm %}
+ {% set status_val = processo.status or "Finalizado" %}
+ <tr class="process-row" data-processo="{{ processo.numero_sei }}" data-demanda-idx="{{ loop.index0 }}">
+ <td class="fw-semibold text-nowrap numero-sei">{{ numero_display }}</td>
+ <td>
+ <div class="pill light">{{ processo.data_entrada|date_br if processo.data_entrada else "-" }}</div>
+ </td>
+ <td>
+ <div class="pill light">{{ processo.finalizado_em.strftime('%d/%m/%Y') if processo.finalizado_em else "-" }}</div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.interessado or '-' }}">
+ {{ processo.interessado or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.concessionaria or '-' }}">
+ {{ processo.concessionaria or "-" }}
+ </div>
+ </td>
+  <td>
+ <div class="d-flex align-items-center gap-2">
+ <div class="pill outline gerencia-pill">{{ processo.gerencia or processo.gerencia_origem or "-" }}</div>
+ </div>
+  </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.destino_saida or '-' }}">
+ {{ processo.destino_saida or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.assunto or '-' }}">
+ {{ processo.assunto or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="pill status {{ 'muted' if not status_val else '' }}">{{ status_val }}</div>
+ </td>
+ <td>
+ <div class="pill secondary">{{ processo.prazo|date_br if processo.prazo else "Sem prazo" }}</div>
+ </td>
+ <td>
+ <div class="process-chip ghost">
+ <div class="chip-avatar muted">{{ (planilhador or '?')[0]|upper }}</div>
+ <div class="chip-body">
+ <div class="chip-title">{{ planilhador or "Nao informado" }}</div>
+ <div class="chip-sub">Responsável Adm</div>
+ </div>
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.classificacao_institucional or '-' }}">
+ {{ processo.classificacao_institucional or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="pill light">{{ processo.data_entrada_gerencia|date_br if processo.data_entrada_gerencia else "-" }}</div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.descricao_melhorada or '-' }}">
+ {{ processo.descricao_melhorada or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.coordenadoria or '-' }}">
+ {{ processo.coordenadoria or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.equipe_area or '-' }}">
+ {{ processo.equipe_area or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.responsavel_equipe or '-' }}">
+ {{ processo.responsavel_equipe or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.tipo_processo or '-' }}">
+ {{ processo.tipo_processo or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.palavras_chave or '-' }}">
+ {{ processo.palavras_chave or "-" }}
+ </div>
+ </td>
+ <td>
+ <div class="pill status {{ 'muted' if not processo.status_equipe and not status_val else '' }}">
+ {{ processo.status_equipe or status_val }}
+ </div>
+ </td>
+ <td>
+ <div class="pill secondary">{{ processo.prazo_equipe|date_br if processo.prazo_equipe else "Sem prazo" }}</div>
+ </td>
+ <td>
+ <div class="text-truncate process-assunto" title="{{ processo.observacoes_complementares or '-' }}">
+ {{ processo.observacoes_complementares or "-" }}
+ </div>
+ </td>
+ {% for campo in campos_extra_saida %}
+ {% set extra_valor = (processo.dados_extra or {}).get(campo.slug) %}
+ {% if not extra_valor and campo.slug == 'tipodeprocesso' %}
+ {% set extra_valor = processo.tipo_processo %}
+ {% endif %}
+ <td>
+ <div class="text-truncate process-assunto" title="{{ extra_valor or '-' }}">
+ {{ extra_valor or "-" }}
+ </div>
+ </td>
+ {% endfor %}
+ </tr>
+ {% endfor %}
+ {% else %}
+ <tr>
+ <td colspan="{{ 22 + (campos_extra_saida|length) }}" class="text-center text-muted py-4">
+ Nenhuma demanda finalizada encontrada com os filtros atuais.
+ </td>
+ </tr>
+ {% endif %}
+ </tbody>
+ </table>
+ </div>
+ <div class="mt-4 d-none" id="historicoWrapper">
+ <div class="d-flex align-items-center gap-2 mb-2">
+ <h3 class="h6 mb-0 fw-semibold" id="historicoTitulo">Histórico do processo</h3>
+ <span class="badge bg-light text-muted border">Somente leitura</span>
+ </div>
+ <div id="historicoMensagem" class="text-muted small">
+ Selecione um processo para ver o histórico.
+ </div>
+ <div id="historicoLista" class="list-group list-group-flush d-none"></div>
+ </div>
+ </div>
+</main>
+
+{% endif %}
+
+<footer class="text-center text-muted py-3">
+ &copy; {{ current_year }} SUROD - Controle de Processos
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+{% if not SITE_EM_CONFIGURACAO %}
+<script>
+(() => {
+ const processosData = {{ processos_data|tojson }};
+ const demandasData = {{ demandas|tojson }};
+ const camposExtraLabels = {{ campos_extra_labels|tojson }};
+ const listaProcessos = Array.isArray(processosData) ? processosData : [];
+ const listaDemandas = Array.isArray(demandasData) ? demandasData : [];
+ const urlLimparFiltros = "{{ url_for('verificar_dados') }}";
+
+ const refs = {
+ formFiltros: document.querySelector(".hero-filters"),
+ filtroGerencia: document.getElementById("filtroGerenciaSelect"),
+ quickGerencias: document.querySelectorAll(".quick-gerencia"),
+ buscaSei: document.getElementById("buscaSei"),
+ btnBuscar: document.getElementById("btnBuscar"),
+ btnLimparFiltros: document.getElementById("btnLimparFiltros"),
+ alertaBusca: document.getElementById("alertaBusca"),
+ painelResumo: document.getElementById("painelResumo"),
+ painelDemanda: document.getElementById("painelDemanda"),
+ conteudoResumo: document.getElementById("conteudoResumo"),
+ listaMovimentacoes: document.getElementById("listaMovimentacoes"),
+ mensagemResumo: document.getElementById("mensagemSelecaoResumo"),
+ mensagemDemanda: document.getElementById("mensagemSelecaoDemanda"),
+  visaoPainelResumo: document.getElementById("visaoResumo"),
+  visaoPainelDemanda: document.getElementById("visaoDemanda"),
+  visaoTabelaResumo: document.getElementById("visaoTabelaResumo"),
+  visaoTabelaDemanda: document.getElementById("visaoTabelaDemanda"),
+ tabelaProcessos: document.getElementById("tabelaProcessos"),
+ tabelaDemandas: document.getElementById("tabelaDemandas"),
+ tabelaProcessosWrapper: document.getElementById("tabelaProcessosWrapper"),
+ tabelaDemandasWrapper: document.getElementById("tabelaDemandasWrapper"),
+ contadorProcessos: document.getElementById("contadorProcessos"),
+ contadorDemandas: document.getElementById("contadorDemandas"),
+ btnLimparSelecao: document.getElementById("btnLimparSelecao"),
+ acoesSelecao: document.getElementById("acoesSelecao"),
+ btnVerFicha: document.getElementById("btnVerFicha"),
+  btnVerHistorico: document.getElementById("btnVerHistorico"),
+  historicoLista: document.getElementById("historicoLista"),
+  historicoMensagem: document.getElementById("historicoMensagem"),
+  historicoTitulo: document.getElementById("historicoTitulo"),
+  historicoWrapper: document.getElementById("historicoWrapper"),
+ btnMaisProcessos: document.getElementById("btnMaisProcessos"),
+ btnMaisDemandas: document.getElementById("btnMaisDemandas"),
+ btnLimparFiltrosColProcessos: document.getElementById("btnLimparFiltrosColProcessos"),
+ btnLimparFiltrosColDemandas: document.getElementById("btnLimparFiltrosColDemandas"),
+ infoProcessosLimite: document.getElementById("infoProcessosLimite"),
+ infoDemandasLimite: document.getElementById("infoDemandasLimite"),
+ };
+
+let processoSelecionado = null;
+let demandaSelecionada = null;
+let demandaSelecionadaIdx = null;
+let historicoAberto = false;
+let fichaAberta = false;
+ const LIMITE_PASSO = 10;
+ let limiteProcessos = LIMITE_PASSO;
+ let limiteDemandas = LIMITE_PASSO;
+
+ const possuiValor = (valor) => valor !== null && valor !== undefined && valor !== "";
+
+ const htmlEscape = (valor) => {
+ if (valor === null || valor === undefined) {
+ return "";
+ }
+ return String(valor)
+ .replace(/&/g, "&amp;")
+ .replace(/</g, "&lt;")
+ .replace(/>/g, "&gt;")
+ .replace(/"/g, "&quot;")
+ .replace(/'/g, "&#39;");
+ };
+
+ const capitalizarSlug = (slug) => {
+ if (!slug) return "Campo extra";
+ return slug
+ .toString()
+ .replace(/[-_]+/g, " ")
+ .replace(/\s+/g, " ")
+ .trim()
+ .replace(/\b\w/g, (letra) => letra.toUpperCase());
+ };
+
+ const extrasLabelsFixos = {
+ numero_sei_original: "Numero SEI original",
+ gerencias_escolhidas: "Gerencias envolvidas",
+ };
+ const labelExtra = (slug) =>
+ extrasLabelsFixos[slug] || (camposExtraLabels && camposExtraLabels[slug]) || capitalizarSlug(slug);
+
+ const aplicarLimiteTabela = (tabela, limite, botaoMais, infoEl) => {
+ if (!tabela) return;
+ const linhasBase = Array.from(tabela.querySelectorAll("tbody tr")).filter(
+ (linha) => !linha.classList.contains("ficha-tecnica-row"),
+ );
+ const visiveis = linhasBase.filter(
+ (linha) => !linha.classList.contains("d-none") && !linha.classList.contains("column-filter-hidden"),
+ );
+ visiveis.forEach((linha, idx) => {
+ const foraLimite = idx >= limite;
+ linha.classList.toggle("hidden-limit", foraLimite);
+ const ficha = linha.nextElementSibling;
+ if (
+ ficha?.classList.contains("ficha-tecnica-row") &&
+ ficha.getAttribute("data-processo") === linha.getAttribute("data-processo")
+ ) {
+ const deveOcultar =
+ foraLimite || linha.classList.contains("d-none") || linha.classList.contains("column-filter-hidden");
+ ficha.classList.toggle("hidden-limit", deveOcultar);
+ }
+ });
+ const total = visiveis.length;
+ if (botaoMais) {
+ botaoMais.classList.toggle("d-none", limite >= total);
+ }
+ if (infoEl) {
+ infoEl.textContent = total ? `Exibindo ${Math.min(limite, total)} de ${total}` : "Sem registros";
+ }
+ };
+
+ const atualizarLimites = () => {
+ aplicarLimiteTabela(refs.tabelaProcessos, limiteProcessos, refs.btnMaisProcessos, refs.infoProcessosLimite);
+ aplicarLimiteTabela(refs.tabelaDemandas, limiteDemandas, refs.btnMaisDemandas, refs.infoDemandasLimite);
+ };
+
+ const normalizarFiltroTabela = (valor) =>
+ (valor || "")
+ .toString()
+ .toLowerCase()
+ .normalize("NFD")
+ .replace(/[\u0300-\u036f]/g, "")
+ .trim();
+
+ const configurarFiltrosTabela = (tabela, botaoLimpar = null) => {
+ if (!tabela) return;
+ const titulos = Array.from(tabela.querySelectorAll("thead tr:first-child th"));
+ if (!titulos.length) return;
+
+ const estado = {
+ filtros: {},
+ sort: { col: null, dir: null },
+ };
+ let painelAtivo = null;
+
+ const obterLinhasBase = () =>
+ Array.from(tabela.querySelectorAll("tbody tr")).filter(
+ (linha) => !linha.classList.contains("ficha-tecnica-row"),
+ );
+
+ const obterValorColuna = (linha, idx) => {
+ const celula = linha.children[idx];
+ return (celula?.innerText || "").replace(/\s+/g, " ").trim();
+ };
+
+ const fecharPainel = () => {
+ if (!painelAtivo) return;
+ painelAtivo.remove();
+ painelAtivo = null;
+ };
+
+ const aplicarEstadoTabela = () => {
+ const linhas = obterLinhasBase();
+
+ linhas.forEach((linha) => {
+ let ok = true;
+ Object.entries(estado.filtros).forEach(([colStr, selecionados]) => {
+ if (!ok) return;
+ const col = Number(colStr);
+ const valor = normalizarFiltroTabela(obterValorColuna(linha, col) || "(vazio)");
+ if (!selecionados || !selecionados.size) return;
+ if (!selecionados.has(valor)) ok = false;
+ });
+ linha.classList.toggle("column-filter-hidden", !ok);
+ const ficha = linha.nextElementSibling;
+ if (
+ ficha?.classList.contains("ficha-tecnica-row") &&
+ ficha.getAttribute("data-processo") === linha.getAttribute("data-processo")
+ ) {
+ ficha.classList.toggle("column-filter-hidden", !ok);
+ }
+ });
+
+ if (estado.sort.col !== null && estado.sort.dir) {
+ const col = estado.sort.col;
+ const dir = estado.sort.dir === "asc" ? 1 : -1;
+ const tbody = tabela.querySelector("tbody");
+ const ordenadas = [...linhas].sort((a, b) => {
+ const va = normalizarFiltroTabela(obterValorColuna(a, col));
+ const vb = normalizarFiltroTabela(obterValorColuna(b, col));
+ return va.localeCompare(vb, "pt-BR", { numeric: true }) * dir;
+ });
+ ordenadas.forEach((linha) => {
+ const ficha = linha.nextElementSibling;
+ tbody?.appendChild(linha);
+ if (
+ ficha?.classList.contains("ficha-tecnica-row") &&
+ ficha.getAttribute("data-processo") === linha.getAttribute("data-processo")
+ ) {
+ tbody?.appendChild(ficha);
+ }
+ });
+ }
+
+ titulos.forEach((th, idx) => {
+ const filtroAtivo = Boolean(estado.filtros[idx] && estado.filtros[idx].size);
+ const sortAtivo = estado.sort.col === idx;
+ th.classList.toggle("col-filter-active", filtroAtivo || sortAtivo);
+ const icon = th.querySelector(".col-filter-icon");
+ if (icon) {
+ icon.className = `bi ${filtroAtivo ? "bi-funnel-fill" : "bi-caret-down-fill"} col-filter-icon`;
+ }
+ });
+
+ atualizarLimites();
+ };
+
+ const abrirPainelColuna = (idx, btn) => {
+ fecharPainel();
+ const linhas = obterLinhasBase();
+ const valoresUnicosMap = new Map();
+ linhas.forEach((linha) => {
+ const bruto = obterValorColuna(linha, idx) || "(Vazio)";
+ const chave = normalizarFiltroTabela(bruto || "(vazio)");
+ if (!valoresUnicosMap.has(chave)) valoresUnicosMap.set(chave, bruto);
+ });
+ const valoresUnicos = [...valoresUnicosMap.entries()].sort((a, b) =>
+ a[1].localeCompare(b[1], "pt-BR", { numeric: true }),
+ );
+ const selecionadosAtuais = estado.filtros[idx] ? new Set(estado.filtros[idx]) : new Set(valoresUnicos.map(([k]) => k));
+ let selecionadosTemp = new Set(selecionadosAtuais);
+
+ const painel = document.createElement("div");
+ painel.className = "excel-filter-menu";
+ painel.innerHTML = `
+ <div class="excel-filter-actions">
+ </div>
+ <input type="search" class="form-control form-control-sm excel-filter-search" placeholder="Pesquisar">
+ <div class="excel-filter-list"></div>
+ <div class="excel-filter-footer">
+   <button type="button" class="btn btn-outline-secondary btn-sm" data-cancel>Cancelar</button>
+   <button type="button" class="btn btn-primary btn-sm" data-ok>OK</button>
+ </div>`;
+ document.body.appendChild(painel);
+ painelAtivo = painel;
+
+ const rect = btn.getBoundingClientRect();
+ painel.style.left = `${Math.max(8, rect.left)}px`;
+ painel.style.top = `${rect.bottom + 6}px`;
+
+ const listEl = painel.querySelector(".excel-filter-list");
+ const searchEl = painel.querySelector(".excel-filter-search");
+ const renderLista = () => {
+ const termo = normalizarFiltroTabela(searchEl.value);
+ const itens = valoresUnicos.filter(([, label]) => normalizarFiltroTabela(label).includes(termo));
+ const todosMarcados = itens.length > 0 && itens.every(([k]) => selecionadosTemp.has(k));
+ listEl.innerHTML = `
+ <label class="excel-filter-item">
+   <input type="checkbox" data-select-all ${todosMarcados ? "checked" : ""}> <span>(Selecionar Tudo)</span>
+ </label>
+ ${itens.map(([k, label]) => `
+ <label class="excel-filter-item">
+   <input type="checkbox" data-value="${htmlEscape(k)}" ${selecionadosTemp.has(k) ? "checked" : ""}>
+   <span>${htmlEscape(label)}</span>
+ </label>
+ `).join("")}
+ `;
+ };
+
+ renderLista();
+
+ searchEl.addEventListener("input", renderLista);
+ listEl.addEventListener("change", (ev) => {
+ const alvo = ev.target;
+ if (!(alvo instanceof HTMLInputElement)) return;
+ if (alvo.dataset.selectAll !== undefined) {
+ const termo = normalizarFiltroTabela(searchEl.value);
+ valoresUnicos
+ .filter(([, label]) => normalizarFiltroTabela(label).includes(termo))
+ .forEach(([k]) => {
+ if (alvo.checked) selecionadosTemp.add(k);
+ else selecionadosTemp.delete(k);
+ });
+ renderLista();
+ return;
+ }
+ const chave = alvo.dataset.value || "";
+ if (!chave) return;
+ if (alvo.checked) selecionadosTemp.add(chave);
+ else selecionadosTemp.delete(chave);
+ renderLista();
+ });
+
+ painel.querySelector("[data-cancel]")?.addEventListener("click", () => fecharPainel());
+ painel.querySelector("[data-ok]")?.addEventListener("click", () => {
+ const todos = new Set(valoresUnicos.map(([k]) => k));
+ const igualTodos = selecionadosTemp.size === todos.size && [...todos].every((k) => selecionadosTemp.has(k));
+ if (igualTodos) {
+ delete estado.filtros[idx];
+ } else {
+ estado.filtros[idx] = new Set(selecionadosTemp);
+ }
+ aplicarEstadoTabela();
+ fecharPainel();
+ });
+ };
+
+ titulos.forEach((th, idx) => {
+ if (th.querySelector(".col-filter-trigger")) return;
+ const btn = document.createElement("button");
+ btn.type = "button";
+ btn.className = "col-filter-trigger";
+ btn.innerHTML = '<i class="bi bi-caret-down-fill col-filter-icon" aria-hidden="true"></i>';
+ btn.addEventListener("click", (ev) => {
+ ev.stopPropagation();
+ abrirPainelColuna(idx, btn);
+ });
+ th.appendChild(btn);
+ });
+
+ document.addEventListener("click", (ev) => {
+ if (!painelAtivo) return;
+ const target = ev.target;
+ if (!(target instanceof Node)) return;
+ if (painelAtivo.contains(target)) return;
+ if (target instanceof Element && target.closest(".col-filter-trigger")) return;
+ fecharPainel();
+ });
+
+ if (botaoLimpar) {
+ botaoLimpar.addEventListener("click", () => {
+ estado.filtros = {};
+ estado.sort = { col: null, dir: null };
+ aplicarEstadoTabela();
+ });
+ }
+
+ aplicarEstadoTabela();
+ };
+
+ const normalizarExtras = (extras) => {
+ if (!extras || typeof extras !== "object") return [];
+ return Object.entries(extras)
+ .filter(([, valor]) => possuiValor(valor))
+ .map(([slug, valor]) => ({
+ slug,
+ label: labelExtra(slug),
+ valor,
+ }));
+ };
+
+ const parserDataHora = (valor) => {
+ if (!possuiValor(valor)) return null;
+ if (valor instanceof Date) return valor;
+ if (typeof valor === "number") return new Date(valor);
+ const texto = String(valor).trim();
+ if (!texto) return null;
+ // YYYY-MM-DD (importacao sem hora): manter dia local, sem deslocar fuso.
+ if (/^\d{4}-\d{2}-\d{2}$/.test(texto)) {
+ const [ano, mes, dia] = texto.split("-").map((v) => Number(v));
+ return new Date(ano, (mes || 1) - 1, dia || 1, 0, 0, 0, 0);
+ }
+ // YYYY-MM-DD HH:MM[:SS] ou YYYY-MM-DDTHH:MM[:SS] sem fuso.
+ const semFuso = texto.match(
+ /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/,
+ );
+ if (semFuso) {
+ const ano = Number(semFuso[1]);
+ const mes = Number(semFuso[2]);
+ const dia = Number(semFuso[3]);
+ const hora = Number(semFuso[4]);
+ const minuto = Number(semFuso[5]);
+ const segundo = Number(semFuso[6] || 0);
+ return new Date(ano, (mes || 1) - 1, dia || 1, hora || 0, minuto || 0, segundo || 0, 0);
+ }
+ if (/[zZ]$|[+\-]\d{2}:\d{2}$/.test(texto)) {
+ return new Date(texto);
+ }
+ const dtDireto = new Date(texto);
+ if (!Number.isNaN(dtDireto.getTime())) {
+ return dtDireto;
+ }
+ return null;
+ };
+
+const formatadorDataHoraBrasilia = new Intl.DateTimeFormat("pt-BR", {
+ timeZone: "America/Sao_Paulo",
+ day: "2-digit",
+ month: "2-digit",
+ year: "numeric",
+ hour: "2-digit",
+ minute: "2-digit",
+ second: "2-digit",
+ });
+
+ const formatadorDataBrasilia = new Intl.DateTimeFormat("pt-BR", {
+ timeZone: "America/Sao_Paulo",
+ day: "2-digit",
+ month: "2-digit",
+ year: "numeric",
+ });
+
+ const formatarData = (iso) => {
+ if (!possuiValor(iso)) return "--";
+ const dt = parserDataHora(iso);
+ if (!dt || Number.isNaN(dt.getTime())) {
+ return htmlEscape(iso);
+ }
+ return formatadorDataHoraBrasilia.format(dt);
+ };
+
+ const timestampEvento = (quando) => {
+ const dt = parserDataHora(quando);
+ return dt && !Number.isNaN(dt.getTime()) ? dt.getTime() : 0;
+ };
+
+ const ehDestinoSaidaTexto = (texto) =>
+ /^(?:\[[^\]]+\]\s*)?Destino SAIDA\b/i.test((texto || "").toString().trim());
+
+ const ehEncerramentoSaidaTexto = (texto) =>
+ /processo\s+encerrado\s+em\s+SAIDA/i.test((texto || "").toString());
+
+const prioridadeHistorico = (evento) => {
+ const texto = (evento?.texto || "").toString();
+ // Em empate de data, prioriza o fechamento completo:
+ // Destino SAIDA -> Processo encerrado -> Demanda finalizada -> Demanda cadastrada
+ if (ehDestinoSaidaTexto(texto)) return 40;
+ if (ehEncerramentoSaidaTexto(texto)) return 30;
+ if (/demanda\s+finalizada/i.test(texto)) return 20;
+ if (/demanda\s+cadastrada/i.test(texto)) return 10;
+ return 0;
+ };
+
+const normalizarTextoHistorico = (texto) =>
+ (texto || "")
+ .toString()
+ .replace(/\s+/g, " ")
+ .trim()
+ .toLowerCase();
+
+const formatarDataHistorico = (evento) => {
+ const texto = (evento?.texto || "").toString();
+ const bruto = evento?.quando;
+ const dt = parserDataHora(bruto);
+ if (!dt || Number.isNaN(dt.getTime())) {
+ return formatarDataCurta(bruto);
+ }
+ return formatadorDataBrasilia.format(dt);
+ };
+
+ const formatarDataCurta = (iso) => {
+ if (!possuiValor(iso)) return "";
+ const dt = new Date(iso);
+ if (Number.isNaN(dt.getTime())) {
+ return htmlEscape(iso);
+ }
+ return dt.toLocaleDateString("pt-BR");
+ };
+
+ const formatarMultiline = (texto, fallback = "Sem registro.") => {
+ if (!possuiValor(texto)) return fallback;
+ return htmlEscape(texto).replace(/\n/g, "<br>");
+ };
+
+ const juntarGerencias = (lista) =>
+ lista.filter((valor) => valor && String(valor).trim()).map((valor) => String(valor).trim()).join(" -> ");
+
+const normalizarSei = (sei) => (sei ? sei.toString().trim().toUpperCase() : "");
+ const normalizarGerencia = (gerencia) => (gerencia ? gerencia.toString().trim().toUpperCase() : "");
+ const extrairBaseSei = (sei) => {
+ const texto = (sei || "").toString().trim();
+ if (!texto) return "";
+ const partes = texto.split("-");
+ if (partes.length > 1) {
+ const prefixo = partes[0].trim();
+ if (/[A-Za-z]/.test(prefixo)) {
+ return partes.slice(1).join("-").trim();
+ }
+ }
+ return texto;
+ };
+ const chaveSelecaoSei = (sei) => normalizarSei(extrairBaseSei(sei));
+ const chaveSei = (sei) => (sei ? sei.toString().replace(/\D/g, "") : "");
+ const numeroSeiBase = (processo) => {
+ if (!processo || typeof processo !== "object") return "";
+ if (possuiValor(processo.numero_sei_base)) return processo.numero_sei_base;
+ const extras = processo.dados_extra || {};
+ if (possuiValor(extras.numero_sei_original)) return extras.numero_sei_original;
+ const numero = processo.numero_sei || "";
+ if (numero.includes("-")) {
+ return numero.split("-").slice(1).join("-").trim();
+ }
+ return numero;
+ };
+
+ const renderizarListaExtras = (extras) => {
+ const itens = normalizarExtras(extras);
+ if (!itens.length) {
+ return "";
+ }
+ const cards = itens
+ .map(
+ (item) => `
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box mb-0">
+ <span class="resumo-label">${htmlEscape(item.label)}</span>
+ <span class="resumo-value">${htmlEscape(item.valor)}</span>
+ </div>
+ </div>
+ `,
+ )
+ .join("");
+ return `
+ <div class="col-12">
+ <div class="resumo-box">
+ <span class="resumo-label">Campos extras do processo</span>
+ <div class="row g-3 mt-1">${cards}</div>
+ </div>
+ </div>
+ `;
+ };
+
+const removerFichaTecnica = () => {
+ if (!refs.tabelaProcessos) return;
+ refs.tabelaProcessos.querySelectorAll(".ficha-tecnica-row").forEach((linha) => linha.remove());
+ };
+ const removerFichaTecnicaDemanda = () => {
+ if (!refs.tabelaDemandas) return;
+ refs.tabelaDemandas.querySelectorAll(".ficha-tecnica-row").forEach((linha) => linha.remove());
+ };
+
+ const fecharFicha = () => {
+ removerFichaTecnica();
+ removerFichaTecnicaDemanda();
+ fichaAberta = false;
+ if (refs.btnVerFicha) refs.btnVerFicha.textContent = "Ver ficha";
+ };
+
+ const abrirFicha = () => {
+ if (!demandaSelecionada && !processoSelecionado) return;
+ removerFichaTecnica();
+ removerFichaTecnicaDemanda();
+ if (demandaSelecionada) {
+ inserirFichaTecnicaNaTabelaDemanda(demandaSelecionada);
+ } else if (processoSelecionado) {
+ inserirFichaTecnicaNaTabela(processoSelecionado);
+ }
+ fichaAberta = true;
+ if (refs.btnVerFicha) refs.btnVerFicha.textContent = "Ocultar ficha";
+ };
+
+
+ 
+ 
+ const renderizarDemandasRelacionadas = (processo) => {
+ const demandas = Array.isArray(processo.demandas_relacionadas)
+ ? processo.demandas_relacionadas
+ : [];
+ if (!demandas.length) return "";
+ const cards = demandas
+ .map((item) => {
+ const campos = [
+ ["Numero SEI", numeroSeiBase(item)],
+ ["Gerencia", item.gerencia],
+ ["Status", item.status],
+ ["Data de entrada", item.data_entrada ? formatarDataCurta(item.data_entrada) : "--"],
+ ["Prazo", item.prazo ? formatarDataCurta(item.prazo) : "--"],
+ ["Assunto", item.assunto],
+ ["Interessado", item.interessado],
+ ["Concessionaria", item.concessionaria],
+ ["Coordenadoria", item.coordenadoria],
+ ["Equipe / ?rea", item.equipe_area],
+ ["Responsavel Adm", item.responsavel_adm],
+ ["Responsavel equipe", item.responsavel_equipe],
+ ["Tipo de processo", item.tipo_processo],
+ ["Palavras-chave", item.palavras_chave],
+ ];
+ const blocos = campos
+ .map(([label, valor]) => {
+ const v = possuiValor(valor) ? htmlEscape(valor) : "--";
+ return `
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box">
+ <span class="resumo-label">${label}</span>
+ <span class="resumo-value">${v}</span>
+ </div>
+ </div>
+ `;
+ })
+ .join("");
+ const obs = formatarMultiline(item.observacao || "", "Nenhuma observacao registrada.");
+ return `
+ <div class="col-12">
+ <div class="resumo-box">
+ <span class="resumo-label">Demanda ${htmlEscape(numeroSeiBase(item) || "--")}</span>
+ <div class="row g-3 mt-2">
+ ${blocos}
+ <div class="col-12">
+ <div class="resumo-box">
+ <span class="resumo-label">ObservacAµes</span>
+ <span class="resumo-value">${obs}</span>
+ </div>
+ </div>
+ </div>
+ </div>
+ </div>
+ `;
+ })
+ .join("");
+ return `
+ <div class="col-12">
+ <div class="resumo-box">
+ <span class="resumo-label">Demandas deste processo</span>
+ <div class="text-muted small mb-2">InformacAµes completas de cada gerencia.</div>
+ <div class="row g-3">${cards}</div>
+ </div>
+ </div>
+ `;
+ };
+
+
+ const construirFichaTecnica = (processo, opts = {}) => {
+ const modoDemanda = !!opts.modoDemanda;
+ const demandas = Array.isArray(processo.demandas_relacionadas)
+ ? processo.demandas_relacionadas
+ : [processo];
+ const juntarValores = (valores) => {
+ const limpos = valores
+ .map((v) => (v || "").toString().trim())
+ .filter((v) => v);
+ const unicos = Array.from(new Set(limpos));
+ return unicos.length ? unicos.join(", ") : "--";
+ };
+ const extrairGerenciaNumero = (numero) => {
+ const texto = (numero || "").toString().trim().toUpperCase();
+ if (!texto || !texto.includes("-")) return "";
+ const prefixo = texto.split("-", 1)[0].trim();
+ return /[A-Z]/.test(prefixo) ? prefixo : "";
+ };
+ const normalizarNomeGerencia = (valor) => {
+ const texto = (valor || "").toString().trim();
+ if (!texto) return "";
+ const partes = texto.split("->").map((p) => p.trim()).filter(Boolean);
+ const base = partes.length ? partes[0] : texto;
+ return base.split(",")[0].trim().toUpperCase();
+ };
+ const classesPorGerencia = {
+ GABINETE: "bg-warning-subtle text-warning border",
+ GEENG: "bg-info-subtle text-info border",
+ GEPLAN: "bg-success-subtle text-success border",
+ GEDEX: "bg-primary-subtle text-primary border",
+ GEFOR: "bg-danger-subtle text-danger border",
+ };
+ const ordemGerenciasPreferencial = ["GABINETE", "GEENG", "GEPLAN", "GEDEX", "GEFOR"];
+ const indiceGerenciaPreferencial = new Map(
+ ordemGerenciasPreferencial.map((nome, idx) => [nome, idx]),
+ );
+ const classePorGerencia = (gerencia) => {
+ const texto = normalizarNomeGerencia(gerencia);
+ return classesPorGerencia[texto] || "bg-light text-dark border";
+ };
+ const ordenarGerenciasPreferenciais = (lista) =>
+ [...lista].sort((a, b) => {
+ const ga = normalizarNomeGerencia(a);
+ const gb = normalizarNomeGerencia(b);
+ const ia = indiceGerenciaPreferencial.has(ga)
+ ? indiceGerenciaPreferencial.get(ga)
+ : Number.MAX_SAFE_INTEGER;
+ const ib = indiceGerenciaPreferencial.has(gb)
+ ? indiceGerenciaPreferencial.get(gb)
+ : Number.MAX_SAFE_INTEGER;
+ if (ia !== ib) return ia - ib;
+ return ga.localeCompare(gb, "pt-BR");
+ });
+ const obterGerenciasEnvolvidas = (processoRef, demandasRef) => {
+ const ignorar = new Set(["SAIDA", "FINALIZADO"]);
+ const trilha = [];
+ const movimentos = Array.isArray(processoRef.movimentacoes) ? [...processoRef.movimentacoes] : [];
+ movimentos
+ .sort((a, b) => ((a.data || "").localeCompare(b.data || "")))
+ .forEach((mov) => {
+ const tipo = (mov.tipo || "").toString().trim().toLowerCase();
+ const de = normalizarNomeGerencia(mov.de || "");
+ const para = normalizarNomeGerencia(mov.para || "");
+ if (tipo === "cadastro") {
+ if (para && !ignorar.has(para)) trilha.push(para);
+ return;
+ }
+ if (de && !ignorar.has(de)) trilha.push(de);
+ if (para && !ignorar.has(para)) trilha.push(para);
+ });
+ if (Array.isArray(processoRef.gerencias_involvidas)) {
+ processoRef.gerencias_involvidas.forEach((g) => {
+ const norm = normalizarNomeGerencia(g);
+ if (norm && !ignorar.has(norm)) trilha.push(norm);
+ });
+ }
+ demandasRef.forEach((d) => {
+ const ger = normalizarNomeGerencia(d.gerencia || "");
+ const pref = normalizarNomeGerencia(extrairGerenciaNumero(d.numero_sei));
+ if (ger && !ignorar.has(ger)) trilha.push(ger);
+ if (pref && !ignorar.has(pref)) trilha.push(pref);
+ });
+ const atual = normalizarNomeGerencia(processoRef.gerencia || "");
+ if (atual && !ignorar.has(atual)) trilha.push(atual);
+ const unicos = [];
+ trilha.forEach((g) => {
+ if (!g || unicos.includes(g)) return;
+ unicos.push(g);
+ });
+ return ordenarGerenciasPreferenciais(unicos);
+ };
+ const chaveGerenciaDemanda = (demanda) => {
+ if (!demanda || typeof demanda !== "object") return "";
+ return normalizarNomeGerencia(
+ extrairGerenciaNumero(demanda.numero_sei) || demanda.gerencia || "",
+ );
+ };
+ const renderizarGerenciasColoridas = (processoRef, demandasRef) => {
+ const lista = obterGerenciasEnvolvidas(processoRef, demandasRef);
+ if (!lista.length) return "--";
+ return lista
+ .map((g) => {
+ const classe = classePorGerencia(g);
+ return `<span class="badge rounded-pill ${classe} me-1 mb-1">${htmlEscape(g)}</span>`;
+ })
+ .join(" " );
+ };
+ const ordemGerencias = obterGerenciasEnvolvidas(processo, demandas);
+ const ordemGerenciasNorm = ordemGerencias
+ .map((g) => normalizarNomeGerencia(g))
+ .filter((g) => g);
+ const indiceGerencia = new Map();
+ ordemGerenciasNorm.forEach((ger, idx) => {
+ if (!indiceGerencia.has(ger)) {
+ indiceGerencia.set(ger, idx);
+ }
+ });
+ const demandasOrdenadas = [...demandas].sort((a, b) => {
+ const ga = chaveGerenciaDemanda(a);
+ const gb = chaveGerenciaDemanda(b);
+ const ia = indiceGerencia.has(ga) ? indiceGerencia.get(ga) : Number.MAX_SAFE_INTEGER;
+ const ib = indiceGerencia.has(gb) ? indiceGerencia.get(gb) : Number.MAX_SAFE_INTEGER;
+ if (ia !== ib) return ia - ib;
+ const na = ((a && a.numero_sei) || "").toString();
+ const nb = ((b && b.numero_sei) || "").toString();
+ return na.localeCompare(nb, "pt-BR");
+ });
+ const renderizarBadgesPorDemanda = (demandasLista, obterValor) => {
+ const badges = [];
+ demandasLista.forEach((d) => {
+ const valor = obterValor(d);
+ const v = possuiValor(valor) ? htmlEscape(valor) : "--";
+ const classe = classePorGerencia(chaveGerenciaDemanda(d));
+ badges.push(`<span class="badge rounded-pill ${classe} me-1 mb-1">${v}</span>`);
+ });
+ return badges.length ? badges.join(" " ) : "--";
+ };
+ const filtrarDemandasUnicasPorValor = (demandasLista, obterValor) => {
+ const vistos = new Set();
+ const resultado = [];
+ demandasLista.forEach((d) => {
+ const valor = obterValor(d);
+ const chave = (valor || "").toString().trim().toUpperCase();
+ if (!chave) return;
+ if (vistos.has(chave)) return;
+ vistos.add(chave);
+ resultado.push(d);
+ });
+ return resultado;
+ };
+ const labelGerencia = modoDemanda ? "Gerencia" : "Gerencias envolvidas";
+ const labelDataEntrada = "Data de entrada";
+ const labelPrazo = "Prazo";
+ const labelAssunto = "Assunto";
+ const labelInteressado = "Interessado";
+ const labelConcessionaria = "Concessionaria";
+ const labelCoordenadoria = modoDemanda ? "Coordenadoria" : "Coordenadorias";
+ const labelEquipeArea = modoDemanda ? "Equipe / ?rea" : "Equipes / ?reas";
+ const labelRespAdm = modoDemanda ? "Responsavel Adm" : "Responsaveis Adm";
+ const labelRespEquipe = modoDemanda ? "Responsavel equipe" : "Responsaveis equipe";
+ const labelTipoProcesso = "Tipo de processo";
+ const labelPalavrasChave = "Palavra-chave";
+ const labelObservacoes = "Observacao";
+ const campos = [
+ ["Numero SEI", htmlEscape(numeroSeiBase(processo) || "--")],
+ [labelGerencia, renderizarGerenciasColoridas(processo, demandasOrdenadas)],
+ ["Status", renderizarBadgesPorDemanda(demandasOrdenadas, (d) => d.status || "Finalizado")],
+ [
+ labelDataEntrada,
+ renderizarBadgesPorDemanda(
+ demandasOrdenadas,
+ (d) => (d.data_entrada ? formatarDataCurta(d.data_entrada) : ""),
+ ),
+ ],
+ [
+ labelPrazo,
+ juntarValores(
+ demandasOrdenadas.map((d) => (d.prazo ? formatarDataCurta(d.prazo) : "")),
+ ),
+ ],
+ [labelAssunto, juntarValores(demandasOrdenadas.map((d) => d.assunto))],
+ [labelInteressado, juntarValores(demandasOrdenadas.map((d) => d.interessado))],
+ [labelConcessionaria, juntarValores(demandasOrdenadas.map((d) => d.concessionaria))],
+ [labelCoordenadoria, renderizarBadgesPorDemanda(demandasOrdenadas, (d) => d.coordenadoria)],
+ [labelEquipeArea, renderizarBadgesPorDemanda(demandasOrdenadas, (d) => d.equipe_area)],
+ [
+ labelRespAdm,
+ modoDemanda
+ ? renderizarBadgesPorDemanda(demandasOrdenadas, (d) => d.responsavel_adm)
+ : renderizarBadgesPorDemanda(
+ filtrarDemandasUnicasPorValor(demandasOrdenadas, (d) => d.responsavel_adm),
+ (d) => d.responsavel_adm,
+ ),
+ ],
+ [labelRespEquipe, renderizarBadgesPorDemanda(demandasOrdenadas, (d) => d.responsavel_equipe)],
+ [
+ labelTipoProcesso,
+ modoDemanda
+ ? renderizarBadgesPorDemanda(demandasOrdenadas, (d) => d.tipo_processo)
+ : juntarValores(demandasOrdenadas.map((d) => d.tipo_processo)),
+ ],
+ [
+ labelPalavrasChave,
+ modoDemanda
+ ? renderizarBadgesPorDemanda(demandasOrdenadas, (d) => d.palavras_chave)
+ : juntarValores(demandasOrdenadas.map((d) => d.palavras_chave)),
+ ],
+ [
+ labelObservacoes,
+ modoDemanda
+ ? renderizarBadgesPorDemanda(
+ demandasOrdenadas,
+ (d) => d.observacoes_complementares || d.observacao,
+ )
+ : juntarValores(
+ demandasOrdenadas.map((d) => d.observacoes_complementares || d.observacao),
+ ),
+ ],
+ ];
+
+ const boxes = campos
+ .map(([label, valor]) => {
+ const v = typeof valor === "string" ? valor : (possuiValor(valor) ? htmlEscape(valor) : "--");
+ return `
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box">
+ <span class="resumo-label">${label}</span>
+ <span class="resumo-value">${v}</span>
+ </div>
+ </div>
+ `;
+ })
+ .join("");
+
+ const numeroRef = numeroSeiBase(processo) || processo.numero_sei || "--";
+ const labelCabecalho = modoDemanda ? "Demanda" : "Processo";
+ return `
+ <div class="ficha-tecnica-wrapper">
+ <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+ <div class="ficha-tecnica-title">Ficha tecnica</div>
+ <span class="badge bg-light text-muted border">${labelCabecalho} ${htmlEscape(numeroRef)}</span>
+ </div>
+ <div class="row g-3">
+ ${boxes}
+ </div>
+ </div>
+ `;
+ };
+
+const inserirFichaTecnicaNaTabela = (processo) => {
+ if (!refs.tabelaProcessos) return;
+ removerFichaTecnica();
+ const corpo = refs.tabelaProcessos.querySelector("tbody");
+ if (!corpo) return;
+
+ const alvo = Array.from(corpo.querySelectorAll("tr")).find(
+ (linha) => normalizarSei(linha.getAttribute("data-processo")) === normalizarSei(processo.numero_sei),
+ );
+
+ const fichaLinha = document.createElement("tr");
+ fichaLinha.className = "ficha-tecnica-row";
+ fichaLinha.setAttribute("data-processo", processo.numero_sei || "");
+
+ const colunas = refs.tabelaProcessos.querySelectorAll("thead th").length || 8;
+ const celula = document.createElement("td");
+ celula.setAttribute("colspan", colunas);
+ celula.innerHTML = construirFichaTecnica(processo);
+ fichaLinha.appendChild(celula);
+
+ if (alvo?.parentNode) {
+ alvo.parentNode.insertBefore(fichaLinha, alvo.nextElementSibling);
+ } else {
+ corpo.appendChild(fichaLinha);
+ }
+ };
+
+ const inserirFichaTecnicaNaTabelaDemanda = (demanda) => {
+ if (!refs.tabelaDemandas) return;
+ removerFichaTecnicaDemanda();
+ const corpo = refs.tabelaDemandas.querySelector("tbody");
+ if (!corpo) return;
+
+ const alvo = Array.from(corpo.querySelectorAll("tr")).find(
+ (linha) => normalizarSei(linha.getAttribute("data-processo")) === normalizarSei(demanda.numero_sei),
+ );
+
+ const fichaLinha = document.createElement("tr");
+ fichaLinha.className = "ficha-tecnica-row";
+ fichaLinha.setAttribute("data-processo", demanda.numero_sei || "");
+
+ const colunas = refs.tabelaDemandas.querySelectorAll("thead th").length || 8;
+ const celula = document.createElement("td");
+ celula.setAttribute("colspan", colunas);
+ const processoDemanda = { ...demanda, demandas_relacionadas: [demanda] };
+ celula.innerHTML = construirFichaTecnica(processoDemanda, { modoDemanda: true });
+ fichaLinha.appendChild(celula);
+
+ if (alvo?.parentNode) {
+ alvo.parentNode.insertBefore(fichaLinha, alvo.nextElementSibling);
+ } else {
+ corpo.appendChild(fichaLinha);
+ }
+ };
+
+ const renderizarListaExtrasGerencia = (extras) => {
+ const itens = normalizarExtras(extras);
+ if (!itens.length) return "";
+ const cards = itens
+ .map(
+ (item) => `
+ <div class="col-md-6 col-lg-4">
+ <span class="resumo-label">${htmlEscape(item.label)}</span>
+ <span class="resumo-value">${htmlEscape(item.valor)}</span>
+ </div>
+ `,
+ )
+ .join("");
+ return `
+ <div class="pt-3">
+ <div class="small text-uppercase fw-semibold text-muted mb-2">Campos extras</div>
+ <div class="row g-3">${cards}</div>
+ </div>
+ `;
+ };
+
+ const renderizarDadosGerencia = (snapshot) => {
+ if (!snapshot || typeof snapshot !== "object") {
+ return '<div class="alert alert-light border mt-3 mb-0 py-2 small">Nenhum dado registrado nesta etapa.</div>';
+ }
+
+ const campos = [
+ ["coordenadoria", "Coordenadoria"],
+ ["equipe_area", "Equipe / ?rea"],
+ ["responsavel_equipe", "Responsavel equipe"],
+ ["tipo_processo", "Tipo de processo"],
+ ["palavras_chave", "Palavras-chave"],
+ ["status", "Status"],
+ ["data_status", "Data status", true],
+ ["prazo_equipe", "Prazo da equipe", true],
+ ];
+
+ const blocos = campos
+ .map(([chave, label, isData]) => {
+ const valor = snapshot[chave];
+ if (!possuiValor(valor)) return "";
+ const texto = isData ? formatarDataCurta(valor) : htmlEscape(valor);
+ return `
+ <div class="col-md-6 col-lg-4">
+ <span class="resumo-label">${label}</span>
+ <span class="resumo-value">${texto}</span>
+ </div>
+ `;
+ })
+ .filter(Boolean)
+ .join("");
+
+ const observacoes = possuiValor(snapshot.observacoes_complementares)
+ ? `
+ <div class="col-12">
+ <span class="resumo-label">ObservacAµes da gerencia</span>
+ <span class="resumo-value">${formatarMultiline(snapshot.observacoes_complementares)}</span>
+ </div>
+ `
+ : "";
+
+ const extras = renderizarListaExtrasGerencia(snapshot.extras);
+ const dadosBrutos = snapshot._raw
+ ? `<pre class="bg-dark text-white rounded-3 p-3 mt-3 mb-0 small">${htmlEscape(snapshot._raw)}</pre>`
+ : "";
+
+ if (!blocos && !extras && !observacoes && !dadosBrutos) {
+ return '<div class="alert alert-light border mt-3 mb-0 py-2 small">Nenhum dado registrado nesta etapa.</div>';
+ }
+
+ return `
+ <div class="mt-3 p-3 bg-light-subtle border rounded-3">
+ <div class="small text-uppercase fw-semibold text-muted mb-2">Dados registrados na gerencia</div>
+ ${blocos ? `<div class="row g-3">${blocos}${observacoes}</div>` : observacoes}
+ ${extras}
+ ${dadosBrutos}
+ </div>
+ `;
+ };
+
+ const renderizarResumoGerencias = (processo) => {
+ const movimentos = Array.isArray(processo.movimentacoes) ? processo.movimentacoes : [];
+ if (!movimentos.length) return "";
+ const porGerencia = new Map();
+ movimentos.forEach((mov) => {
+ const dados = mov.dados && typeof mov.dados === "object" ? mov.dados : null;
+ if (!dados) return;
+ const gerencia = (mov.de || mov.para || "").toString().trim();
+ if (!gerencia) return;
+ const dataMs = new Date(mov.data || 0).getTime() || 0;
+ const atual = porGerencia.get(gerencia);
+ if (!atual || dataMs >= atual.dataMs) {
+ porGerencia.set(gerencia, { dados, dataMs });
+ }
+ });
+ if (!porGerencia.size) return "";
+ const cards = Array.from(porGerencia.entries())
+ .map(([gerencia, info]) => {
+ const conteudo = renderizarDadosGerencia(info.dados);
+ return `
+ <div class="col-12">
+ <div class="resumo-box">
+ <span class="resumo-label">Gerencia ${htmlEscape(gerencia)}</span>
+ <div class="mt-2">${conteudo}</div>
+ </div>
+ </div>
+ `;
+ })
+ .join("");
+ return `
+ <div class="col-12">
+ <div class="resumo-box">
+ <span class="resumo-label">Dados por gerencia</span>
+ <div class="row g-3 mt-1">${cards}</div>
+ </div>
+ </div>
+ `;
+ };
+
+  const badgeTipo = (tipo) => {
+  if (!tipo) return "";
+  const mapa = {
+ movimentacao: { label: "Movimentacao", classe: "bg-secondary-subtle text-dark" },
+ finalizacao_gerencia: { label: "Finalizacao de gerencia", classe: "bg-warning-subtle text-warning" },
+ finalizado_geral: { label: "Encerramento", classe: "bg-success-subtle text-success" },
+ };
+  const { label, classe } = mapa[tipo] || { label: capitalizarSlug(tipo), classe: "bg-secondary-subtle text-dark" };
+  return `<span class="badge ${classe} ms-2">${htmlEscape(label)}</span>`;
+  };
+ 
+  const atualizarMetricasPainel = (usandoResumo) => {
+  const sufixo = usandoResumo ? "finalizados" : "demandas";
+  document.querySelectorAll("[data-label-finalizados]").forEach((el) => {
+  const valor = el.getAttribute(`data-label-${sufixo}`);
+  if (valor) el.textContent = valor;
+  });
+  document.querySelectorAll("[data-valor-finalizados]").forEach((el) => {
+  const valor = el.getAttribute(`data-valor-${sufixo}`);
+  if (valor) el.textContent = valor;
+  });
+  document.querySelectorAll("[data-foot-finalizados]").forEach((el) => {
+  const valor = el.getAttribute(`data-foot-${sufixo}`);
+  if (valor) el.textContent = valor;
+  });
+  };
+ 
+  const atualizarTituloTabela = (usandoResumo) => {
+  const sufixo = usandoResumo ? "finalizados" : "demandas";
+  const titulo = document.getElementById("tituloPainelTabela");
+  if (titulo) {
+  const texto = titulo.getAttribute(`data-${sufixo}`);
+  if (texto) titulo.textContent = texto;
+  }
+  const subtitulo = document.getElementById("subtituloPainelTabela");
+  if (subtitulo) {
+  const texto = subtitulo.getAttribute(`data-${sufixo}`);
+  if (texto) subtitulo.textContent = texto;
+  }
+  };
+ 
+ const alternarVisaoPainel = () => {
+  const usandoResumo = !refs.visaoPainelResumo || refs.visaoPainelResumo.checked;
+ if (refs.painelResumo && refs.painelDemanda) {
+ refs.painelResumo.classList.toggle("d-none", !usandoResumo);
+ refs.painelDemanda.classList.toggle("d-none", usandoResumo);
+ }
+  atualizarMetricasPainel(usandoResumo);
+  if (refs.visaoTabelaResumo && refs.visaoTabelaDemanda) {
+  refs.visaoTabelaResumo.checked = usandoResumo;
+  refs.visaoTabelaDemanda.checked = !usandoResumo;
+  }
+  alternarVisaoTabela();
+  };
+
+  const alternarVisaoTabela = () => {
+  const usandoResumo = !refs.visaoTabelaResumo || refs.visaoTabelaResumo.checked;
+ if (refs.tabelaProcessosWrapper && refs.tabelaDemandasWrapper) {
+ refs.tabelaProcessosWrapper.classList.toggle("d-none", !usandoResumo);
+ refs.tabelaDemandasWrapper.classList.toggle("d-none", usandoResumo);
+ }
+  refs.contadorProcessos?.classList.toggle("d-none", !usandoResumo);
+  refs.contadorDemandas?.classList.toggle("d-none", usandoResumo);
+  atualizarTituloTabela(usandoResumo);
+  atualizarLimites();
+  if (refs.visaoPainelResumo && refs.visaoPainelDemanda) {
+  refs.visaoPainelResumo.checked = usandoResumo;
+  refs.visaoPainelDemanda.checked = !usandoResumo;
+  }
+  atualizarMetricasPainel(usandoResumo);
+  };
+
+ const aplicarFiltroSelecao = (numeroSei) => {
+ const alvo = chaveSelecaoSei(numeroSei);
+ const filtrar = (tabela) => {
+ if (!tabela) return;
+ tabela.querySelectorAll("tbody tr").forEach((linha) => {
+ const linhaSei = chaveSelecaoSei(linha.getAttribute("data-processo"));
+ const esconder = alvo && linhaSei !== alvo;
+ linha.classList.toggle("d-none", esconder);
+ });
+ };
+ filtrar(refs.tabelaProcessos);
+ filtrar(refs.tabelaDemandas);
+ refs.btnLimparSelecao?.classList.toggle("d-none", !alvo);
+ atualizarLimites();
+ };
+
+ const limparFiltroSelecao = () => aplicarFiltroSelecao("");
+
+ const ocultarHistorico = () => {
+ if (refs.historicoLista) {
+ refs.historicoLista.innerHTML = "";
+ refs.historicoLista.classList.add("d-none");
+ }
+ if (refs.historicoTitulo) {
+ refs.historicoTitulo.textContent = "Historico do processo";
+ }
+ if (refs.historicoMensagem) {
+ refs.historicoMensagem.textContent = "Selecione um processo para ver o historico.";
+ }
+ refs.historicoMensagem?.classList.remove("d-none");
+ refs.historicoWrapper?.classList.add("d-none");
+ historicoAberto = false;
+ if (refs.btnVerHistorico) {
+ refs.btnVerHistorico.textContent = "Ver historico";
+ }
+ };
+
+const limparResultados = () => {
+ processoSelecionado = null;
+ demandaSelecionada = null;
+ demandaSelecionadaIdx = null;
+ fecharFicha();
+ if (refs.conteudoResumo) {
+ refs.conteudoResumo.innerHTML = "";
+ refs.conteudoResumo.classList.add("d-none");
+ }
+ if (refs.listaMovimentacoes) {
+ refs.listaMovimentacoes.innerHTML = "";
+ }
+ ocultarHistorico();
+ refs.btnVerFicha?.setAttribute("disabled", "disabled");
+ refs.btnVerHistorico?.setAttribute("disabled", "disabled");
+ refs.acoesSelecao?.classList.add("d-none");
+ refs.mensagemResumo?.classList.add("d-none");
+ refs.mensagemDemanda?.classList.remove("d-none");
+ destacarLinha(null);
+ limparFiltroSelecao();
+ };
+
+ const mostrarAlerta = (texto) => {
+ if (!refs.alertaBusca) return;
+ refs.alertaBusca.textContent = texto;
+ refs.alertaBusca.classList.remove("d-none");
+ };
+
+ const limparAlerta = () => {
+ if (!refs.alertaBusca) return;
+ refs.alertaBusca.classList.add("d-none");
+ refs.alertaBusca.textContent = "";
+ };
+
+ const destacarLinha = (numeroSei) => {
+ const alvoBase = chaveSelecaoSei(numeroSei);
+ const alvoExato = normalizarSei(numeroSei);
+ if (refs.tabelaProcessos) {
+ refs.tabelaProcessos.querySelectorAll("tbody tr").forEach((linha) => {
+ const linhaSei = chaveSelecaoSei(linha.getAttribute("data-processo"));
+ linha.classList.toggle("table-active", alvoBase && linhaSei === alvoBase);
+ });
+ }
+ if (refs.tabelaDemandas) {
+ refs.tabelaDemandas.querySelectorAll("tbody tr").forEach((linha) => {
+ const linhaSei = normalizarSei(linha.getAttribute("data-processo"));
+ const linhaIdx = linha.getAttribute("data-demanda-idx");
+ const destaquePorIdx =
+ demandaSelecionadaIdx !== null && demandaSelecionadaIdx !== undefined
+ ? String(linhaIdx) === String(demandaSelecionadaIdx)
+ : false;
+ const destaquePadrao = alvoExato && linhaSei === alvoExato && demandaSelecionadaIdx === null;
+ linha.classList.toggle("table-active", destaquePorIdx || destaquePadrao);
+ });
+ }
+ aplicarFiltroSelecao(numeroSei);
+ };
+
+ const chaveDemandaSelecionada = (demanda, idx = null) => {
+ if (!demanda || typeof demanda !== "object") return "";
+ const partes = [
+ normalizarSei(demanda.numero_sei || ""),
+ normalizarGerencia(demanda.gerencia || demanda.gerencia_origem || ""),
+ (demanda.finalizado_em || "").toString(),
+ idx === null || idx === undefined ? "" : String(idx),
+ ];
+ return partes.join("|");
+ };
+
+ const obterProcesso = (numeroSei) => {
+ if (!listaProcessos.length) return null;
+ const alvo = normalizarSei(numeroSei);
+ const digitos = chaveSei(numeroSei);
+ if (!alvo && !digitos) {
+ return null;
+ }
+ return (
+ listaProcessos.find((item) => {
+ const numero = normalizarSei(item.numero_sei);
+ if (numero && numero === alvo) return true;
+ if (digitos && chaveSei(item.numero_sei) === digitos) return true;
+ return false;
+ }) || null
+ );
+ };
+
+ const obterProcessosPorBase = (numeroSei) => {
+ if (!listaProcessos.length) return [];
+ const base = chaveSelecaoSei(numeroSei);
+ if (!base) return [];
+ return listaProcessos.filter((item) => chaveSelecaoSei(item.numero_sei) === base);
+ };
+
+ const deduplicarDemandas = (lista) => {
+ const vistos = new Set();
+ const saida = [];
+ (Array.isArray(lista) ? lista : []).forEach((item) => {
+ const chave = [
+ item?.id ?? "",
+ normalizarSei(item?.numero_sei || ""),
+ normalizarGerencia(item?.gerencia || item?.gerencia_origem || ""),
+ (item?.finalizado_em || "").toString(),
+ ].join("|");
+ if (vistos.has(chave)) return;
+ vistos.add(chave);
+ saida.push(item);
+ });
+ return saida;
+ };
+
+ const deduplicarEventosHistorico = (lista) => {
+ const vistos = new Set();
+ const saida = [];
+ (Array.isArray(lista) ? lista : []).forEach((item) => {
+ const chave = [
+ item?.data || "",
+ item?.tipo || "",
+ item?.usuario || "",
+ item?.de || "",
+ item?.para || "",
+ item?.motivo || "",
+ item?.texto || "",
+ item?.numero_sei_ref || "",
+ ].join("|");
+ if (vistos.has(chave)) return;
+ vistos.add(chave);
+ saida.push(item);
+ });
+ return saida;
+ };
+
+ const obterProcessoConsolidadoPorBase = (numeroSei) => {
+ const relacionados = obterProcessosPorBase(numeroSei);
+ if (!relacionados.length) return null;
+ if (relacionados.length === 1) return relacionados[0];
+ const ordenados = [...relacionados].sort((a, b) => {
+ const da = timestampEvento(a.finalizado_em || a.atualizado_em || a.criado_em);
+ const db = timestampEvento(b.finalizado_em || b.atualizado_em || b.criado_em);
+ return db - da;
+ });
+ const principal = { ...ordenados[0] };
+ const demandasRel = deduplicarDemandas(
+ ordenados.flatMap((item) =>
+ Array.isArray(item.demandas_relacionadas) && item.demandas_relacionadas.length
+ ? item.demandas_relacionadas
+ : [item],
+ ),
+ );
+ const movsCompleto = deduplicarEventosHistorico(
+ ordenados.flatMap((item) =>
+ Array.isArray(item.movimentacoes_completas) && item.movimentacoes_completas.length
+ ? item.movimentacoes_completas
+ : (Array.isArray(item.movimentacoes) ? item.movimentacoes : []),
+ ),
+ ).sort((a, b) => timestampEvento(b.data) - timestampEvento(a.data));
+ const gerencias = Array.from(
+ new Set(
+ ordenados
+ .flatMap((item) => (Array.isArray(item.gerencias_involvidas) ? item.gerencias_involvidas : []))
+ .map((g) => (g || "").toString().trim())
+ .filter(Boolean),
+ ),
+ );
+ principal.demandas_relacionadas = demandasRel;
+ principal.movimentacoes_completas = movsCompleto;
+ principal.gerencias_involvidas = gerencias;
+ principal.ciclos_total = Math.max(
+ Number(principal.ciclos_total || 1),
+ Number(relacionados.length || 1),
+ );
+ return principal;
+ };
+
+ const obterProcessoPorBase = (numeroSei) => {
+ return obterProcessoConsolidadoPorBase(numeroSei);
+ };
+
+ const obterDemanda = (numeroSei) => {
+ if (!listaDemandas.length) return null;
+ const alvo = normalizarSei(numeroSei);
+ const base = chaveSelecaoSei(numeroSei);
+ let encontrado = null;
+ if (alvo) {
+ encontrado = listaDemandas.find((item) => normalizarSei(item.numero_sei) === alvo) || null;
+ }
+ if (!encontrado && base) {
+ encontrado = listaDemandas.find((item) => chaveSelecaoSei(item.numero_sei) === base) || null;
+ }
+ return encontrado;
+ };
+
+ const obterGerenciasInvolvidas = (processo) => {
+ const ignorar = new Set(["SAIDA", "FINALIZADO"]);
+ const filtrar = (lista) =>
+ lista
+ .map((item) => (item || "").toString().trim())
+ .filter((item) => item && !ignorar.has(item.toUpperCase()));
+
+ if (Array.isArray(processo.gerencias_involvidas) && processo.gerencias_involvidas.length) {
+ const filtradas = filtrar(processo.gerencias_involvidas);
+ return filtradas.length ? juntarGerencias(ordenarGerenciasPreferenciais(filtradas)) : "--";
+ }
+ const movimentos = Array.isArray(processo.movimentacoes) ? processo.movimentacoes : [];
+ const vistos = [];
+ const registrar = (nome) => {
+ const texto = (nome || "").toString().trim();
+ if (!texto || ignorar.has(texto.toUpperCase())) return;
+ const slug = texto.toUpperCase();
+ if (!vistos.some((item) => item.slug === slug)) {
+ vistos.push({ slug, nome: texto });
+ }
+ };
+ movimentos.forEach((mov) => {
+ registrar(mov.de);
+ registrar(mov.para);
+ });
+ registrar(processo.gerencia);
+ const ordenadas = ordenarGerenciasPreferenciais(vistos.map((item) => item.nome));
+ return ordenadas.length ? juntarGerencias(ordenadas) : "--";
+ };
+ const renderizarResumo = (processo) => {
+ inserirFichaTecnicaNaTabela(processo);
+ if (refs.conteudoResumo) {
+ refs.conteudoResumo.innerHTML = "";
+ refs.conteudoResumo.classList.add("d-none");
+ }
+ refs.mensagemResumo?.classList.add("d-none");
+ };
+
+ const renderizarMovimentacoes = (processo) => {
+ if (!refs.listaMovimentacoes) return;
+ refs.listaMovimentacoes.innerHTML = "";
+ const movimentos = Array.isArray(processo.movimentacoes) ? processo.movimentacoes : [];
+ if (!movimentos.length) {
+ refs.listaMovimentacoes.innerHTML = '<div class="list-group-item text-muted">Nao existem movimentacAµes cadastradas para este processo.</div>';
+ refs.mensagemDemanda?.classList.add("d-none");
+ return;
+ }
+
+ const movimentosOrdenados = [...movimentos].sort((a, b) => {
+ const da = new Date(a.data || 0).getTime();
+ const db = new Date(b.data || 0).getTime();
+ return db - da;
+ });
+
+ const linhas = movimentosOrdenados
+ .map((mov, indice) => {
+ const dados = mov.dados && typeof mov.dados === "object" ? mov.dados : {};
+ const statusEtapa = dados.status || "--";
+ const equipe = dados.equipe_area || "--";
+ const coord = dados.coordenadoria || "--";
+ const resp = dados.responsavel_equipe || "--";
+ const motivo = formatarMultiline(mov.motivo, "Sem justificativa informada.");
+ const gerenciaOrigem = htmlEscape(mov.de || processo.gerencia || "--");
+ return `
+ <tr>
+ <td class="text-muted small">${indice + 1}</td>
+ <td class="fw-semibold">${gerenciaOrigem}</td>
+ <td>${badgeTipo(mov.tipo)}</td>
+ <td>${htmlEscape(mov.usuario || "--")}</td>
+ <td>${formatarData(mov.data)}</td>
+ <td>${htmlEscape(statusEtapa)}</td>
+ <td>${htmlEscape(coord)}</td>
+ <td>${htmlEscape(equipe)}</td>
+ <td>${htmlEscape(resp)}</td>
+ <td>${motivo}</td>
+ </tr>
+ `;
+ })
+ .join("");
+
+ refs.listaMovimentacoes.innerHTML = `
+ <div class="table-responsive">
+ <table class="table table-sm align-middle table-hover mb-0">
+ <thead class="table-light">
+ <tr>
+ <th class="text-muted small">#</th>
+ <th>Gerencia</th>
+ <th>Tipo</th>
+ <th>Usuario</th>
+ <th>Data</th>
+ <th>Status</th>
+ <th>Coordenadoria</th>
+ <th>Equipe / ?rea</th>
+ <th>Responsavel equipe</th>
+ <th>Motivo</th>
+ </tr>
+ </thead>
+ <tbody>
+ ${linhas}
+ </tbody>
+ </table>
+ </div>
+ `;
+ refs.mensagemDemanda?.classList.add("d-none");
+ };
+
+ const construirHistorico = (processo, opcoes = {}) => {
+const eventos = [];
+ const numeroSeiDemanda = normalizarSei(opcoes.numeroSeiDemanda || "");
+ const filtrarPorDemanda = Boolean(numeroSeiDemanda);
+ const demandaSelecionadaHistorico = opcoes.demandaSelecionada || null;
+ const isDemanda = Boolean(demandaSelecionadaHistorico);
+ const gerenciaDemandaSelecionada = normalizarGerencia(
+ demandaSelecionadaHistorico?.gerencia || demandaSelecionadaHistorico?.gerencia_origem || "",
+ );
+ const movimentos = Array.isArray(processo.movimentacoes_completas)
+ ? processo.movimentacoes_completas
+ : (Array.isArray(processo.movimentacoes) ? processo.movimentacoes : []);
+ const ordenadosTodos = [...movimentos].sort((a, b) => {
+ const da = new Date(a.data || 0).getTime();
+ const db = new Date(b.data || 0).getTime();
+ return da - db;
+ });
+const ordenados = filtrarPorDemanda
+ ? ordenadosTodos.filter((mov) => {
+ const numeroRef = normalizarSei(mov.numero_sei_ref || "");
+ if (numeroRef && numeroRef !== numeroSeiDemanda) return false;
+ if (!gerenciaDemandaSelecionada) return true;
+ const de = normalizarGerencia(mov.de || "");
+ const para = normalizarGerencia(mov.para || "");
+ const tipo = (mov.tipo || "").toString().toLowerCase();
+ if (isDemanda && (tipo === "finalizado_geral" || para === "FINALIZADO")) return true;
+ if (tipo === "cadastro") return para === gerenciaDemandaSelecionada;
+ return de === gerenciaDemandaSelecionada || para === gerenciaDemandaSelecionada;
+ })
+ : ordenadosTodos;
+ const ultimoTimestampMovimentacao = ordenados.reduce(
+ (max, mov) => Math.max(max, timestampEvento(mov?.data)),
+ 0,
+ );
+ if (filtrarPorDemanda && !ordenados.length) {
+ return [];
+ }
+ const demandasNoHistorico = new Set(
+ ordenados
+ .map((mov) => (mov.numero_sei_ref || "").toString().trim())
+ .filter(Boolean)
+ );
+const obterGerenciaCriacao = () =>
+(processo.gerencia_criacao || processo.gerencia_origem || processo.gerencia || "--");
+const possuiFinalizacaoMov = ordenados.some((mov) => {
+const tipo = (mov.tipo || "").toString().toLowerCase();
+const destino = (mov.para || "").toString().toUpperCase();
+return tipo === "finalizado_geral" || destino === "FINALIZADO";
+});
+const possuiCadastroMov = ordenados.some(
+(mov) => ((mov.tipo || "").toString().toLowerCase() === "cadastro")
+);
+ const possuiFinalizacaoGerenciaMov = ordenados.some(
+ (mov) => ((mov.tipo || "").toString().toLowerCase() === "finalizacao_gerencia")
+ );
+const possuiFinalizacaoGeralMov = ordenados.some((mov) => {
+ const tipo = (mov.tipo || "").toString().toLowerCase();
+ const destino = (mov.para || "").toString().toUpperCase();
+ return tipo === "finalizado_geral" || destino === "FINALIZADO";
+ });
+ const possuiEncerramentoSaidaMov = ordenados.some((mov) => {
+ const tipo = (mov.tipo || "").toString().toLowerCase();
+ const destino = (mov.para || "").toString().toUpperCase();
+ const texto = (mov.texto || "").toString().toUpperCase();
+ return (
+ tipo === "finalizado_geral"
+ || destino === "FINALIZADO"
+ || texto.includes("PROCESSO ENCERRADO EM SAIDA")
+ );
+ });
+
+if (isDemanda) {
+const gerenciaDemanda = (demandaSelecionadaHistorico.gerencia || demandaSelecionadaHistorico.gerencia_origem || processo.gerencia || "--").toString();
+const origemDemanda = (demandaSelecionadaHistorico.gerencia_origem || "").toString().trim();
+const destinoDemanda = (demandaSelecionadaHistorico.destino_saida || "").toString().trim();
+if (!possuiCadastroMov) {
+eventos.push({
+quando: demandaSelecionadaHistorico.data_entrada_gerencia || demandaSelecionadaHistorico.data_entrada || processo.criado_em,
+texto: `Demanda cadastrada por ${processo.usuario_cadastro || "usuario"} e enviada para ${gerenciaDemanda}.`,
+});
+}
+if (!possuiFinalizacaoGerenciaMov && demandaSelecionadaHistorico.finalizado_em) {
+eventos.push({
+quando: demandaSelecionadaHistorico.finalizado_em,
+texto: `Demanda finalizada em ${gerenciaDemanda} por ${processo.finalizado_por || "usuario"} e enviada para SAIDA.`,
+});
+}
+if (!possuiEncerramentoSaidaMov && (demandaSelecionadaHistorico.finalizado_em || processo.finalizado_em)) {
+const baseEncerramento = Math.max(
+ timestampEvento(
+ demandaSelecionadaHistorico.finalizado_em
+ || demandaSelecionadaHistorico.data_saida
+ || processo.finalizado_em
+ || processo.data_saida
+ || demandaSelecionadaHistorico.data_entrada,
+ ),
+ ultimoTimestampMovimentacao,
+ );
+eventos.push({
+quando:
+baseEncerramento || Date.now(),
+texto: `Processo encerrado em SAIDA por ${processo.finalizado_por || "usuario"}.`,
+});
+}
+if (destinoDemanda) {
+const baseDestino = Math.max(
+ timestampEvento(
+ demandaSelecionadaHistorico.finalizado_em
+ || demandaSelecionadaHistorico.data_saida
+ || processo.finalizado_em
+ || processo.data_saida
+ || demandaSelecionadaHistorico.data_entrada,
+ ),
+ ultimoTimestampMovimentacao,
+);
+eventos.push({
+quando: (baseDestino || Date.now()) + 1,
+texto: `Destino SAIDA (${gerenciaDemanda}): ${destinoDemanda}.`,
+});
+}
+} else if (processo.criado_em && !possuiCadastroMov) {
+const gerenciaCriacao = obterGerenciaCriacao();
+const autor = processo.usuario_cadastro || "usuario";
+const gerenciaNorm = (gerenciaCriacao || "").toString().trim().toUpperCase();
+const termoCad = gerenciaNorm === "SAIDA" ? "Processo" : "Demanda";
+const acaoCad = termoCad === "Processo" ? "cadastrado" : "cadastrada";
+const envioCad = termoCad === "Processo" ? "enviado" : "enviada";
+eventos.push({
+quando: processo.criado_em,
+texto: `${termoCad} ${acaoCad} por ${autor} e ${envioCad} para ${gerenciaCriacao}.`,
+});
+}
+
+ ordenados.forEach((mov) => {
+ const tipoMov = (mov.tipo || "").toString().toLowerCase();
+ const gerenciaMov = (mov.de || "").toString().trim().toUpperCase();
+ const termo = (tipoMov === "finalizado_geral" || gerenciaMov === "SAIDA") ? "Processo" : "Demanda";
+ let texto = (mov.texto || "").toString().trim();
+ if (tipoMov === "finalizado_geral" && !/processo\s+encerrado\s+em\s+saida/i.test(texto)) {
+ texto = `Processo encerrado em SAIDA por ${mov.usuario || processo.finalizado_por || "usuario"}.`;
+ }
+ if (!texto) {
+  if (tipoMov === "status") {
+   const sujeito = termo === "Processo" ? "do processo" : "da demanda";
+   texto = `Status ${sujeito} atualizado na gerencia ${mov.de || "-"} para: ${mov.motivo || "-"} por ${mov.usuario || "usuario"}.`;
+  } else {
+   const acaoMov = termo === "Processo" ? "movido" : "movida";
+   texto = `${termo} ${acaoMov} de "${mov.de || "-"}" para "${mov.para || "-"}" por "${mov.usuario || "usuario"}".`;
+  }
+ }
+ const numeroRef = (mov.numero_sei_ref || "").toString().trim();
+ const numeroRefBase = extrairBaseSei(numeroRef);
+ if (numeroRefBase && demandasNoHistorico.size > 1) {
+ texto = `[${numeroRefBase}] ${texto}`;
+ }
+ eventos.push({ quando: mov.data, texto });
+ });
+
+if (!isDemanda && (processo.data_saida || processo.finalizado_em) && !possuiFinalizacaoMov) {
+const usuarioFinal = (processo.finalizado_por || "usuario").toString();
+const gerenciaFinal = (processo.gerencia || "-").toString();
+const textoFinal = `Processo encerrado em ${gerenciaFinal} por ${usuarioFinal}.`;
+eventos.push({
+quando: processo.data_saida || processo.finalizado_em,
+texto: textoFinal,
+});
+}
+
+const vistos = new Set();
+const eventosOrdenados = eventos
+.filter((e) => e.quando || e.texto)
+.filter((e) => {
+const chave = `${e.quando || ""}::${e.texto}`;
+if (vistos.has(chave)) return false;
+vistos.add(chave);
+return true;
+})
+.sort((a, b) => {
+return timestampEvento(a.quando) - timestampEvento(b.quando);
+});
+
+ const destinoSaida = isDemanda
+ ? (demandaSelecionadaHistorico.destino_saida || "").toString().trim()
+ : (processo.destino_saida || "").toString().trim();
+if (!isDemanda) {
+const destinosDemandas = Array.isArray(processo.demandas_relacionadas)
+? processo.demandas_relacionadas
+: [];
+const destinosExtras = destinosDemandas
+.map((d) => {
+const destino = (d?.destino_saida || "").toString().trim();
+if (!destino) return null;
+const dataFinal = d?.finalizado_em || null;
+const dataSaida = d?.data_saida || null;
+let quando = dataFinal || dataSaida || d?.data_entrada || processo.finalizado_em || processo.data_saida || null;
+const dtFinal = parserDataHora(dataFinal);
+const dtSaida = parserDataHora(dataSaida);
+if (dtFinal) {
+// Regra: destino usa a mesma referencia de finalizacao.
+quando = dtFinal.getTime();
+} else if (dtSaida) {
+quando = dtSaida.getTime();
+}
+const gerencia = (d?.gerencia || d?.gerencia_origem || "").toString().trim();
+const sufixoGerencia = gerencia ? ` (${gerencia})` : "";
+return {
+quando,
+texto: `Destino SAIDA${sufixoGerencia}: ${destino}.`,
+chaveDemanda: `${(d?.numero_sei || "").toString().trim()}::${(d?.data_entrada || "").toString()}::${(d?.finalizado_em || "").toString()}::${(d?.data_saida || "").toString()}::${destino}`,
+};
+})
+.filter(Boolean);
+if (!destinosExtras.length && destinoSaida) {
+const textoDestino = `Destino SAIDA: ${destinoSaida}.`;
+const jaExiste = eventosOrdenados.some(
+(ev) => (ev.texto || "").toString().trim() === textoDestino,
+);
+if (!jaExiste) {
+let quandoDestino = processo.finalizado_em ||
+processo.data_saida ||
+(eventosOrdenados.length ? eventosOrdenados[eventosOrdenados.length - 1].quando : null);
+const baseDestino = timestampEvento(quandoDestino);
+quandoDestino = baseDestino || Date.now();
+eventosOrdenados.push({ quando: quandoDestino, texto: textoDestino });
+}
+} else {
+const ultimoTsAtual = eventosOrdenados.reduce(
+ (max, ev) => Math.max(max, timestampEvento(ev.quando)),
+ 0,
+);
+destinosExtras.forEach((evDestino, idx) => {
+const baseTs = timestampEvento(evDestino.quando) || Date.now();
+const eventoDestino = {
+quando: Math.max(baseTs, ultimoTsAtual + idx + 1),
+texto: evDestino.texto,
+};
+const chaveDestino = `DEST::${evDestino.chaveDemanda || `${eventoDestino.quando}::${eventoDestino.texto}::${idx}`}`;
+if (!vistos.has(chaveDestino)) {
+vistos.add(chaveDestino);
+eventosOrdenados.push(eventoDestino);
+}
+});
+}
+}
+
+const eventosUnicos = [];
+const vistosUnicos = new Set();
+for (const ev of eventosOrdenados) {
+ const ts = timestampEvento(ev?.quando);
+ const chave = `${normalizarTextoHistorico(ev?.texto)}::${Math.floor(ts / 1000)}`;
+ if (vistosUnicos.has(chave)) continue;
+ vistosUnicos.add(chave);
+ eventosUnicos.push(ev);
+}
+
+return [...eventosUnicos].sort((a, b) => {
+ const diff = timestampEvento(b.quando) - timestampEvento(a.quando);
+ if (diff !== 0) return diff;
+ return prioridadeHistorico(b) - prioridadeHistorico(a);
+});
+};
+const renderizarHistorico = (processo, opcoes = {}) => {
+ if (!refs.historicoLista || !refs.historicoMensagem) return;
+ refs.historicoLista.innerHTML = "";
+ const eventos = construirHistorico(processo, opcoes);
+ const ehDemanda = Boolean(opcoes.demandaSelecionada);
+ if (refs.historicoTitulo) {
+ refs.historicoTitulo.textContent = ehDemanda ? "Historico da demanda" : "Historico do processo";
+ }
+ if (!eventos.length) {
+ refs.historicoMensagem.textContent = ehDemanda
+ ? "Nenhum historico encontrado para esta demanda."
+ : "Nenhum historico encontrado para este processo.";
+ refs.historicoMensagem.classList.remove("d-none");
+ refs.historicoLista.classList.add("d-none");
+ return;
+ }
+const eventosVisual = [...eventos].sort(
+ (a, b) => {
+ const diff = timestampEvento(b?.quando) - timestampEvento(a?.quando);
+ if (diff !== 0) return diff;
+ return prioridadeHistorico(b) - prioridadeHistorico(a);
+ },
+);
+ const itens = eventosVisual
+ .map(
+ (ev) => {
+ const textoEvento = (ev.texto || "").toString();
+ const destaqueDestino = ehDestinoSaidaTexto(textoEvento.trim());
+ return `
+ <div class="list-group-item ${destaqueDestino ? "historico-destino-saida" : ""}">
+ <div class="text-muted small">${formatarDataHistorico(ev)}</div>
+ <div>${htmlEscape(ev.texto || "")}</div>
+ </div>
+ `;
+ },
+ )
+ .join("");
+ refs.historicoLista.innerHTML = itens;
+ refs.historicoLista.classList.remove("d-none");
+ refs.historicoMensagem.classList.add("d-none");
+ refs.historicoWrapper?.classList.remove("d-none");
+ historicoAberto = true;
+ if (refs.btnVerHistorico) {
+ refs.btnVerHistorico.textContent = "Ocultar historico";
+ }
+ };
+
+ const selecionarProcesso = (numeroSei, origem = "auto", demandaDireta = null, demandaIdx = null) => {
+ limparAlerta();
+ if (!numeroSei) {
+ limparResultados();
+ mostrarAlerta("Informe um numero SEI para realizar a busca.");
+ return;
+ }
+
+ const processo =
+ origem === "demanda" ? null : obterProcessoConsolidadoPorBase(numeroSei);
+ const demandaLocal =
+ origem === "processo" ? null : (demandaDireta || obterDemanda(numeroSei));
+ if (!processo && !demandaLocal) {
+ limparResultados();
+ mostrarAlerta("Nenhum processo finalizado encontrado para o numero informado.");
+ return;
+ }
+ const referencia = processo || demandaLocal;
+
+ const chaveAtual = demandaSelecionada
+ ? `D:${chaveDemandaSelecionada(demandaSelecionada, demandaSelecionadaIdx)}`
+ : (processoSelecionado ? `P:${chaveSelecaoSei(processoSelecionado.numero_sei)}` : "");
+ const chaveNovo = demandaLocal
+ ? `D:${chaveDemandaSelecionada(demandaLocal, demandaIdx)}`
+ : `P:${chaveSelecaoSei(referencia.numero_sei)}`;
+ if (chaveAtual && chaveAtual === chaveNovo) {
+ if (refs.buscaSei) {
+ refs.buscaSei.value = "";
+ }
+ limparResultados();
+ return;
+ }
+
+ processoSelecionado =
+ processo || (demandaLocal ? obterProcessoPorBase(demandaLocal.numero_sei) : null);
+ demandaSelecionada = demandaLocal || null;
+ demandaSelecionadaIdx = demandaLocal ? demandaIdx : null;
+ if (refs.buscaSei) {
+ refs.buscaSei.value = numeroSeiBase(referencia);
+ }
+ alternarVisaoTabela();
+ fecharFicha();
+ if (refs.listaMovimentacoes) refs.listaMovimentacoes.innerHTML = "";
+ ocultarHistorico();
+ refs.btnVerFicha?.removeAttribute("disabled");
+ refs.btnVerHistorico?.removeAttribute("disabled");
+ refs.acoesSelecao?.classList.remove("d-none");
+ historicoAberto = false;
+ destacarLinha(referencia.numero_sei);
+ try {
+ const ficha = refs.tabelaProcessos?.querySelector(".ficha-tecnica-row");
+ const destino =
+ (refs.visaoTabelaResumo?.checked && ficha) ||
+ (!refs.visaoTabelaResumo?.checked ? refs.tabelaDemandasWrapper : refs.tabelaProcessosWrapper) ||
+ ficha ||
+ refs.tabelaProcessosWrapper;
+ destino?.scrollIntoView({
+ behavior: "smooth",
+ block: "start",
+ });
+ } catch (erro) {
+ /* Ignora erro de scroll em navegadores legacy */
+ }
+ };
+
+ refs.visaoPainelResumo?.addEventListener("change", alternarVisaoPainel);
+ refs.visaoPainelDemanda?.addEventListener("change", alternarVisaoPainel);
+ refs.visaoTabelaResumo?.addEventListener("change", alternarVisaoTabela);
+ refs.visaoTabelaDemanda?.addEventListener("change", alternarVisaoTabela);
+ alternarVisaoPainel();
+ alternarVisaoTabela();
+ configurarFiltrosTabela(refs.tabelaProcessos, refs.btnLimparFiltrosColProcessos);
+ configurarFiltrosTabela(refs.tabelaDemandas, refs.btnLimparFiltrosColDemandas);
+
+ refs.quickGerencias.forEach((botao) => {
+ botao.addEventListener("click", () => {
+ const destino = botao.getAttribute("data-gerencia") || "";
+ if (refs.filtroGerencia) {
+ refs.filtroGerencia.value = destino;
+ }
+ // destaca botao selecionado
+ refs.quickGerencias.forEach((b) => b.classList.remove("active"));
+ botao.classList.add("active");
+ botao.closest("form")?.submit();
+ });
+ if ((botao.getAttribute("data-gerencia") || "") === (refs.filtroGerencia?.value || "")) {
+ botao.classList.add("active");
+ }
+ });
+
+ refs.btnBuscar?.addEventListener("click", () => {
+ selecionarProcesso(refs.buscaSei?.value.trim());
+ });
+
+ refs.btnLimparFiltros?.addEventListener("click", () => {
+ refs.formFiltros?.reset();
+ if (refs.filtroGerencia) {
+ refs.filtroGerencia.value = "";
+ }
+ window.location.href = urlLimparFiltros;
+ });
+
+ refs.btnLimparSelecao?.addEventListener("click", () => {
+ limparAlerta();
+ if (refs.buscaSei) refs.buscaSei.value = "";
+ limparResultados();
+ });
+
+refs.btnVerHistorico?.addEventListener("click", () => {
+ if (!demandaSelecionada && refs.visaoTabelaDemanda?.checked && refs.tabelaDemandas) {
+ const linhaAtiva = refs.tabelaDemandas.querySelector("tbody tr.table-active");
+ if (linhaAtiva) {
+ const idxBruto = linhaAtiva.getAttribute("data-demanda-idx");
+ const idx = idxBruto === null || idxBruto === "" ? null : Number(idxBruto);
+ if (idx !== null && Number.isFinite(idx) && idx >= 0 && idx < listaDemandas.length) {
+ demandaSelecionada = listaDemandas[idx];
+ demandaSelecionadaIdx = idx;
+ }
+ }
+ }
+ const processoHistorico =
+ processoSelecionado ||
+ (demandaSelecionada ? obterProcessoPorBase(demandaSelecionada.numero_sei) : null);
+ if (!processoHistorico && !demandaSelecionada) return;
+ if (historicoAberto) {
+ if (refs.listaMovimentacoes) refs.listaMovimentacoes.innerHTML = "";
+ ocultarHistorico();
+ historicoAberto = false;
+ refs.btnVerHistorico.textContent = "Ver historico";
+ return;
+ }
+ const usarHistoricoDemanda = Boolean(demandaSelecionada);
+ if (processoHistorico && usarHistoricoDemanda) {
+ renderizarMovimentacoes(processoHistorico);
+ renderizarHistorico(processoHistorico, {
+ demandaSelecionada,
+ numeroSeiDemanda: demandaSelecionada.numero_sei,
+ });
+ } else if (processoHistorico) {
+ renderizarMovimentacoes(processoHistorico);
+ renderizarHistorico(processoHistorico);
+ } else {
+ mostrarAlerta("Nenhum historico encontrado para este numero.");
+ }
+ historicoAberto = true;
+ if (refs.btnVerHistorico) refs.btnVerHistorico.textContent = "Ocultar historico";
+});
+
+ refs.btnVerFicha?.addEventListener("click", () => {
+ if (!processoSelecionado && !demandaSelecionada) return;
+ if (fichaAberta) {
+ fecharFicha();
+ return;
+ }
+ abrirFicha();
+ });
+
+ refs.btnMaisProcessos?.addEventListener("click", () => {
+ limiteProcessos += LIMITE_PASSO;
+ atualizarLimites();
+ });
+ refs.btnMaisDemandas?.addEventListener("click", () => {
+ limiteDemandas += LIMITE_PASSO;
+ atualizarLimites();
+ });
+
+ refs.buscaSei?.addEventListener("keyup", (evento) => {
+ if (evento.key === "Enter") {
+ selecionarProcesso(refs.buscaSei.value.trim());
+ }
+ });
+
+ if (refs.tabelaProcessos) {
+ refs.tabelaProcessos.querySelectorAll("tbody tr").forEach((linha) => {
+ linha.addEventListener("click", () => {
+ const numero = (linha.getAttribute("data-processo") || "").trim();
+ if (numero) {
+ selecionarProcesso(numero, "processo");
+ }
+ });
+ });
+ }
+ if (refs.tabelaDemandas) {
+ refs.tabelaDemandas.querySelectorAll("tbody tr").forEach((linha) => {
+ linha.addEventListener("click", () => {
+ const numero = (linha.getAttribute("data-processo") || "").trim();
+ const idxBruto = linha.getAttribute("data-demanda-idx");
+ const idx = idxBruto === null || idxBruto === "" ? null : Number(idxBruto);
+ const demandaDaLinha =
+ idx !== null && Number.isFinite(idx) && idx >= 0 && idx < listaDemandas.length
+ ? listaDemandas[idx]
+ : null;
+ if (numero) {
+ selecionarProcesso(numero, "demanda", demandaDaLinha, idx);
+ }
+ });
+ });
+ }
+
+ atualizarLimites();
+})();
+</script>
+{% endif %}
+{% include "_assistente_global.html" %}
+</body>
+
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

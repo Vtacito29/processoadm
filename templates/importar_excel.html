@@ -1,0 +1,173 @@
+﻿<!DOCTYPE html>
+<!--
+ Template: importar_excel.html
+ Proposito: Importacao com mapeamento de colunas.
+ Variaveis esperadas:
+ - etapa: "upload" ou "mapa"
+ - campos_importacao: lista de (campo, label)
+ - colunas, preview, token, mapa_atual, nome_arquivo
+-->
+<html lang="pt-br">
+<head>
+ <meta charset="UTF-8">
+ <title>Importar Excel - Controle de Processos</title>
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+ <link href="{{ url_for('static', filename='css/global.css') }}" rel="stylesheet">
+ <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+ <div class="container-fluid">
+ <a class="navbar-brand fw-semibold" href="{{ url_for('index') }}">Controle de Processos</a>
+ <div class="ms-auto d-flex gap-2 align-items-center">
+ <a class="btn btn-outline-light btn-sm" href="{{ url_for('index') }}">Inicio</a>
+ </div>
+ </div>
+</nav>
+
+<main class="container my-5">
+ <div class="card border-0 shadow-sm rounded-4 p-4">
+ <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+ <div>
+ <h1 class="h5 mb-1 fw-semibold">Importar planilha Excel</h1>
+ <small class="text-muted">Mapeie as colunas antes de importar.</small>
+ </div>
+ <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('index') }}">
+ <i class="bi bi-arrow-left"></i> Voltar
+ </a>
+ </div>
+
+ {% with mensagens = get_flashed_messages(with_categories=True) %}
+ {% if mensagens %}
+ <div class="mb-3">
+ {% for categoria, mensagem in mensagens %}
+ <div class="alert alert-{{ categoria }} alert-dismissible fade show" role="alert">
+ {{ mensagem }}
+ <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+ </div>
+ {% endfor %}
+ </div>
+ {% endif %}
+ {% endwith %}
+
+ {% if etapa == "upload" %}
+ <form method="post" enctype="multipart/form-data">
+ <input type="hidden" name="acao" value="mapear">
+ <div class="mb-3">
+ <label class="form-label">Arquivo Excel</label>
+ <input class="form-control" type="file" name="arquivo" accept=".xlsx,.xls" required>
+ <div class="form-text">
+ Apenas Número SEI é obrigatório. Campos extras podem ser informados como "Label (GERÊNCIA)".
+ </div>
+ </div>
+ <button class="btn btn-primary" type="submit">
+ <i class="bi bi-arrow-right-circle"></i> Continuar para mapeamento
+ </button>
+ </form>
+ {% else %}
+ {% set mapa_atual = mapa_atual or {} %}
+ {% set sheet_name_atual = sheet_name_atual or (sheet_names[0] if sheet_names else "") %}
+ {% set header_row = header_row or 1 %}
+ <div class="alert alert-info small">
+ {% if nome_arquivo %}
+ Arquivo: <strong>{{ nome_arquivo }}</strong>.
+ {% endif %}
+ Confirme o mapeamento das colunas antes de importar.
+ </div>
+ <form method="post" class="mb-4">
+ <input type="hidden" name="acao" value="mapear">
+ <input type="hidden" name="token" value="{{ token }}">
+ <div class="row g-3 align-items-end">
+ <div class="col-12 col-md-6">
+ <label class="form-label">Aba (planilha)</label>
+ <select class="form-select" name="sheet_name">
+ {% for nome in sheet_names or [] %}
+ <option value="{{ nome }}" {% if nome == sheet_name_atual %}selected{% endif %}>
+ {{ nome }}
+ </option>
+ {% endfor %}
+ </select>
+ </div>
+ <div class="col-12 col-md-3">
+ <label class="form-label">Linha do cabecalho</label>
+ <input class="form-control" type="number" name="header_row" min="1" value="{{ header_row }}">
+ </div>
+ <div class="col-12 col-md-3 d-grid">
+ <button class="btn btn-outline-secondary" type="submit">
+ Atualizar preview
+ </button>
+ </div>
+ </div>
+ </form>
+ <form method="post" class="mb-4">
+ <input type="hidden" name="acao" value="importar">
+ <input type="hidden" name="token" value="{{ token }}">
+ <input type="hidden" name="sheet_name" value="{{ sheet_name_atual }}">
+ <input type="hidden" name="header_row" value="{{ header_row }}">
+ <div class="row g-3">
+ {% for campo, label in campos_importacao %}
+ <div class="col-12 col-md-6 col-lg-4">
+ <label class="form-label">{{ label }}</label>
+ <select class="form-select" name="map_{{ campo }}">
+ <option value="">Ignorar</option>
+ {% for col in colunas %}
+ <option value="{{ col }}" {% if mapa_atual.get(campo) == col %}selected{% endif %}>
+ {{ col }}
+ </option>
+ {% endfor %}
+ </select>
+ </div>
+ {% endfor %}
+ </div>
+ <div class="mt-4 d-flex flex-wrap gap-2">
+ <button class="btn btn-success" type="submit">
+ <i class="bi bi-upload"></i> Importar planilha
+ </button>
+ <a class="btn btn-outline-secondary" href="{{ url_for('importar_excel') }}">
+ Refazer mapeamento
+ </a>
+ </div>
+ </form>
+
+ <h2 class="h6 fw-semibold mb-2">Preview das primeiras linhas</h2>
+ <div class="table-responsive border rounded-3">
+ <table class="table table-sm table-striped align-middle mb-0">
+ <thead>
+ <tr>
+ {% for col in colunas %}
+ <th>{{ col }}</th>
+ {% endfor %}
+ </tr>
+ </thead>
+ <tbody>
+ {% if preview %}
+ {% for row in preview %}
+ <tr>
+ {% for col in colunas %}
+ <td>{{ row.get(col, "") }}</td>
+ {% endfor %}
+ </tr>
+ {% endfor %}
+ {% else %}
+ <tr>
+ <td colspan="{{ colunas|length }}" class="text-center text-muted py-3">
+ Sem dados para preview.
+ </td>
+ </tr>
+ {% endif %}
+ </tbody>
+ </table>
+ </div>
+ {% endif %}
+ </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+
+
+
+
+
