@@ -4234,6 +4234,13 @@ def importar_excel():
         texto = limpar_texto(valor, "")
         return texto or None
 
+    def limitar_texto_bd(valor, max_len):
+        """Limita texto para caber em colunas VARCHAR sem quebrar importacao."""
+        texto = texto_opcional(valor)
+        if texto is None or max_len <= 0:
+            return texto
+        return texto[:max_len]
+
     def limpar_numero_sei(valor):
         if valor is None:
             return ""
@@ -4329,13 +4336,17 @@ def importar_excel():
             # Importacao de planilha: hora desconhecida, padroniza para 00:00:00.
             finalizado_em = datetime.combine(finalizado_em.date(), datetime.min.time())
 
-        responsavel_adm = texto_opcional(obter_valor(row, "responsavel_adm")) or responsavel_padrao
+        responsavel_adm = (
+            limitar_texto_bd(obter_valor(row, "responsavel_adm"), 255)
+            or limitar_texto_bd(responsavel_padrao, 255)
+            or "USUARIO"
+        )
         tramitado_para_raw = texto_opcional(obter_valor(row, "tramitado_para"))
         tramitado_para = (
             normalizar_gerencia(tramitado_para_raw, permitir_entrada=True)
             if tramitado_para_raw
             else None
-        ) or tramitado_para_raw
+        ) or limitar_texto_bd(tramitado_para_raw, 50)
 
         dados_extra = {
             "numero_sei_original": numero_base,
@@ -4365,22 +4376,22 @@ def importar_excel():
 
         processo = Processo(
             numero_sei=numero_formatado,
-            assunto=assunto,
-            interessado=interessado,
-            concessionaria=texto_opcional(obter_valor(row, "concessionaria")),
+            assunto=limitar_texto_bd(assunto, 255) or "NAO INFORMADO",
+            interessado=limitar_texto_bd(interessado, 255) or "NAO INFORMADO",
+            concessionaria=limitar_texto_bd(obter_valor(row, "concessionaria"), 255),
             descricao=texto_opcional(obter_valor(row, "descricao")),
-            gerencia=gerencia,
+            gerencia=limitar_texto_bd(gerencia, 50) or GERENCIA_PADRAO,
             prazo=prazo,
             data_entrada=data_entrada,
             responsavel_adm=responsavel_adm,
             observacao=texto_opcional(obter_valor(row, "observacao")),
             descricao_melhorada=texto_opcional(obter_valor(row, "descricao_melhorada")),
-            coordenadoria=texto_opcional(obter_valor(row, "coordenadoria")),
-            equipe_area=texto_opcional(obter_valor(row, "equipe_area")),
-            responsavel_equipe=texto_opcional(obter_valor(row, "responsavel_equipe")),
-            tipo_processo=texto_opcional(obter_valor(row, "tipo_processo")),
-            palavras_chave=texto_opcional(obter_valor(row, "palavras_chave")),
-            status=status_raw,
+            coordenadoria=limitar_texto_bd(obter_valor(row, "coordenadoria"), 255),
+            equipe_area=limitar_texto_bd(obter_valor(row, "equipe_area"), 255),
+            responsavel_equipe=limitar_texto_bd(obter_valor(row, "responsavel_equipe"), 255),
+            tipo_processo=limitar_texto_bd(obter_valor(row, "tipo_processo"), 255),
+            palavras_chave=limitar_texto_bd(obter_valor(row, "palavras_chave"), 255),
+            status=limitar_texto_bd(status_raw, 100),
             data_status=data_status,
             prazo_equipe=prazo_equipe,
             observacoes_complementares=texto_opcional(
@@ -4389,7 +4400,7 @@ def importar_excel():
             data_saida=data_saida,
             tramitado_para=tramitado_para,
             finalizado_em=finalizado_em,
-            finalizado_por=texto_opcional(obter_valor(row, "finalizado_por")),
+            finalizado_por=limitar_texto_bd(obter_valor(row, "finalizado_por"), 80),
             dados_extra=dados_extra,
         )
 
@@ -4402,9 +4413,10 @@ def importar_excel():
         # Para linhas importadas sem trilha historica, cria uma trilha minima consistente
         # usando as datas da planilha (cadastro -> finalizacao gerencia -> encerramento geral).
         usuario_evento = (
-            texto_opcional(obter_valor(row, "finalizado_por"))
+            limitar_texto_bd(obter_valor(row, "finalizado_por"), 80)
             or responsavel_adm
-            or (current_user.username if current_user.is_authenticated else "importacao")
+            or limitar_texto_bd(current_user.username if current_user.is_authenticated else "importacao", 80)
+            or "importacao"
         )
         data_cadastro = (
             datetime.combine(data_entrada, datetime.min.time())
