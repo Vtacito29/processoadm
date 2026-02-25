@@ -372,6 +372,7 @@ body {
 }
 .gerencia-chip .gerencia-part.aberta {
     color: #b91c1c;
+    cursor: help;
 }
 .gerencia-chip .gerencia-sep {
     color: #94a3b8;
@@ -381,6 +382,7 @@ body {
     background: #fee2e2;
     color: #b91c1c;
     border-color: rgba(239, 68, 68, 0.4);
+    cursor: help;
 }
 
 .pill.status {

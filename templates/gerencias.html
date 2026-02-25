@@ -556,13 +556,14 @@
  {% set gerencias_env = gerencias_envolvidas_map.get(processo.id, []) if gerencias_envolvidas_map else [] %}
  {% set gerencias_abertas = gerencias_abertas_map.get(processo.id, []) if gerencias_abertas_map else [] %}
  {% set trilhas_saida = trilhas_saida_map.get(processo.id, []) if trilhas_saida_map else [] %}
+ {% set tooltip_demanda_aberta = "Ainda existe uma demanda ativa nesta gerencia. O processo so pode ser finalizado apos finalizar essa demanda." %}
  {% if gerencia == 'SAIDA' %}
  {% if trilhas_saida %}
  {% for item in trilhas_saida %}
  <span class="gerencia-chip">
  {% if item.partes %}
  {% for parte in item.partes %}
- <span class="gerencia-part{% if parte.aberta %} aberta{% endif %}">{{ parte.nome }}</span>{% if not loop.last %}<span class="gerencia-sep"> -> </span>{% endif %}
+ <span class="gerencia-part{% if parte.aberta %} aberta{% endif %}"{% if parte.aberta %} title="{{ tooltip_demanda_aberta }}"{% endif %}>{{ parte.nome }}</span>{% if not loop.last %}<span class="gerencia-sep"> -> </span>{% endif %}
  {% endfor %}
  {% else %}
  {{ item.texto }}
@@ -1139,10 +1140,11 @@
  {% set gerencias_env = gerencias_envolvidas_map.get(processo.id, []) if gerencias_envolvidas_map else [] %}
  {% set gerencias_abertas = gerencias_abertas_map.get(processo.id, []) if gerencias_abertas_map else [] %}
  {% set trilhas_saida = trilhas_saida_map.get(processo.id, []) if trilhas_saida_map else [] %}
+ {% set tooltip_demanda_aberta = "Ainda existe uma demanda ativa nesta gerencia. O processo so pode ser finalizado apos finalizar essa demanda." %}
  {% if gerencia == 'SAIDA' %}
  {% if trilhas_saida %}
  {% for item in trilhas_saida %}
- <span class="gerencia-chip{% if item.aberta %} aberta{% endif %}">{{ item.texto }}</span>
+ <span class="gerencia-chip{% if item.aberta %} aberta{% endif %}"{% if item.aberta %} title="{{ tooltip_demanda_aberta }}"{% endif %}>{{ item.texto }}</span>
  {% endfor %}
  {% elif gerencias_env %}
  <span class="gerencia-chip{% if gerencias_abertas %} aberta{% endif %}">{{ gerencias_env|trilha_gerencias }}</span>
