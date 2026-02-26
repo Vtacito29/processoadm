@@ -1101,6 +1101,16 @@ def usuario_pode_cadastrar_processo(usuario: Optional["Usuario"] = None) -> bool
     )
 
 
+def usuario_pode_finalizar_gerencia(usuario: Optional["Usuario"] = None) -> bool:
+    """Define se o usuario pode finalizar/tramitar processos na propria gerencia."""
+    usuario_ref = usuario or current_user
+    if not usuario_ref or not getattr(usuario_ref, "is_authenticated", False):
+        return False
+    if usuario_tem_acesso_total(usuario_ref):
+        return True
+    return bool(getattr(usuario_ref, "pode_finalizar_gerencia", True))
+
+
 def usuario_pode_exportar_global(usuario: Optional["Usuario"] = None) -> bool:
     """Permite exportar relatorios gerais conforme permissao explicitada."""
     usuario_ref = usuario or current_user
@@ -1577,8 +1587,8 @@ def listar_usuarios_por_gerencia(gerencia: Optional[str]) -> List["Usuario"]:
     return [
         usuario
         for usuario in usuarios
-        if not getattr(usuario, "is_admin", False)
-        and not getattr(usuario, "acesso_total", False)
+        if bool(getattr(usuario, "aparece_atribuido_sei", False))
+        and bool(normalizar_gerencia(getattr(usuario, "gerencia_padrao", None), permitir_entrada=True))
         and usuario_tem_liberacao_gerencia(gerencia, usuario=usuario)
     ]
 
@@ -1812,6 +1822,7 @@ class Usuario(UserMixin, db.Model):
     acesso_total = db.Column(db.Boolean, default=False)
     must_reset_password = db.Column(db.Boolean, default=False)
     pode_cadastrar_processo = db.Column(db.Boolean, default=False)
+    pode_finalizar_gerencia = db.Column(db.Boolean, default=True)
     pode_exportar = db.Column(db.Boolean, default=False)
     pode_importar = db.Column(db.Boolean, default=False)
     criado_em = db.Column(db.DateTime, default=datetime.utcnow)
@@ -2078,17 +2089,6 @@ def login():
                 if gerencia_legacy:
                     gerencias_form = [gerencia_legacy]
             gerencias_liberadas = _normalizar_lista_gerencias(gerencias_form)
-            gerencia_forcada = (
-                current_user.is_gerente
-                and not usuario_tem_acesso_total(current_user)
-            )
-            if gerencia_forcada:
-                ger_forcada = normalizar_gerencia(
-                    getattr(current_user, "gerencia_padrao", None), permitir_entrada=True
-                )
-                gerencia_padrao = ger_forcada
-                if ger_forcada and not gerencias_liberadas:
-                    gerencias_liberadas = [ger_forcada]
             permissoes = _permissoes_por_perfil(perfil)
             perm_cadastrar = permissoes["cadastrar"]
             perm_exportar = permissoes["exportar"]
@@ -2107,12 +2107,15 @@ def login():
             )
             if nome_existente:
                 erros.append("Nome (ja utilizado)")
-            if not gerencia_padrao and not perfil_acesso_total:
-                erros.append("Gerencia vinculada")
-            if not gerencias_liberadas and not perfil_acesso_total:
+            if not gerencias_liberadas:
                 erros.append("Gerencias liberadas")
             coord = limpar_texto(request.form.get("coordenadoria"))
             equipe = limpar_texto(request.form.get("equipe_area"))
+            pode_finalizar_gerencia = (
+                (request.form.get("pode_finalizar_gerencia") or "0").strip().lower()
+                in {"1", "true", "on", "yes"}
+            )
+            pode_finalizar_gerencia = True if perfil != "usuario" else pode_finalizar_gerencia
             adicionar_atribuido_sei = (
                 (request.form.get("adicionar_atribuido_sei") or "0").strip().lower()
                 in {"1", "true", "on", "yes"}
@@ -2122,14 +2125,10 @@ def login():
             else:
                 username = gerar_username_unico(nome, email)
                 senha_temporaria = _gerar_senha_temporaria(nome)
-                gerencia_padrao = None if perfil_acesso_total else gerencia_padrao
-                gerencias_serializadas = (
-                    None
-                    if perfil_acesso_total
-                    else serializar_gerencias_liberadas(gerencias_liberadas)
-                )
-                coord_padrao = None if perfil_acesso_total else coord
-                equipe_padrao = None if perfil_acesso_total else equipe
+                gerencia_padrao = gerencia_padrao or None
+                gerencias_serializadas = serializar_gerencias_liberadas(gerencias_liberadas)
+                coord_padrao = coord
+                equipe_padrao = equipe
                 novo = Usuario(
                     username=username,
                     email=email,
@@ -2140,7 +2139,6 @@ def login():
                     equipe_area=equipe_padrao,
                     aparece_atribuido_sei=bool(
                         adicionar_atribuido_sei
-                        and not perfil_acesso_total
                         and coord_padrao
                         and equipe_padrao
                     ),
@@ -2149,6 +2147,7 @@ def login():
                     acesso_total=(perfil == "acesso_total"),
                     must_reset_password=True,
                     pode_cadastrar_processo=perm_cadastrar,
+                    pode_finalizar_gerencia=True if perfil_acesso_total else pode_finalizar_gerencia,
                     pode_exportar=perm_exportar,
                     pode_importar=perm_importar,
                 )
@@ -2172,9 +2171,6 @@ def login():
             usuario = db.session.get(Usuario, usuario_id) if usuario_id else None
             if not usuario:
                 flash("Usuario nao encontrado para edicao.", "warning")
-                return redirect(url_for("login", form_action="register"))
-            if usuario.id == current_user.id:
-                flash("Nao e permitido editar o proprio usuario nesta tela.", "warning")
                 return redirect(url_for("login", form_action="register"))
             if (
                 normalizar_chave(usuario.username or "") == normalizar_chave(DEFAULT_ADMIN_USER or "")
@@ -2206,6 +2202,11 @@ def login():
                 gerencias_liberadas = _normalizar_lista_gerencias(request.form.getlist("gerencias"))
             coord = limpar_texto(request.form.get("coordenadoria"))
             equipe = limpar_texto(request.form.get("equipe_area"))
+            pode_finalizar_gerencia = (
+                (request.form.get("pode_finalizar_gerencia") or "0").strip().lower()
+                in {"1", "true", "on", "yes"}
+            )
+            pode_finalizar_gerencia = True if perfil != "usuario" else pode_finalizar_gerencia
             erros = []
             if not nome:
                 erros.append("Nome")
@@ -2228,9 +2229,7 @@ def login():
             )
             if nome_existente:
                 erros.append("Nome (ja utilizado)")
-            if not gerencia_padrao and not perfil_acesso_total:
-                erros.append("Gerencia vinculada")
-            if not gerencias_liberadas and not perfil_acesso_total:
+            if not gerencias_liberadas:
                 erros.append("Gerencias liberadas")
             if erros:
                 flash("Preencha corretamente: " + ", ".join(erros), "warning")
@@ -2239,18 +2238,17 @@ def login():
             permissoes = _permissoes_por_perfil(perfil)
             usuario.nome = nome
             usuario.email = email
-            usuario.gerencia_padrao = None if perfil_acesso_total else gerencia_padrao
-            usuario.gerencias_liberadas = (
-                None
-                if perfil_acesso_total
-                else serializar_gerencias_liberadas(gerencias_liberadas)
-            )
-            usuario.coordenadoria = None if perfil_acesso_total else (coord or None)
-            usuario.equipe_area = None if perfil_acesso_total else (equipe or None)
+            usuario.gerencia_padrao = gerencia_padrao or None
+            usuario.gerencias_liberadas = serializar_gerencias_liberadas(gerencias_liberadas)
+            usuario.coordenadoria = coord or None
+            usuario.equipe_area = equipe or None
             usuario.is_admin = perfil == "admin"
             usuario.is_gerente = perfil in {"admin", "gerente"}
             usuario.acesso_total = perfil_acesso_total
             usuario.pode_cadastrar_processo = permissoes["cadastrar"]
+            usuario.pode_finalizar_gerencia = (
+                True if perfil_acesso_total else pode_finalizar_gerencia
+            )
             usuario.pode_exportar = permissoes["exportar"]
             usuario.pode_importar = permissoes["importar"]
             db.session.commit()
@@ -2278,11 +2276,7 @@ def login():
         if current_user.is_authenticated
         else None
     )
-    gerencia_forcada = (
-        current_user.is_authenticated
-        and current_user.is_gerente
-        and not usuario_tem_acesso_total(current_user)
-    )
+    gerencia_forcada = False
     pode_gerenciar_usuarios = current_user.is_authenticated and usuario_pode_excluir_usuarios()
     coordenadorias_cadastro: List[str] = []
     equipes_por_coordenadoria_cadastro: Dict[str, List[str]] = {}
@@ -2312,8 +2306,6 @@ def login():
     usuarios_para_gerenciar = []
     if pode_gerenciar_usuarios:
         for usuario in Usuario.query.order_by(Usuario.nome.asc()).all():
-            if usuario.id == current_user.id:
-                continue
             usuarios_para_gerenciar.append(
                 {
                     "id": usuario.id,
@@ -2324,6 +2316,9 @@ def login():
                     "equipe_area": usuario.equipe_area or "",
                     "perfil": _perfil_usuario(usuario),
                     "gerencias": obter_gerencias_liberadas_usuario(usuario),
+                    "pode_finalizar_gerencia": bool(
+                        getattr(usuario, "pode_finalizar_gerencia", True)
+                    ),
                     "gerencia_padrao": normalizar_gerencia(
                         usuario.gerencia_padrao, permitir_entrada=True
                     ),
@@ -3699,14 +3694,8 @@ def garantir_usuario_padrao():
                 func.lower(Usuario.email) == DEFAULT_ADMIN_EMAIL.lower()
             )
         usuario = Usuario.query.filter(or_(*filtros_admin)).first() if filtros_admin else None
-    gerencia_padrao_admin = (
-        None if acesso_total else (DEFAULT_ADMIN_GERENCIA or GERENCIA_PADRAO)
-    )
-    gerencias_liberadas_admin = (
-        None
-        if acesso_total
-        else serializar_gerencias_liberadas([gerencia_padrao_admin])
-    )
+    gerencia_padrao_admin = DEFAULT_ADMIN_GERENCIA or GERENCIA_PADRAO
+    gerencias_liberadas_admin = serializar_gerencias_liberadas([gerencia_padrao_admin])
     if not usuario:
         usuario = Usuario(
             username=DEFAULT_ADMIN_USER,
@@ -3714,14 +3703,15 @@ def garantir_usuario_padrao():
             nome=DEFAULT_ADMIN_NAME,
             gerencia_padrao=gerencia_padrao_admin,
             gerencias_liberadas=gerencias_liberadas_admin,
-            coordenadoria=None if acesso_total else (DEFAULT_ADMIN_COORDENADORIA or None),
-            equipe_area=None if acesso_total else (DEFAULT_ADMIN_EQUIPE or None),
+            coordenadoria=DEFAULT_ADMIN_COORDENADORIA or None,
+            equipe_area=DEFAULT_ADMIN_EQUIPE or None,
             is_admin=is_admin,
             is_admin_principal=True,
             is_gerente=is_gerente,
             acesso_total=acesso_total,
             must_reset_password=False,
             pode_cadastrar_processo=pode_cadastrar,
+            pode_finalizar_gerencia=True,
             pode_exportar=pode_exportar,
             pode_importar=pode_importar,
         )
@@ -3743,26 +3733,23 @@ def garantir_usuario_padrao():
         if acesso_total and not usuario.acesso_total:
             usuario.acesso_total = True
             atualizou = True
-        if acesso_total and usuario.gerencia_padrao:
-            usuario.gerencia_padrao = None
-            atualizou = True
-        if acesso_total and usuario.gerencias_liberadas:
-            usuario.gerencias_liberadas = None
-            atualizou = True
         if not acesso_total and usuario.acesso_total:
             usuario.acesso_total = False
             atualizou = True
-        if not acesso_total and not usuario.gerencia_padrao:
+        if not usuario.gerencia_padrao:
             usuario.gerencia_padrao = DEFAULT_ADMIN_GERENCIA or GERENCIA_PADRAO
             atualizou = True
-        if not acesso_total and not usuario.gerencias_liberadas and usuario.gerencia_padrao:
+        if not usuario.gerencias_liberadas and usuario.gerencia_padrao:
             usuario.gerencias_liberadas = serializar_gerencias_liberadas([usuario.gerencia_padrao])
             atualizou = True
-        if not acesso_total and usuario.coordenadoria is None and DEFAULT_ADMIN_COORDENADORIA:
+        if usuario.coordenadoria is None and DEFAULT_ADMIN_COORDENADORIA:
             usuario.coordenadoria = DEFAULT_ADMIN_COORDENADORIA
             atualizou = True
-        if not acesso_total and usuario.equipe_area is None and DEFAULT_ADMIN_EQUIPE:
+        if usuario.equipe_area is None and DEFAULT_ADMIN_EQUIPE:
             usuario.equipe_area = DEFAULT_ADMIN_EQUIPE
+            atualizou = True
+        if usuario.pode_finalizar_gerencia is None:
+            usuario.pode_finalizar_gerencia = True
             atualizou = True
         if atualizou:
             db.session.commit()
@@ -3983,6 +3970,10 @@ def garantir_colunas_extra():
             "ALTER TABLE usuarios ADD COLUMN pode_cadastrar_processo BOOLEAN DEFAULT 0"
         )
         adicionou_permissoes = True
+    if "pode_finalizar_gerencia" not in colunas_usuarios:
+        alteracoes_usuarios.append(
+            "ALTER TABLE usuarios ADD COLUMN pode_finalizar_gerencia BOOLEAN DEFAULT TRUE"
+        )
     if "pode_exportar" not in colunas_usuarios:
         alteracoes_usuarios.append(
             "ALTER TABLE usuarios ADD COLUMN pode_exportar BOOLEAN DEFAULT 0"
@@ -3997,6 +3988,13 @@ def garantir_colunas_extra():
     for comando in alteracoes_usuarios:
         with db.engine.begin() as conexao:
             conexao.execute(text(comando))
+    with db.engine.begin() as conexao:
+        conexao.execute(
+            text(
+                "UPDATE usuarios SET pode_finalizar_gerencia = TRUE "
+                "WHERE pode_finalizar_gerencia IS NULL"
+            )
+        )
     if adicionou_permissoes:
         with db.engine.begin() as conexao:
             conexao.execute(
@@ -4016,7 +4014,6 @@ def garantir_colunas_extra():
 
     usuarios_sem_lista = (
         Usuario.query.filter(
-            Usuario.acesso_total.is_(False),
             Usuario.gerencia_padrao.isnot(None),
             or_(
                 Usuario.gerencias_liberadas.is_(None),
@@ -5460,6 +5457,7 @@ def gerencia(nome_gerencia):
         pode_configurar_campos=pode_configurar,
         pode_exportar_gerencia=pode_exportar_gerencia,
         pode_editar_gerencia=pode_editar_gerencia,
+        pode_finalizar_gerencia=usuario_pode_finalizar_gerencia(),
         finalizados=finalizados,
         devolvidos=devolvidos,
         origens_saida=origens_saida,
@@ -7284,6 +7282,7 @@ def _render_tela_edicao_processo(
         opcoes_responsaveis_por_equipe=RESPONSAVEIS_POR_EQUIPE,
         opcoes_destinos_saida=DESTINOS_SAIDA,
         scroll_y=scroll_y,
+        pode_finalizar_gerencia=usuario_pode_finalizar_gerencia(),
     )
 
 
@@ -7595,6 +7594,12 @@ def finalizar_processo(processo_id: int):
     if not usuario_pode_editar_processo(processo):
         flash("Sem permissao para tramitar/finalizar este processo.", "warning")
         return redirect(url_for("gerencia", nome_gerencia=processo.gerencia))
+    if not usuario_pode_finalizar_gerencia():
+        flash(
+            "Seu perfil permite visualizar/editar/salvar, mas nao permite finalizar processos.",
+            "warning",
+        )
+        return redirect(url_for("editar_processo", processo_id=processo.id))
     responsavel_atual = processo.assigned_to
     if processo.finalizado_em:
         flash("Processo ja estava finalizado.", "info")
@@ -8529,6 +8534,50 @@ def atribuir_processo(processo_id: int):
             )
             flash("Processo atribuido para o usuario selecionado.", "success")
         else:
+            candidato_usuario = localizar_usuario_por_texto(
+                destinatario_nome, gerencia=gerencia_processo
+            )
+            if candidato_usuario:
+                if not usuario_tem_liberacao_gerencia(
+                    gerencia_processo, usuario=candidato_usuario
+                ):
+                    flash(
+                        "O nome selecionado corresponde a um usuario sem liberacao para esta gerencia.",
+                        "warning",
+                    )
+                    return redirect(url_for("gerencia", nome_gerencia=destino))
+                if not usuario_permitido_para_atribuicao(candidato_usuario, processo):
+                    flash(
+                        "O nome selecionado corresponde a um usuario, mas fora da coordenadoria/equipe permitida.",
+                        "warning",
+                    )
+                    return redirect(url_for("gerencia", nome_gerencia=destino))
+                processo.assigned_to = candidato_usuario
+                nome_origem = _nome_usuario(current_user)
+                nome_destino = _nome_usuario(candidato_usuario)
+                processo.responsavel_equipe = nome_destino
+                if candidato_usuario.id != current_user.id:
+                    registrar_notificacao(
+                        candidato_usuario,
+                        f"{nome_origem} atribuiu o processo {processo.numero_sei_base} para voce.",
+                        processo,
+                    )
+                db.session.add(
+                    Movimentacao(
+                        processo=processo,
+                        de_gerencia=processo.gerencia,
+                        para_gerencia=processo.gerencia,
+                        motivo=f'Processo atribuido por "{current_user.username}" para "{nome_destino}".',
+                        usuario=current_user.username,
+                        tipo="atribuicao",
+                    )
+                )
+                flash(
+                    f"O nome selecionado foi vinculado automaticamente ao usuario {nome_destino}.",
+                    "success",
+                )
+                db.session.commit()
+                return redirect(url_for("gerencia", nome_gerencia=destino))
             if not responsavel_em_lista(destinatario_nome, processo):
                 flash("Selecione um responsavel valido da lista.", "warning")
                 return redirect(url_for("gerencia", nome_gerencia=destino))

@@ -78,12 +78,12 @@
  <input type="hidden" name="form_action" value="register">
  <input type="hidden" name="adicionar_atribuido_sei" id="adicionar-atribuido-sei" value="0">
  <div class="mb-3">
- <label class="form-label">Gerência vinculada (atribuída)</label>
+ <label class="form-label">Gerência vinculada (atribuída) (opcional)</label>
  {% if gerencia_forcada %}
  <input class="form-control" type="text" value="{{ gerencia_padrao_usuario or '' }}" readonly>
  <input type="hidden" name="gerencia_padrao" id="cadastro-gerencia" value="{{ gerencia_padrao_usuario or '' }}">
  {% else %}
- <select class="form-select" name="gerencia_padrao" id="cadastro-gerencia" required>
+ <select class="form-select" name="gerencia_padrao" id="cadastro-gerencia">
  <option value="">Selecione</option>
  {% for g in gerencias %}
  <option value="{{ g }}">{{ g }}</option>
@@ -95,7 +95,6 @@
  <label class="form-label">Nome completo</label>
  <input class="form-control" type="text" name="nome" id="cadastro-nome" list="nomes-por-gerencia" required>
  <datalist id="nomes-por-gerencia"></datalist>
- <div class="form-text">Ao selecionar a gerência, os nomes já usados nela aparecem como sugestão.</div>
  </div>
  <div class="mb-3">
  <label class="form-label">E-mail</label>
@@ -129,15 +128,21 @@
  </select>
  </div>
  <div id="status-usuario-existente" class="alert alert-warning py-2 px-3 small d-none mb-3" role="alert"></div>
- <div id="sugestoes-usuarios" class="form-text mb-3"></div>
  </div>
  <div class="mb-3">
  <label class="form-label">Perfil de acesso</label>
- <select class="form-select" name="perfil">
+ <select class="form-select js-perfil-select" id="cadastro-perfil" name="perfil" data-target="#wrapper-pode-finalizar-cadastro">
  {% for value, label in perfis_disponiveis %}
  <option value="{{ value }}" {% if value == "usuario" %}selected{% endif %}>{{ label }}</option>
  {% endfor %}
  </select>
+ </div>
+ <div class="mb-3 form-check" id="wrapper-pode-finalizar-cadastro">
+ <input class="form-check-input" type="checkbox" id="pode_finalizar_gerencia" name="pode_finalizar_gerencia" value="1" checked>
+ <label class="form-check-label" for="pode_finalizar_gerencia">
+ Permitir finalizar processos na gerência
+ </label>
+ <div class="form-text">Desmarcado: usuário pode apenas visualizar, editar e salvar.</div>
  </div>
  <div class="mb-3">
  <label class="form-label">O que cada perfil pode fazer</label>
@@ -190,9 +195,11 @@
  </div>
  <div class="d-flex gap-2">
  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#editarUsuario{{ usuario.id }}" aria-expanded="false">Editar</button>
+ {% if usuario.id != current_user.id %}
  <form method="post" action="{{ url_for('excluir_usuario', usuario_id=usuario.id) }}" onsubmit="return confirm('Excluir este usuário?');">
  <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
  </form>
+ {% endif %}
  </div>
  </div>
  <div class="collapse mt-3" id="editarUsuario{{ usuario.id }}">
@@ -208,8 +215,8 @@
  <input class="form-control form-control-sm" type="email" name="email" value="{{ usuario.email }}" required>
  </div>
  <div class="col-12">
- <label class="form-label small">Gerência vinculada (atribuída)</label>
- <select class="form-select form-select-sm" name="gerencia_padrao" required>
+ <label class="form-label small">Gerência vinculada (atribuída) (opcional)</label>
+ <select class="form-select form-select-sm" name="gerencia_padrao">
  <option value="">Selecione</option>
  {% for g in gerencias %}
  <option value="{{ g }}" {% if g == usuario.gerencia_padrao %}selected{% endif %}>{{ g }}</option>
@@ -248,11 +255,26 @@
  </div>
  <div class="col-md-6">
  <label class="form-label small">Perfil</label>
- <select class="form-select form-select-sm" name="perfil">
+ <select class="form-select form-select-sm js-perfil-select" name="perfil" data-target="#wrapper-pode-finalizar-{{ usuario.id }}">
  {% for value, label in perfis_disponiveis %}
  <option value="{{ value }}" {% if value == usuario.perfil %}selected{% endif %}>{{ label }}</option>
  {% endfor %}
  </select>
+ </div>
+ <div class="col-md-6 d-flex align-items-end" id="wrapper-pode-finalizar-{{ usuario.id }}">
+ <div class="form-check mb-2">
+ <input
+ class="form-check-input"
+ type="checkbox"
+ id="podeFinalizar{{ usuario.id }}"
+ name="pode_finalizar_gerencia"
+ value="1"
+ {% if usuario.pode_finalizar_gerencia %}checked{% endif %}
+ >
+ <label class="form-check-label small" for="podeFinalizar{{ usuario.id }}">
+ Permitir finalizar na gerência
+ </label>
+ </div>
  </div>
  <div class="col-md-6 d-grid align-content-end">
  <button class="btn btn-sm btn-primary mt-4" type="submit">Salvar alterações</button>
@@ -364,7 +386,6 @@
  const emailInput = document.getElementById("cadastro-email");
  const adicionarAtribuidoInput = document.getElementById("adicionar-atribuido-sei");
  const statusExistente = document.getElementById("status-usuario-existente");
- const sugestoes = document.getElementById("sugestoes-usuarios");
 
  const nomesAtribuidosDaGerencia = () => {
  const ger = gerenciaInput ? (gerenciaInput.value || "") : "";
@@ -372,8 +393,7 @@
  };
 
  const popularNomesPorGerencia = () => {
- if (!gerenciaInput || !datalistNomes || !sugestoes) return;
- const ger = gerenciaInput.value || "";
+ if (!gerenciaInput || !datalistNomes) return;
  const nomes = nomesAtribuidosDaGerencia();
  datalistNomes.innerHTML = "";
  nomes.forEach((nome) => {
@@ -381,11 +401,6 @@
  opt.value = nome;
  datalistNomes.appendChild(opt);
  });
- if (nomes.length) {
- sugestoes.textContent = `Sugestoes de Atribuido SEI para ${ger}: ${nomes.slice(0, 8).join(" | ")}`;
- } else {
- sugestoes.textContent = "Sem nomes de Atribuido SEI para esta gerencia. Voce pode cadastrar um novo nome.";
- }
  };
 
  const popularCoordenadoriasPorGerencia = () => {
@@ -397,7 +412,7 @@
  };
 
  const atualizarStatusUsuario = () => {
- if (!nomeInput || !emailInput || !statusExistente || !sugestoes) return;
+ if (!nomeInput || !emailInput || !statusExistente) return;
  const nome = normalizar(nomeInput.value);
  const email = normalizar(emailInput.value);
  const iguais = usuariosExistentes.filter((item) => {
@@ -416,14 +431,26 @@
  .join(" | ");
  statusExistente.classList.remove("d-none");
  statusExistente.textContent = "Ja existe usuario com esse nome ou e-mail. Cadastro sera bloqueado.";
- sugestoes.textContent = `Encontrados: ${resumo}`;
+ };
+
+ const atualizarExibicaoPermissaoFinalizar = (selectPerfil) => {
+ if (!selectPerfil) return;
+ const target = selectPerfil.dataset.target || "";
+ if (!target) return;
+ const wrapper = document.querySelector(target);
+ if (!wrapper) return;
+ const ehUsuario = (selectPerfil.value || "").toLowerCase() === "usuario";
+ wrapper.classList.toggle("d-none", !ehUsuario);
+ const checkbox = wrapper.querySelector('input[name="pode_finalizar_gerencia"]');
+ if (checkbox && !ehUsuario) {
+ checkbox.checked = true;
+ }
  };
 
  if (formCadastro && gerenciaInput) {
- popularNomesPorGerencia();
  popularCoordenadoriasPorGerencia();
  gerenciaInput.addEventListener("change", () => {
- popularNomesPorGerencia();
+ datalistNomes.innerHTML = "";
  popularCoordenadoriasPorGerencia();
  atualizarStatusUsuario();
  });
@@ -434,10 +461,18 @@
  }
 
  if (nomeInput && emailInput) {
+ nomeInput.addEventListener("focus", popularNomesPorGerencia);
+ nomeInput.addEventListener("click", popularNomesPorGerencia);
+ nomeInput.addEventListener("input", popularNomesPorGerencia);
  nomeInput.addEventListener("input", atualizarStatusUsuario);
  emailInput.addEventListener("input", atualizarStatusUsuario);
  atualizarStatusUsuario();
  }
+
+ document.querySelectorAll(".js-perfil-select").forEach((selectPerfil) => {
+ atualizarExibicaoPermissaoFinalizar(selectPerfil);
+ selectPerfil.addEventListener("change", () => atualizarExibicaoPermissaoFinalizar(selectPerfil));
+ });
 
  if (formCadastro) {
  formCadastro.addEventListener("submit", (event) => {

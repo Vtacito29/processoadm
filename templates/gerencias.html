@@ -507,9 +507,11 @@
  <a class="icon-btn neutral" href="{{ url_for('editar_processo', processo_id=processo.id, mostrar_ficha=1) }}#ficha-tecnica" title="Visualizar processo">
  <i class="bi bi-eye"></i>
  </a>
+ {% if pode_finalizar_gerencia %}
  <a class="icon-btn success" href="{{ url_for('editar_processo', processo_id=processo.id) }}#acao-finalizar" title="Finalizar processo">
  <i class="bi bi-check-circle"></i>
  </a>
+ {% endif %}
  <a class="icon-btn warning" href="{{ url_for('editar_processo', processo_id=processo.id, acao='devolver') }}#acao-devolver" title="Devolver processo">
  <i class="bi bi-arrow-return-left"></i>
  </a>

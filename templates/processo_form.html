@@ -74,6 +74,7 @@
 {% set mapa_responsaveis = opcoes_responsaveis_por_equipe|default({}) %}
 {% set lista_destinos_saida = opcoes_destinos_saida|default([]) %}
 {% set somente_visualizacao = somente_visualizacao|default(false) %}
+{% set pode_finalizar_gerencia = pode_finalizar_gerencia|default(true) %}
 {% set reenviar_devolvido = reenviar_devolvido|default(false) %}
 
 {% if SITE_EM_CONFIGURACAO %}
@@ -92,6 +93,11 @@
  {% if modo_edicao and somente_visualizacao %}
  <div class="alert alert-info" data-auto-dismiss="1">
  Modo somente visualização. Seu perfil não pode editar ou tramitar processos desta gerência.
+ </div>
+ {% endif %}
+ {% if modo_edicao and not somente_visualizacao and not pode_finalizar_gerencia %}
+ <div class="alert alert-info" data-auto-dismiss="1">
+ Seu perfil pode visualizar, editar e salvar, mas não pode finalizar processos.
  </div>
  {% endif %}
 
@@ -801,15 +807,17 @@
 </div>
 {% endif %}
 
+ {% if pode_finalizar_gerencia %}
  <div id="alertaObrigatoriosFinalizar" class="alert alert-warning py-2 px-3 small mb-2 d-none" role="alert">
   Preencha os campos obrigat&oacute;rios para finalizar: <span id="listaObrigatoriosFinalizar"></span>.
   <button type="button" class="btn-close" aria-label="Fechar" data-close-alert="obrigatorios"></button>
  </div>
+ {% endif %}
 
  <div class="d-flex flex-wrap gap-2 justify-content-start mt-4">
  {% if modo_edicao and not somente_visualizacao %}
  {% if processo %}
- {% if processo.gerencia == 'SAIDA' %}
+ {% if processo.gerencia == 'SAIDA' and pode_finalizar_gerencia %}
  {% if mostrar_devolver %}
  <input type="hidden" name="comentario" value="Devolucao pela SAÍDA">
  <input type="hidden" name="nova_gerencia" id="nova_gerencia_hidden">
@@ -826,7 +834,7 @@
  {% if not mostrar_devolver %}
  <button class="btn btn-success btn-lg" type="submit" id="acao-finalizar" data-finalize="1" formaction="{{ url_for('finalizar_processo', processo_id=processo.id) }}">Finalizar na SAÍDA</button>
  {% endif %}
- {% else %}
+ {% elif pode_finalizar_gerencia %}
  <button class="btn btn-success btn-lg" type="submit" id="botaoFinalizar" data-finalize="1" formaction="{{ url_for('finalizar_processo', processo_id=processo.id) }}">Finalizar</button>
  {% endif %}
  {% endif %}
@@ -1628,7 +1636,7 @@
  });
 </script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-{% if modo_edicao and not SITE_EM_CONFIGURACAO and not somente_visualizacao %}
+{% if modo_edicao and not SITE_EM_CONFIGURACAO and not somente_visualizacao and pode_finalizar_gerencia %}
 <script>
  const seletorTramite = document.getElementById("tramitado_para");
  const seletorDevolver = document.getElementById("devolver_para");
