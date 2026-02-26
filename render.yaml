@@ -1,3 +1,4 @@
+# Arquivo: render.yaml | Objetivo: configuracao de deploy do servico web e banco no Render.
 services:
   - type: web
     name: controle-de-processos

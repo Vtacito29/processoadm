@@ -1,3 +1,4 @@
+"""Arquivo: app.py | Objetivo: Aplicacao Flask completa para gestao de processos, usuarios, importacao/exportacao e historico."""
 """
 Aplicacao Flask para controlar o ciclo de vida de processos entre gerencias.
 
@@ -1192,8 +1193,126 @@ def perfis_disponiveis_para_usuario(
             ("acesso_total", labels["acesso_total"]),
         ]
     if getattr(usuario_ref, "is_gerente", False):
-        return [("usuario", labels["usuario"])]
+        return [
+            ("usuario", labels["usuario"]),
+            ("gerente", labels["gerente"]),
+        ]
     return [("usuario", labels["usuario"])]
+
+
+def _montar_opcoes_usuario_cadastro() -> tuple[
+    List[str], Dict[str, List[str]], List[str], Dict[str, List[str]], Dict[str, List[str]]
+]:
+    """Monta opcoes e sugestoes para tela de cadastro de usuarios."""
+    coords_coletadas: List[str] = []
+    mapa_equipes: Dict[str, List[str]] = {}
+    mapa_equipes_slugs: Dict[str, Set[str]] = {}
+    chave_coord_por_slug: Dict[str, str] = {}
+    coordenadorias_por_gerencia: Dict[str, List[str]] = {}
+    coordenadorias_por_gerencia_slugs: Dict[str, Set[str]] = {}
+    pessoas_por_gerencia: Dict[str, List[str]] = {}
+    pessoas_por_gerencia_slugs: Dict[str, Set[str]] = {}
+
+    def _registrar_coord_em_gerencia(gerencia: Optional[str], coord_valor: Optional[str]) -> None:
+        ger = normalizar_gerencia(gerencia, permitir_entrada=True)
+        coord = limpar_texto(coord_valor, "")
+        if not ger or not coord:
+            return
+        lista = coordenadorias_por_gerencia.setdefault(ger, [])
+        slugs = coordenadorias_por_gerencia_slugs.setdefault(ger, set())
+        slug = normalizar_chave(coord)
+        if slug in slugs:
+            return
+        slugs.add(slug)
+        lista.append(coord)
+
+    def _registrar_pessoa_em_gerencia(gerencia: Optional[str], nome_valor: Optional[str]) -> None:
+        ger = normalizar_gerencia(gerencia, permitir_entrada=True)
+        nome = limpar_texto(nome_valor, "")
+        if not ger or not nome:
+            return
+        lista = pessoas_por_gerencia.setdefault(ger, [])
+        slugs = pessoas_por_gerencia_slugs.setdefault(ger, set())
+        slug = normalizar_chave(nome)
+        if slug in slugs:
+            return
+        slugs.add(slug)
+        lista.append(nome)
+
+    def _registrar_coord(valor: Optional[str]) -> None:
+        coord = limpar_texto(valor, "")
+        if not coord:
+            return
+        slug = normalizar_chave(coord)
+        if slug in chave_coord_por_slug:
+            return
+        chave_coord_por_slug[slug] = coord
+        coords_coletadas.append(coord)
+
+    def _registrar_equipe(coord_valor: Optional[str], equipe_valor: Optional[str]) -> None:
+        coord = limpar_texto(coord_valor, "")
+        equipe = limpar_texto(equipe_valor, "")
+        if not coord or not equipe:
+            return
+        _registrar_coord(coord)
+        chave_coord = chave_coord_por_slug.get(normalizar_chave(coord), coord)
+        lista = mapa_equipes.setdefault(chave_coord, [])
+        slugs = mapa_equipes_slugs.setdefault(chave_coord, set())
+        slug_equipe = normalizar_chave(equipe)
+        if slug_equipe not in slugs:
+            slugs.add(slug_equipe)
+            lista.append(equipe)
+
+    for _, coords in COORDENADORIAS_POR_GERENCIA.items():
+        for coord in coords:
+            _registrar_coord(coord)
+    for ger, coords in COORDENADORIAS_POR_GERENCIA.items():
+        for coord in coords:
+            _registrar_coord_em_gerencia(ger, coord)
+
+    for coord, equipes in EQUIPES_POR_COORDENADORIA.items():
+        _registrar_coord(coord)
+        for equipe in equipes:
+            _registrar_equipe(coord, equipe)
+
+    for usuario in Usuario.query.order_by(Usuario.nome.asc()).all():
+        _registrar_coord(usuario.coordenadoria)
+        _registrar_equipe(usuario.coordenadoria, usuario.equipe_area)
+        _registrar_coord_em_gerencia(usuario.gerencia_padrao, usuario.coordenadoria)
+
+    pares_processo = db.session.query(
+        Processo.gerencia,
+        Processo.coordenadoria,
+        Processo.equipe_area,
+        Processo.responsavel_adm,
+        Processo.responsavel_equipe,
+    ).all()
+    for ger, coord, equipe, resp_adm, resp_eq in pares_processo:
+        _registrar_coord(coord)
+        _registrar_equipe(coord, equipe)
+        _registrar_coord_em_gerencia(ger, coord)
+
+    for ger in GERENCIAS_DESTINOS:
+        for nome_resp in obter_responsaveis_por_gerencia(ger):
+            _registrar_pessoa_em_gerencia(ger, nome_resp)
+
+    coordenadorias = _ordenar_nomes_unicos(coords_coletadas)
+    equipes_unicas = _ordenar_nomes_unicos(
+        [item for itens in mapa_equipes.values() for item in itens]
+    )
+    mapa_ordenado = {
+        coord: _ordenar_nomes_unicos(mapa_equipes.get(coord, []))
+        for coord in coordenadorias
+    }
+    coordenadorias_ger_map = {
+        ger: _ordenar_nomes_unicos(coords)
+        for ger, coords in coordenadorias_por_gerencia.items()
+    }
+    pessoas_ger_map = {
+        ger: _ordenar_nomes_unicos(nomes)
+        for ger, nomes in pessoas_por_gerencia.items()
+    }
+    return coordenadorias, mapa_ordenado, equipes_unicas, coordenadorias_ger_map, pessoas_ger_map
 
 
 def coletar_dados_extra_form(gerencia: Optional[str], origem: Dict[str, str]) -> Dict[str, str]:
@@ -1256,24 +1375,133 @@ def obter_status_por_gerencia(gerencia: Optional[str]) -> List[str]:
 
 
 def obter_coordenadorias_por_gerencia(gerencia: Optional[str]) -> List[str]:
-    """Lista coordenadorias disponiveis para a gerencia informada."""
-    if not gerencia:
+    """Lista coordenadorias disponiveis para a gerencia informada (fixas + dinamicas)."""
+    ger_norm = normalizar_gerencia(gerencia, permitir_entrada=True)
+    if not ger_norm:
         return []
-    return COORDENADORIAS_POR_GERENCIA.get(gerencia, [])
+
+    valores = list(COORDENADORIAS_POR_GERENCIA.get(ger_norm, []))
+    vistos = {normalizar_chave(item) for item in valores}
+
+    pares_usuarios = (
+        db.session.query(Usuario.coordenadoria)
+        .filter(Usuario.coordenadoria.isnot(None))
+        .filter(func.lower(Usuario.gerencia_padrao) == ger_norm.lower())
+        .all()
+    )
+    for (coord,) in pares_usuarios:
+        coord_txt = limpar_texto(coord, "")
+        if not coord_txt:
+            continue
+        chave = normalizar_chave(coord_txt)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        valores.append(coord_txt)
+
+    pares_processos = (
+        db.session.query(Processo.coordenadoria)
+        .filter(Processo.coordenadoria.isnot(None))
+        .filter(func.lower(Processo.gerencia) == ger_norm.lower())
+        .all()
+    )
+    for (coord,) in pares_processos:
+        coord_txt = limpar_texto(coord, "")
+        if not coord_txt:
+            continue
+        chave = normalizar_chave(coord_txt)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        valores.append(coord_txt)
+
+    return _ordenar_nomes_unicos(valores)
 
 
 def obter_equipes_por_coordenadoria(coordenadoria: Optional[str]) -> List[str]:
-    """Lista equipes disponiveis para a coordenadoria informada."""
-    if not coordenadoria:
+    """Lista equipes disponiveis para a coordenadoria informada (fixas + dinamicas)."""
+    coord = limpar_texto(coordenadoria, "")
+    if not coord:
         return []
-    return EQUIPES_POR_COORDENADORIA.get(coordenadoria, [])
+    coord_norm = normalizar_chave(coord)
+
+    coord_chave = next(
+        (item for item in EQUIPES_POR_COORDENADORIA if normalizar_chave(item) == coord_norm),
+        coord,
+    )
+    valores = list(EQUIPES_POR_COORDENADORIA.get(coord_chave, []))
+    vistos = {normalizar_chave(item) for item in valores}
+
+    equipes_usuarios = (
+        db.session.query(Usuario.equipe_area)
+        .filter(Usuario.equipe_area.isnot(None))
+        .filter(func.lower(Usuario.coordenadoria) == coord.lower())
+        .all()
+    )
+    for (equipe,) in equipes_usuarios:
+        equipe_txt = limpar_texto(equipe, "")
+        if not equipe_txt:
+            continue
+        chave = normalizar_chave(equipe_txt)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        valores.append(equipe_txt)
+
+    equipes_processos = (
+        db.session.query(Processo.equipe_area)
+        .filter(Processo.equipe_area.isnot(None))
+        .filter(func.lower(Processo.coordenadoria) == coord.lower())
+        .all()
+    )
+    for (equipe,) in equipes_processos:
+        equipe_txt = limpar_texto(equipe, "")
+        if not equipe_txt:
+            continue
+        chave = normalizar_chave(equipe_txt)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        valores.append(equipe_txt)
+
+    return _ordenar_nomes_unicos(valores)
 
 
 def obter_responsaveis_por_equipe(equipe: Optional[str]) -> List[str]:
     """Lista responsaveis disponiveis para a equipe informada."""
-    if not equipe:
+    equipe_txt = limpar_texto(equipe, "")
+    if not equipe_txt:
         return []
-    return RESPONSAVEIS_POR_EQUIPE.get(equipe, [])
+    equipe_chave = next(
+        (item for item in RESPONSAVEIS_POR_EQUIPE if normalizar_chave(item) == normalizar_chave(equipe_txt)),
+        equipe_txt,
+    )
+    nomes = list(RESPONSAVEIS_POR_EQUIPE.get(equipe_chave, []))
+
+    usuarios = (
+        Usuario.query.filter(Usuario.aparece_atribuido_sei.is_(True))
+        .filter(Usuario.equipe_area.isnot(None))
+        .filter(func.lower(Usuario.equipe_area) == equipe_txt.lower())
+        .all()
+    )
+    for usuario in usuarios:
+        nome = limpar_texto(usuario.nome or usuario.username, "")
+        if nome:
+            nomes.append(nome)
+
+    resp_processos = (
+        db.session.query(Processo.responsavel_equipe)
+        .filter(Processo.equipe_area.isnot(None))
+        .filter(Processo.responsavel_equipe.isnot(None))
+        .filter(func.lower(Processo.equipe_area) == equipe_txt.lower())
+        .all()
+    )
+    for (nome_proc,) in resp_processos:
+        nome = limpar_texto(nome_proc, "")
+        if nome:
+            nomes.append(nome)
+
+    return _ordenar_nomes_unicos(nomes)
 
 
 def obter_equipes_por_gerencia(gerencia: Optional[str]) -> List[str]:
@@ -1282,7 +1510,7 @@ def obter_equipes_por_gerencia(gerencia: Optional[str]) -> List[str]:
     resultado = []
     vistos = set()
     for coord in coordenadorias:
-        for equipe in EQUIPES_POR_COORDENADORIA.get(coord, []):
+        for equipe in obter_equipes_por_coordenadoria(coord):
             if equipe in vistos:
                 continue
             vistos.add(equipe)
@@ -1296,11 +1524,26 @@ def obter_responsaveis_por_gerencia(gerencia: Optional[str]) -> List[str]:
     resultado = []
     vistos = set()
     for equipe in equipes:
-        for responsavel in RESPONSAVEIS_POR_EQUIPE.get(equipe, []):
+        for responsavel in obter_responsaveis_por_equipe(equipe):
             if responsavel in vistos:
                 continue
             vistos.add(responsavel)
             resultado.append(responsavel)
+    ger_norm = normalizar_gerencia(gerencia, permitir_entrada=True)
+    if ger_norm:
+        extras = (
+            db.session.query(Processo.responsavel_equipe)
+            .filter(Processo.gerencia.isnot(None))
+            .filter(Processo.responsavel_equipe.isnot(None))
+            .filter(func.lower(Processo.gerencia) == ger_norm.lower())
+            .all()
+        )
+        for (nome_extra,) in extras:
+            nome = limpar_texto(nome_extra, "")
+            if not nome or nome in vistos:
+                continue
+            vistos.add(nome)
+            resultado.append(nome)
     return resultado
 
 
@@ -1435,19 +1678,15 @@ def listar_responsaveis_por_contexto(processo: "Processo") -> List[str]:
     """Lista responsaveis permitidos conforme coordenadoria/equipe do processo."""
     if not processo:
         return []
-    mapa_resp = {normalizar_chave(k): v for k, v in RESPONSAVEIS_POR_EQUIPE.items()}
-    mapa_equipes = {
-        normalizar_chave(k): v for k, v in EQUIPES_POR_COORDENADORIA.items()
-    }
     equipe = limpar_texto(processo.equipe_area, "")
     if equipe:
-        return _ordenar_nomes_unicos(mapa_resp.get(normalizar_chave(equipe), []))
+        return obter_responsaveis_por_equipe(equipe)
     coordenadoria = limpar_texto(processo.coordenadoria, "")
     if coordenadoria:
-        equipes = mapa_equipes.get(normalizar_chave(coordenadoria), [])
+        equipes = obter_equipes_por_coordenadoria(coordenadoria)
         nomes: List[str] = []
         for eq in equipes:
-            nomes.extend(mapa_resp.get(normalizar_chave(eq), []))
+            nomes.extend(obter_responsaveis_por_equipe(eq))
         return _ordenar_nomes_unicos(nomes)
     return obter_responsaveis_por_gerencia(processo.gerencia)
 
@@ -1565,6 +1804,7 @@ class Usuario(UserMixin, db.Model):
     gerencias_liberadas = db.Column(db.Text, nullable=True)
     coordenadoria = db.Column(db.String(120), nullable=True)
     equipe_area = db.Column(db.String(120), nullable=True)
+    aparece_atribuido_sei = db.Column(db.Boolean, default=False)
     password_hash = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
     is_admin_principal = db.Column(db.Boolean, default=False)
@@ -1827,7 +2067,12 @@ def login():
             if perfil == "acesso_total" and not usuario_pode_conceder_acesso_total(current_user):
                 perfil = "usuario"
             perfil_acesso_total = perfil == "acesso_total"
-            gerencias_form = request.form.getlist("gerencias")
+            gerencia_padrao = normalizar_gerencia(
+                request.form.get("gerencia_padrao"), permitir_entrada=True
+            )
+            gerencias_form = request.form.getlist("gerencias_liberadas")
+            if not gerencias_form:
+                gerencias_form = request.form.getlist("gerencias")
             if not gerencias_form:
                 gerencia_legacy = request.form.get("gerencia")
                 if gerencia_legacy:
@@ -1841,7 +2086,9 @@ def login():
                 ger_forcada = normalizar_gerencia(
                     getattr(current_user, "gerencia_padrao", None), permitir_entrada=True
                 )
-                gerencias_liberadas = [ger_forcada] if ger_forcada else []
+                gerencia_padrao = ger_forcada
+                if ger_forcada and not gerencias_liberadas:
+                    gerencias_liberadas = [ger_forcada]
             permissoes = _permissoes_por_perfil(perfil)
             perm_cadastrar = permissoes["cadastrar"]
             perm_exportar = permissoes["exportar"]
@@ -1853,16 +2100,29 @@ def login():
                 erros.append("Email")
             elif buscar_usuario_por_login(email):
                 erros.append("Email (ja utilizado)")
+            nome_existente = (
+                Usuario.query.filter(func.lower(Usuario.nome) == nome.lower()).first()
+                if nome
+                else None
+            )
+            if nome_existente:
+                erros.append("Nome (ja utilizado)")
+            if not gerencia_padrao and not perfil_acesso_total:
+                erros.append("Gerencia vinculada")
             if not gerencias_liberadas and not perfil_acesso_total:
-                erros.append("Gerência")
+                erros.append("Gerencias liberadas")
             coord = limpar_texto(request.form.get("coordenadoria"))
             equipe = limpar_texto(request.form.get("equipe_area"))
+            adicionar_atribuido_sei = (
+                (request.form.get("adicionar_atribuido_sei") or "0").strip().lower()
+                in {"1", "true", "on", "yes"}
+            )
             if erros:
                 flash("Preencha corretamente: " + ", ".join(erros), "warning")
             else:
                 username = gerar_username_unico(nome, email)
                 senha_temporaria = _gerar_senha_temporaria(nome)
-                gerencia_padrao = None if perfil_acesso_total else gerencias_liberadas[0]
+                gerencia_padrao = None if perfil_acesso_total else gerencia_padrao
                 gerencias_serializadas = (
                     None
                     if perfil_acesso_total
@@ -1878,6 +2138,12 @@ def login():
                     gerencias_liberadas=gerencias_serializadas,
                     coordenadoria=coord_padrao,
                     equipe_area=equipe_padrao,
+                    aparece_atribuido_sei=bool(
+                        adicionar_atribuido_sei
+                        and not perfil_acesso_total
+                        and coord_padrao
+                        and equipe_padrao
+                    ),
                     is_admin=(perfil == "admin"),
                     is_gerente=(perfil in {"admin", "gerente"}),
                     acesso_total=(perfil == "acesso_total"),
@@ -1930,7 +2196,14 @@ def login():
                 perfil = perfil_atual
             perfil_acesso_total = perfil == "acesso_total"
 
-            gerencias_liberadas = _normalizar_lista_gerencias(request.form.getlist("gerencias"))
+            gerencia_padrao = normalizar_gerencia(
+                request.form.get("gerencia_padrao"), permitir_entrada=True
+            )
+            gerencias_liberadas = _normalizar_lista_gerencias(
+                request.form.getlist("gerencias_liberadas")
+            )
+            if not gerencias_liberadas:
+                gerencias_liberadas = _normalizar_lista_gerencias(request.form.getlist("gerencias"))
             coord = limpar_texto(request.form.get("coordenadoria"))
             equipe = limpar_texto(request.form.get("equipe_area"))
             erros = []
@@ -1946,8 +2219,19 @@ def login():
                 )
                 if email_existente:
                     erros.append("Email (ja utilizado)")
+            nome_existente = (
+                Usuario.query.filter(func.lower(Usuario.nome) == nome.lower())
+                .filter(Usuario.id != usuario.id)
+                .first()
+                if nome
+                else None
+            )
+            if nome_existente:
+                erros.append("Nome (ja utilizado)")
+            if not gerencia_padrao and not perfil_acesso_total:
+                erros.append("Gerencia vinculada")
             if not gerencias_liberadas and not perfil_acesso_total:
-                erros.append("Gerencias")
+                erros.append("Gerencias liberadas")
             if erros:
                 flash("Preencha corretamente: " + ", ".join(erros), "warning")
                 return redirect(url_for("login", form_action="register"))
@@ -1955,7 +2239,7 @@ def login():
             permissoes = _permissoes_por_perfil(perfil)
             usuario.nome = nome
             usuario.email = email
-            usuario.gerencia_padrao = None if perfil_acesso_total else gerencias_liberadas[0]
+            usuario.gerencia_padrao = None if perfil_acesso_total else gerencia_padrao
             usuario.gerencias_liberadas = (
                 None
                 if perfil_acesso_total
@@ -2000,6 +2284,31 @@ def login():
         and not usuario_tem_acesso_total(current_user)
     )
     pode_gerenciar_usuarios = current_user.is_authenticated and usuario_pode_excluir_usuarios()
+    coordenadorias_cadastro: List[str] = []
+    equipes_por_coordenadoria_cadastro: Dict[str, List[str]] = {}
+    equipes_cadastro: List[str] = []
+    coordenadorias_por_gerencia_cadastro: Dict[str, List[str]] = {}
+    pessoas_por_gerencia_cadastro: Dict[str, List[str]] = {}
+    usuarios_existentes = []
+    if pode_registrar:
+        (
+            coordenadorias_cadastro,
+            equipes_por_coordenadoria_cadastro,
+            equipes_cadastro,
+            coordenadorias_por_gerencia_cadastro,
+            pessoas_por_gerencia_cadastro,
+        ) = _montar_opcoes_usuario_cadastro()
+        for usuario in Usuario.query.order_by(Usuario.nome.asc()).all():
+            usuarios_existentes.append(
+                {
+                    "id": usuario.id,
+                    "nome": usuario.nome or "",
+                    "username": usuario.username or "",
+                    "email": usuario.email or "",
+                    "coordenadoria": usuario.coordenadoria or "",
+                    "equipe_area": usuario.equipe_area or "",
+                }
+            )
     usuarios_para_gerenciar = []
     if pode_gerenciar_usuarios:
         for usuario in Usuario.query.order_by(Usuario.nome.asc()).all():
@@ -2015,6 +2324,9 @@ def login():
                     "equipe_area": usuario.equipe_area or "",
                     "perfil": _perfil_usuario(usuario),
                     "gerencias": obter_gerencias_liberadas_usuario(usuario),
+                    "gerencia_padrao": normalizar_gerencia(
+                        usuario.gerencia_padrao, permitir_entrada=True
+                    ),
                 }
             )
     return render_template(
@@ -2027,6 +2339,12 @@ def login():
         gerencia_padrao_usuario=gerencia_padrao_usuario,
         pode_gerenciar_usuarios=pode_gerenciar_usuarios,
         usuarios_para_gerenciar=usuarios_para_gerenciar,
+        coordenadorias_cadastro=coordenadorias_cadastro,
+        equipes_por_coordenadoria_cadastro=equipes_por_coordenadoria_cadastro,
+        equipes_cadastro=equipes_cadastro,
+        coordenadorias_por_gerencia_cadastro=coordenadorias_por_gerencia_cadastro,
+        pessoas_por_gerencia_cadastro=pessoas_por_gerencia_cadastro,
+        usuarios_existentes=usuarios_existentes,
     )
 
 
@@ -3656,6 +3974,10 @@ def garantir_colunas_extra():
         alteracoes_usuarios.append("ALTER TABLE usuarios ADD COLUMN coordenadoria VARCHAR(120)")
     if "equipe_area" not in colunas_usuarios:
         alteracoes_usuarios.append("ALTER TABLE usuarios ADD COLUMN equipe_area VARCHAR(120)")
+    if "aparece_atribuido_sei" not in colunas_usuarios:
+        alteracoes_usuarios.append(
+            "ALTER TABLE usuarios ADD COLUMN aparece_atribuido_sei BOOLEAN DEFAULT 0"
+        )
     if "pode_cadastrar_processo" not in colunas_usuarios:
         alteracoes_usuarios.append(
             "ALTER TABLE usuarios ADD COLUMN pode_cadastrar_processo BOOLEAN DEFAULT 0"

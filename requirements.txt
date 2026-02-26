@@ -1,3 +1,4 @@
+# Arquivo: requirements.txt | Objetivo: dependencias Python necessarias para executar o sistema.
 Flask==2.3.3
 Flask-SQLAlchemy==3.1.1
 Flask-Login==0.6.3
