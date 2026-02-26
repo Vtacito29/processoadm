@@ -1745,6 +1745,77 @@ def responsavel_em_lista(nome: str, processo: "Processo") -> bool:
     return any(_normalizar_nome_usuario(item) == chave for item in listar_responsaveis_por_contexto(processo))
 
 
+def _usuario_deve_aparecer_atribuido_sei(usuario: "Usuario") -> bool:
+    """Determina se o usuário deve aparecer na lista de atribuição SEI."""
+    if not usuario:
+        return False
+    gerencia = normalizar_gerencia(
+        getattr(usuario, "gerencia_padrao", None), permitir_entrada=True
+    )
+    # Sem gerência vinculada, mantém comportamento de não aparecer na atribuição.
+    if not gerencia:
+        return False
+    nome_ref = limpar_texto(usuario.nome or usuario.username, "")
+    if not nome_ref:
+        return False
+    responsaveis = listar_responsaveis_por_contexto_cadastro(
+        gerencia=gerencia,
+        coordenadoria=getattr(usuario, "coordenadoria", None),
+        equipe=getattr(usuario, "equipe_area", None),
+    )
+    chave_nome = _normalizar_nome_usuario(nome_ref)
+    return any(_normalizar_nome_usuario(item) == chave_nome for item in responsaveis)
+
+
+def vincular_usuarios_legados_atribuicao() -> Dict[str, int]:
+    """
+    Vincula usuários legados às regras de atribuição sem exigir recadastro.
+
+    - Marca `aparece_atribuido_sei=True` quando o nome do usuário já existe na
+      lista de responsáveis do seu contexto.
+    - Vincula `assigned_to_id` em processos que já possuem `responsavel_equipe`
+      correspondente a um usuário permitido.
+    """
+    usuarios_atualizados = 0
+    processos_vinculados = 0
+
+    usuarios = Usuario.query.order_by(Usuario.id.asc()).all()
+    for usuario in usuarios:
+        if bool(getattr(usuario, "aparece_atribuido_sei", False)):
+            continue
+        if _usuario_deve_aparecer_atribuido_sei(usuario):
+            usuario.aparece_atribuido_sei = True
+            usuarios_atualizados += 1
+
+    processos_sem_vinculo = (
+        Processo.query.filter(
+            Processo.assigned_to_id.is_(None),
+            Processo.responsavel_equipe.isnot(None),
+        ).all()
+    )
+    for processo in processos_sem_vinculo:
+        candidato = localizar_usuario_por_texto(
+            processo.responsavel_equipe or "",
+            gerencia=processo.gerencia,
+        )
+        if not candidato:
+            continue
+        if not usuario_permitido_para_atribuicao(candidato, processo):
+            continue
+        processo.assigned_to = candidato
+        processo.responsavel_equipe = (
+            _nome_usuario_exibicao(candidato) or processo.responsavel_equipe
+        )
+        processos_vinculados += 1
+
+    if usuarios_atualizados or processos_vinculados:
+        db.session.commit()
+    return {
+        "usuarios_atualizados": usuarios_atualizados,
+        "processos_vinculados": processos_vinculados,
+    }
+
+
 def obter_responsaveis_adm_disponiveis() -> List[str]:
     """Lista usuarios disponiveis para responsavel ADM."""
     if RESPONSAVEIS_ADM:
@@ -2221,7 +2292,7 @@ def login():
                 normalizar_chave(usuario.username or "") == normalizar_chave(DEFAULT_ADMIN_USER or "")
                 and not usuario_tem_acesso_total(current_user)
             ):
-                flash("Nao e permitido editar o administrador principal por esta tela.", "warning")
+                flash("Não é permitido editar o administrador principal por esta tela.", "warning")
                 return redirect(url_for("login", form_action="register"))
 
             nome = limpar_texto(request.form.get("nome"))
@@ -2415,7 +2486,7 @@ def excluir_usuario(usuario_id: int):
         normalizar_chave(usuario.username or "") == normalizar_chave(DEFAULT_ADMIN_USER or "")
         and not usuario_tem_acesso_total(current_user)
     ):
-        flash("Nao e permitido excluir o admin principal.", "warning")
+        flash("Não é permitido excluir o admin principal.", "warning")
         return redirect(url_for("login", form_action="register"))
 
     Processo.query.filter(Processo.assigned_to_id == usuario.id).update(
@@ -2969,7 +3040,7 @@ def _mensagem_erro_excel(caminho: str, exc: Exception) -> str:
         return "Arquivo nao parece um .xlsx valido. Salve novamente como .xlsx."
     if ext not in {"", ".xls", ".xlsx", ".xlsm", ".xltx", ".xltm"}:
         return "Formato nao suportado. Use .xlsx ou .xls."
-    return "Nao foi possivel ler o arquivo Excel informado."
+    return "Não foi possível ler o arquivo Excel informado."
 
 
 def _normalizar_linha_cabecalho(valor, padrao: int = 1) -> int:
@@ -3775,7 +3846,7 @@ def garantir_usuario_padrao():
         db.session.add(usuario)
         db.session.commit()
         app.logger.warning(
-            "Usurio padro '%s' criado. Altere a senha via DEFAULT_ADMIN_PASSWORD.",
+            "Usuário padrão '%s' criado. Altere a senha via DEFAULT_ADMIN_PASSWORD.",
             DEFAULT_ADMIN_USER,
         )
     else:
@@ -3869,12 +3940,21 @@ def inicializar():
     db.create_all()
     garantir_colunas_extra()
     garantir_usuario_padrao()
+    vinculos_legados = vincular_usuarios_legados_atribuicao()
+    if (vinculos_legados.get("usuarios_atualizados") or 0) or (
+        vinculos_legados.get("processos_vinculados") or 0
+    ):
+        app.logger.info(
+            "Vinculos de atribuicao ajustados automaticamente: %s usuarios, %s processos.",
+            vinculos_legados.get("usuarios_atualizados") or 0,
+            vinculos_legados.get("processos_vinculados") or 0,
+        )
     if AUTO_CORRIGIR_DADOS_ON_START:
         promover_usuarios_acesso_total()
         preencher_planilhador_padrao()
         corrigidos = corrigir_gerencias_sem_cadastro()
         if corrigidos:
-            app.logger.info("Gerncias atualizadas automaticamente: %s.", corrigidos)
+            app.logger.info("Gerências atualizadas automaticamente: %s.", corrigidos)
     else:
         app.logger.info(
             "AUTO_CORRIGIR_DADOS_ON_START=0 -> pulando normalizacoes pesadas no startup."
@@ -4283,7 +4363,7 @@ def index():
 def exportar_geral():
     """Exporta processos em Excel com escopo global (ativos, finalizados ou todos)."""
     if not usuario_pode_exportar_global():
-        flash("Sem permissao para exportar relatorios.", "danger")
+        flash("Sem permissão para exportar relatórios.", "danger")
         return redirect(url_for("index"))
 
     escopo = request.form.get("escopo") or "ativos"
@@ -4387,7 +4467,7 @@ def importar_excel():
         flash("Importacao de processos indisponivel durante a configuracao.", "info")
         return redirect(url_for("index"))
     if not usuario_pode_importar_global():
-        flash("Sem permissao para importar planilhas.", "danger")
+        flash("Sem permissão para importar planilhas.", "danger")
         return redirect(url_for("index"))
 
     if request.method == "GET":
@@ -4423,12 +4503,12 @@ def importar_excel():
 
             token = _registrar_importacao_temp(arquivo)
             if not token:
-                flash("Nao foi possivel preparar o arquivo de importacao.", "danger")
+                flash("Não foi possível preparar o arquivo de importação.", "danger")
                 return redirect(url_for("importar_excel"))
             info = _obter_importacao_temp(token)
             caminho = info.get("caminho") if info else None
             if not caminho:
-                flash("Nao foi possivel localizar o arquivo de importacao.", "danger")
+                flash("Não foi possível localizar o arquivo de importação.", "danger")
                 return redirect(url_for("importar_excel"))
 
         suporte_msg = _validar_suporte_excel(caminho)
@@ -4891,7 +4971,7 @@ def gerencia(nome_gerencia):
     """Lista processos ativos de uma gerencia especifica."""
     gerencia_alvo = normalizar_gerencia(nome_gerencia, permitir_entrada=True)
     if not gerencia_alvo or gerencia_alvo == "ENTRADA":
-        flash("Gerncia informada  invlida.", "warning")
+        flash("Gerência informada é inválida.", "warning")
         return redirect(url_for("index"))
 
     filtro_sei = request.args.get("sei", "").strip()
@@ -5541,10 +5621,10 @@ def exportar_gerencia(nome_gerencia: str):
     """Gera um arquivo Excel com processos da gerência (ativos/finalizados)."""
     gerencia_alvo = normalizar_gerencia(nome_gerencia, permitir_entrada=True)
     if not gerencia_alvo:
-        flash("Gerência invalida para exportacao.", "warning")
+        flash("Gerência inválida para exportação.", "warning")
         return redirect(url_for("index"))
     if not usuario_pode_exportar_gerencia(gerencia_alvo):
-        flash("Sem permissao para exportar relatórios desta gerência.", "danger")
+        flash("Sem permissão para exportar relatórios desta gerência.", "danger")
         return redirect(url_for("gerencia", nome_gerencia=gerencia_alvo))
 
     escopo = request.form.get("escopo") or "ativos"
@@ -5557,16 +5637,16 @@ def exportar_gerencia(nome_gerencia: str):
         "numero_sei": ("Número SEI", lambda p: p.numero_sei_base),
         "assunto": ("Assunto", lambda p: p.assunto),
         "interessado": ("Interessado", lambda p: p.interessado),
-        "concessionaria": ("Concessionaria", lambda p: p.concessionaria),
+        "concessionaria": ("Concessionária", lambda p: p.concessionaria),
         "gerencia": ("Gerência", lambda p: p.gerencia),
         "data_entrada": ("Data entrada", lambda p: p.data_entrada.strftime("%d/%m/%Y") if p.data_entrada else ""),
         "prazo": ("Prazo SUROD", lambda p: p.prazo.strftime("%d/%m/%Y") if p.prazo else ""),
         "status": ("Status", lambda p: p.status),
         "prazo_equipe": ("Prazo equipe", lambda p: p.prazo_equipe.strftime("%d/%m/%Y") if p.prazo_equipe else ""),
-        "responsavel_adm": ("Responsavel Adm", lambda p: p.responsavel_adm),
+        "responsavel_adm": ("Responsável Adm", lambda p: p.responsavel_adm),
         "coordenadoria": ("Coordenadoria", lambda p: p.coordenadoria),
-        "equipe_area": ("Equipe / Area", lambda p: p.equipe_area),
-        "responsavel_equipe": ("Responsavel (Equipe)", lambda p: p.responsavel_equipe),
+        "equipe_area": ("Equipe / Área", lambda p: p.equipe_area),
+        "responsavel_equipe": ("Responsável (Equipe)", lambda p: p.responsavel_equipe),
         "tipo_processo": ("Tipo de processo", lambda p: p.tipo_processo),
         "palavras_chave": ("Palavras-chave", lambda p: p.palavras_chave),
         "observacoes_complementares": (
@@ -5710,7 +5790,7 @@ def novo_processo():
         )
         return redirect(url_for("index"))
     if not usuario_pode_cadastrar_processo():
-        flash("Sem permissao para cadastrar novos processos.", "warning")
+        flash("Sem permissão para cadastrar novos processos.", "warning")
         return redirect(url_for("index"))
 
     gerencias_usuario = obter_gerencias_liberadas_usuario(current_user)
@@ -7614,7 +7694,7 @@ def atualizar_classificacao(processo_id: int):
 
     processo = Processo.query.get_or_404(processo_id)
     if not usuario_pode_editar_processo(processo):
-        flash("Sem permissao para editar este processo.", "warning")
+        flash("Sem permissão para editar este processo.", "warning")
         return redirect(url_for("gerencia", nome_gerencia=processo.gerencia))
     classificacao = limpar_texto(request.form.get("classificacao"), "")
     classificacao_anterior = processo.classificacao_institucional or ""
@@ -7648,7 +7728,7 @@ def finalizar_processo(processo_id: int):
 
     processo = Processo.query.get_or_404(processo_id)
     if not usuario_pode_editar_processo(processo):
-        flash("Sem permissao para tramitar/finalizar este processo.", "warning")
+        flash("Sem permissão para tramitar/finalizar este processo.", "warning")
         return redirect(url_for("gerencia", nome_gerencia=processo.gerencia))
     if not usuario_pode_finalizar_gerencia():
         flash(
@@ -7961,7 +8041,7 @@ def excluir_processo(processo_id: int):
 
     processo = Processo.query.get_or_404(processo_id)
     if not usuario_pode_editar_processo(processo):
-        flash("Sem permissao para excluir este processo.", "warning")
+        flash("Sem permissão para excluir este processo.", "warning")
         return redirect(url_for("gerencia", nome_gerencia=processo.gerencia))
     gerencia_origem = processo.gerencia
     db.session.delete(processo)
@@ -7980,7 +8060,7 @@ def mover_processo(processo_id: int):
 
     processo = Processo.query.get_or_404(processo_id)
     if not usuario_pode_editar_processo(processo):
-        flash("Sem permissao para tramitar este processo.", "warning")
+        flash("Sem permissão para tramitar este processo.", "warning")
         return redirect(url_for("gerencia", nome_gerencia=processo.gerencia))
     nova_gerencia = normalizar_gerencia(request.form.get("nova_gerencia"))
     comentario = limpar_texto(request.form.get("comentario"), "")
@@ -8092,7 +8172,7 @@ def devolver_para_gabinete(processo_id: int):
 
     processo = Processo.query.get_or_404(processo_id)
     if not usuario_pode_editar_processo(processo):
-        flash("Sem permissao para devolver este processo.", "warning")
+        flash("Sem permissão para devolver este processo.", "warning")
         return redirect(url_for("gerencia", nome_gerencia=processo.gerencia))
 
     origem = normalizar_gerencia(processo.gerencia, permitir_entrada=True)
@@ -8146,7 +8226,7 @@ def reenviar_processo_devolvido(processo_id: int):
         return redirect(url_for("gerencia", nome_gerencia="GABINETE", aba="interacoes"))
 
     if not usuario_pode_editar_gerencia("GABINETE"):
-        flash("Sem permissao para tratar devolvidos do gabinete.", "warning")
+        flash("Sem permissão para tratar devolvidos do gabinete.", "warning")
         return redirect(url_for("gerencia", nome_gerencia="GABINETE", aba="devolvidos"))
 
     dados_extra = dict(processo.dados_extra or {})
@@ -8391,7 +8471,7 @@ def acao_processo_devolvido(processo_id: int):
         return redirect(url_for("gerencia", nome_gerencia="GABINETE", aba="interacoes"))
 
     if not usuario_pode_editar_gerencia("GABINETE"):
-        flash("Sem permissao para tratar devolvidos do gabinete.", "warning")
+        flash("Sem permissão para tratar devolvidos do gabinete.", "warning")
         return redirect(url_for("gerencia", nome_gerencia="GABINETE", aba="devolvidos"))
 
     dados_extra = dict(processo.dados_extra or {})
@@ -8483,14 +8563,14 @@ def acao_processo_devolvido(processo_id: int):
 def atribuir_processo(processo_id: int):
     """Permite que usuarios assumam ou liberem processos."""
     if SITE_EM_CONFIGURACAO:
-        flash("Atribuicoes estarao disponiveis apos a configuracao do banco.", "info")
+        flash("Atribuições estarão disponíveis após a configuração do banco.", "info")
         return redirect(url_for("index"))
     processo = Processo.query.get_or_404(processo_id)
     if not usuario_pode_editar_processo(processo):
-        flash("Sem permissao para alterar atribuicao deste processo.", "warning")
+        flash("Sem permissão para alterar atribuição deste processo.", "warning")
         return redirect(url_for("gerencia", nome_gerencia=processo.gerencia))
     if request.method == "GET":
-        flash("Use os botoes da lista para atribuir processos.", "info")
+        flash("Use os botões da lista para atribuir processos.", "info")
         return redirect(url_for("gerencia", nome_gerencia=processo.gerencia))
 
     acao = request.form.get("acao")
@@ -8521,15 +8601,15 @@ def atribuir_processo(processo_id: int):
             and processo.assigned_to_id != current_user.id
             and not usuario_tem_acesso_total()
         ):
-            flash("Processo ja esta atribuido a outro usuario.", "warning")
+            flash("Processo já está atribuído a outro usuário.", "warning")
         elif not usuario_tem_liberacao_gerencia(gerencia_processo, usuario=current_user):
             flash(
-                "Voce so pode assumir demandas da sua propria gerencia.",
+                "Você só pode assumir demandas da sua própria gerência.",
                 "warning",
             )
         elif not usuario_permitido_para_atribuicao(current_user, processo):
             flash(
-                "A atribuicao so pode ser feita para usuario da mesma coordenadoria ou equipe do processo.",
+                "A atribuição só pode ser feita para usuário da mesma coordenadoria ou equipe do processo.",
                 "warning",
             )
         else:
@@ -8546,25 +8626,25 @@ def atribuir_processo(processo_id: int):
                     tipo="atribuicao",
                 )
             )
-            flash("Processo atribuido ao seu usuario.", "success")
+            flash("Processo atribuído ao seu usuário.", "success")
     elif acao == "atribuir":
         if not destinatario_id and not destinatario_nome:
-            flash("Selecione um usuario ou responsavel da lista.", "warning")
+            flash("Selecione um usuário ou responsável da lista.", "warning")
             return redirect(url_for("gerencia", nome_gerencia=destino))
         if destinatario_id:
             destinatario = db.session.get(Usuario, destinatario_id)
             if not destinatario:
-                flash("Usuario destinatario nao encontrado.", "danger")
+                flash("Usuário destinatário não encontrado.", "danger")
                 return redirect(url_for("gerencia", nome_gerencia=destino))
             if not usuario_tem_liberacao_gerencia(gerencia_processo, usuario=destinatario):
                 flash(
-                    "A atribuicao so pode ser feita para usuario da mesma gerencia da demanda.",
+                    "A atribuição só pode ser feita para usuário da mesma gerência da demanda.",
                     "warning",
                 )
                 return redirect(url_for("gerencia", nome_gerencia=destino))
             if not usuario_permitido_para_atribuicao(destinatario, processo):
                 flash(
-                    "A atribuicao so pode ser feita para usuario da mesma coordenadoria ou equipe do processo.",
+                    "A atribuição só pode ser feita para usuário da mesma coordenadoria ou equipe do processo.",
                     "warning",
                 )
                 return redirect(url_for("gerencia", nome_gerencia=destino))
@@ -8575,7 +8655,7 @@ def atribuir_processo(processo_id: int):
             if destinatario.id != current_user.id:
                 registrar_notificacao(
                     destinatario,
-                    f"{nome_origem} atribuiu o processo {processo.numero_sei_base} para voce.",
+                    f"{nome_origem} atribuiu o processo {processo.numero_sei_base} para você.",
                     processo,
                 )
             db.session.add(
@@ -8583,12 +8663,12 @@ def atribuir_processo(processo_id: int):
                     processo=processo,
                     de_gerencia=processo.gerencia,
                     para_gerencia=processo.gerencia,
-                    motivo=f'Processo atribuido por "{current_user.username}" para "{nome_destino}".',
+                    motivo=f'Processo atribuído por "{current_user.username}" para "{nome_destino}".',
                     usuario=current_user.username,
                     tipo="atribuicao",
                 )
             )
-            flash("Processo atribuido para o usuario selecionado.", "success")
+            flash("Processo atribuído para o usuário selecionado.", "success")
         else:
             candidato_usuario = localizar_usuario_por_texto(
                 destinatario_nome, gerencia=gerencia_processo
@@ -8598,13 +8678,13 @@ def atribuir_processo(processo_id: int):
                     gerencia_processo, usuario=candidato_usuario
                 ):
                     flash(
-                        "O nome selecionado corresponde a um usuario sem liberacao para esta gerencia.",
+                        "O nome selecionado corresponde a um usuário sem liberação para esta gerência.",
                         "warning",
                     )
                     return redirect(url_for("gerencia", nome_gerencia=destino))
                 if not usuario_permitido_para_atribuicao(candidato_usuario, processo):
                     flash(
-                        "O nome selecionado corresponde a um usuario, mas fora da coordenadoria/equipe permitida.",
+                        "O nome selecionado corresponde a um usuário, mas fora da coordenadoria/equipe permitida.",
                         "warning",
                     )
                     return redirect(url_for("gerencia", nome_gerencia=destino))
@@ -8615,7 +8695,7 @@ def atribuir_processo(processo_id: int):
                 if candidato_usuario.id != current_user.id:
                     registrar_notificacao(
                         candidato_usuario,
-                        f"{nome_origem} atribuiu o processo {processo.numero_sei_base} para voce.",
+                        f"{nome_origem} atribuiu o processo {processo.numero_sei_base} para você.",
                         processo,
                     )
                 db.session.add(
@@ -8623,19 +8703,19 @@ def atribuir_processo(processo_id: int):
                         processo=processo,
                         de_gerencia=processo.gerencia,
                         para_gerencia=processo.gerencia,
-                        motivo=f'Processo atribuido por "{current_user.username}" para "{nome_destino}".',
+                        motivo=f'Processo atribuído por "{current_user.username}" para "{nome_destino}".',
                         usuario=current_user.username,
                         tipo="atribuicao",
                     )
                 )
                 flash(
-                    f"O nome selecionado foi vinculado automaticamente ao usuario {nome_destino}.",
+                    f"O nome selecionado foi vinculado automaticamente ao usuário {nome_destino}.",
                     "success",
                 )
                 db.session.commit()
                 return redirect(url_for("gerencia", nome_gerencia=destino))
             if not responsavel_em_lista(destinatario_nome, processo):
-                flash("Selecione um responsavel valido da lista.", "warning")
+                flash("Selecione um responsável válido da lista.", "warning")
                 return redirect(url_for("gerencia", nome_gerencia=destino))
             nome_origem = _nome_usuario(current_user)
             processo.assigned_to = None
@@ -8645,15 +8725,15 @@ def atribuir_processo(processo_id: int):
                     processo=processo,
                     de_gerencia=processo.gerencia,
                     para_gerencia=processo.gerencia,
-                    motivo=f'Processo atribuido por "{nome_origem}" para "{destinatario_nome}".',
+                    motivo=f'Processo atribuído por "{nome_origem}" para "{destinatario_nome}".',
                     usuario=current_user.username,
                     tipo="atribuicao",
                 )
             )
-            flash("Processo atribuido para o responsavel selecionado.", "success")
+            flash("Processo atribuído para o responsável selecionado.", "success")
     elif acao == "liberar":
         if processo.assigned_to_id in {None}:
-            flash("Processo ja estava sem responsavel.", "info")
+            flash("Processo já estava sem responsável.", "info")
         elif processo.assigned_to_id == current_user.id or usuario_tem_acesso_total():
             nome_liberado = (
                 processo.assigned_to.nome or processo.assigned_to.username
@@ -8674,16 +8754,16 @@ def atribuir_processo(processo_id: int):
                     processo=processo,
                     de_gerencia=processo.gerencia,
                     para_gerencia=processo.gerencia,
-                    motivo=f'Processo liberado por "{current_user.username}" (antes atribuido para "{nome_liberado}").',
+                    motivo=f'Processo liberado por "{current_user.username}" (antes atribuído para "{nome_liberado}").',
                     usuario=current_user.username,
                     tipo="atribuicao",
                 )
             )
             flash("Processo liberado com sucesso.", "info")
         else:
-            flash("Voce nao pode liberar um processo atribuido a outra pessoa.", "warning")
+            flash("Você não pode liberar um processo atribuído a outra pessoa.", "warning")
     else:
-        flash("Acao desconhecida para atribuicao.", "warning")
+        flash("Ação desconhecida para atribuição.", "warning")
         return redirect(url_for("gerencia", nome_gerencia=destino))
 
     db.session.commit()
@@ -8708,7 +8788,7 @@ def gerenciar_notificacoes():
         db.session.commit()
         flash("Notificacoes atualizadas.", "info")
     else:
-        flash("Acao de notificacao desconhecida.", "warning")
+        flash("Ação de notificação desconhecida.", "warning")
     return redirect(request.referrer or url_for("index"))
 
 
@@ -8998,7 +9078,7 @@ def _responder_pergunta_geral_assistente(pergunta: str) -> Optional[str]:
         metricas = obter_metricas_processos()
         tempo_medio_dias = metricas.get("tempo_medio_dias")
         if tempo_medio_dias is None:
-            return "Nao ha dados suficientes para calcular o tempo medio agora."
+            return "Não h? dados suficientes para calcular o tempo m?dio agora."
         return f"Tempo medio geral: {tempo_medio_dias:.1f} dia(s)."
     if not any(chave in texto for chave in ["quantos", "quantidade", "total"]):
         return None
@@ -9017,7 +9097,7 @@ def _responder_pergunta_geral_assistente(pergunta: str) -> Optional[str]:
     if "cadastr" in texto or "registr" in texto:
         if nome_usuario and not usuario:
             return (
-                f"Nao encontrei o usuario '{nome_usuario}'. Informe o nome ou username exato."
+                f"Não encontrei o usuário '{nome_usuario}'. Informe o nome ou username exato."
             )
         consulta = Movimentacao.query.filter(Movimentacao.tipo == "cadastro")
         if usuario:
@@ -9177,7 +9257,7 @@ def _responder_pergunta_site_assistente(pergunta: str) -> Optional[str]:
     if tem("cadastrar usuario", "cadastro usuario", "novo usuario", "criar usuario"):
         return (
             "Assessoria, gerentes e o administrador principal podem cadastrar usuarios. "
-            "No menu do usuario, clique em 'Cadastrar usuario' e informe os dados e permissoes."
+            "No menu do usuário, clique em 'Cadastrar usuário' e informe os dados e permissões."
         )
 
     if tem("permiss", "perfil"):
@@ -9195,7 +9275,7 @@ def _responder_pergunta_site_assistente(pergunta: str) -> Optional[str]:
     if tem("novo processo", "cadastrar processo", "criar processo", "registrar processo"):
         return (
             "No painel Inicio, clique em 'Novo processo', preencha o formulario e salve. "
-            "Se o botao nao aparecer, seu perfil pode nao ter permissao."
+            "Se o botão não aparecer, seu perfil pode não ter permissão."
         )
 
     if tem("editar", "visualizar", "ficha tecnica", "detalhe", "detalhes"):
@@ -9282,7 +9362,7 @@ def _responder_pergunta_site_assistente(pergunta: str) -> Optional[str]:
 
     if tem("ajuda", "duvida", "duvidas", "manual"):
         return (
-            "Posso ajudar com cadastro, edicao, atribuicao, finalizacao, devolucao, "
+            "Posso ajudar com cadastro, edição, atribuição, finalização, devolução, "
             "exportacao/importacao, historico, usuarios, permissoes e filtros."
         )
 
@@ -9344,7 +9424,7 @@ def _pergunta_exige_numero(pergunta: str) -> bool:
 def _gerar_resposta_assistente(pergunta: str, processo: Optional[Processo]) -> str:
     """Gera uma resposta simples baseada nos dados locais do processo."""
     if not processo:
-        return "Nao encontrei um processo com essas informacoes. Informe o numero SEI completo para uma resposta precisa."
+        return "Não encontrei um processo com essas informações. Informe o número SEI completo para uma resposta precisa."
     resumo = _resumo_processo_assistente(processo)
     texto = _normalizar_texto_assistente(pergunta)
     if not texto:
@@ -9474,7 +9554,7 @@ def _gerar_resposta_assistente(pergunta: str, processo: Optional[Processo]) -> s
             if chave and valor and chave != "numero_sei_original"
         }
         if not extras:
-            return f"Nao ha campos extras cadastrados. {resumo}"
+            return f"Não h? campos extras cadastrados. {resumo}"
         pares = [f"{chave}: {valor}" for chave, valor in extras.items()]
         return "Campos extras: " + "; ".join(pares) + f". {resumo}"
 
@@ -9496,7 +9576,7 @@ def _gerar_resposta_assistente(pergunta: str, processo: Optional[Processo]) -> s
                 f"O processo esta parado ha cerca de {dias} dia(s) (ultima movimentacao em "
                 f"{_fmt_data(base_data)}). {resumo}"
             )
-        return f"Nao foi possivel calcular o tempo parado. {resumo}"
+        return f"Não foi possível calcular o tempo parado. {resumo}"
 
     return resumo
 
@@ -9544,7 +9624,7 @@ def assistente_responder():
         if exige_numero:
             return jsonify(
                 {
-                    "resposta": "Nao encontrei um processo com esse numero SEI. Verifique e tente novamente.",
+                    "resposta": "Não encontrei um processo com esse n?mero SEI. Verifique e tente novamente.",
                     "referencia": None,
                     "gerencia": None,
                 }
@@ -9569,7 +9649,7 @@ def assistente_responder():
             )
         return jsonify(
             {
-                "resposta": "Nao consegui entender. Posso ajudar com processos (com numero SEI), contagens gerais e uso do site (cadastro, edicao, atribuicao, finalizacao, devolucao, exportacao/importacao, historico, usuarios e permissoes).",
+                "resposta": "Não consegui entender. Posso ajudar com processos (com número SEI), contagens gerais e uso do site (cadastro, edição, atribuição, finalização, devolução, exportação/importação, histórico, usuários e permissões).",
                 "referencia": None,
                 "gerencia": None,
             }
@@ -9591,7 +9671,7 @@ def salvar_campos_extra(processo_id: int):
     """Armazena valores dos campos personalizados de uma gerencia."""
     processo = Processo.query.get_or_404(processo_id)
     if not usuario_pode_editar_processo(processo):
-        flash("Sem permissao para editar este processo.", "warning")
+        flash("Sem permissão para editar este processo.", "warning")
         return redirect(url_for("gerencia", nome_gerencia=processo.gerencia))
     if SITE_EM_CONFIGURACAO:
         flash("Campos extras estao indisponiveis durante a configuracao.", "info")

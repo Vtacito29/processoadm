@@ -641,7 +641,7 @@
  %}
 
 
- <div class="process-chip ghost" title="{{ planilhador or 'Nao informado' }}">
+ <div class="process-chip ghost" title="{{ planilhador or 'Não informado' }}">
 
 
  <div class="chip-avatar muted">{{ (planilhador or '?')[0]|upper }}</div>
@@ -650,10 +650,10 @@
  <div class="chip-body">
 
 
- <div class="chip-title">{{ planilhador or "Nao informado" }}</div>
+ <div class="chip-title">{{ planilhador or "Não informado" }}</div>
 
 
- <div class="chip-sub">Responsavel Adm{% if processo.responsavel_equipe %} | Atribuido para {{ processo.responsavel_equipe }}{% endif %}</div>
+ <div class="chip-sub">Responsável Adm{% if processo.responsavel_equipe %} | Atribuído para {{ processo.responsavel_equipe }}{% endif %}</div>
 
 
  </div>
@@ -1188,7 +1188,7 @@
  %}
 
 
- <div class="process-chip ghost" title="{{ planilhador or 'Nao informado' }}">
+ <div class="process-chip ghost" title="{{ planilhador or 'Não informado' }}">
 
 
  <div class="chip-avatar muted">{{ (planilhador or '?')[0]|upper }}</div>
@@ -1197,10 +1197,10 @@
  <div class="chip-body">
 
 
- <div class="chip-title">{{ planilhador or "Nao informado" }}</div>
+ <div class="chip-title">{{ planilhador or "Não informado" }}</div>
 
 
- <div class="chip-sub">Responsavel Adm{% if processo.responsavel_equipe %} | Atribuido para {{ processo.responsavel_equipe }}{% endif %}</div>
+ <div class="chip-sub">Responsável Adm{% if processo.responsavel_equipe %} | Atribuído para {{ processo.responsavel_equipe }}{% endif %}</div>
 
 
  </div>
@@ -1907,7 +1907,7 @@
  {% else %}
 
 
- <p class="text-muted mb-0">Nenhuma notificacao por aqui ainda.</p>
+ <p class="text-muted mb-0">Nenhuma notificação por aqui ainda.</p>
 
 
  {% endif %}
@@ -1922,7 +1922,7 @@
 
 
 {% if pode_editar_gerencia %}
-<!-- Modal para atribuir a outro usuario -->
+<!-- Modal para atribuir a outro usuário -->
 
 
 <div class="modal fade" id="modalAtribuirOutro" tabindex="-1" aria-hidden="true">
@@ -1964,7 +1964,7 @@
  <input type="hidden" name="destino" value="{{ gerencia }}">
 
  <div class="alert alert-info py-2 px-3 small mb-3" id="statusAtribuicaoModal">
- Processo sem atribuicao no momento.
+ Processo sem atribuição no momento.
  </div>
 
 
@@ -1977,7 +1977,7 @@
  <select class="form-select" name="destinatario_id" id="destinatarioSelect" required>
 
 
- <option value="" disabled selected hidden>Selecione um usuario</option>
+ <option value="" disabled selected hidden>Selecione um usuário</option>
 
 
  {% for usuario in usuarios_disponiveis %}
@@ -2005,7 +2005,7 @@
 
  <button type="button" class="btn btn-outline-danger d-none" id="btnDesatribuirModal">Desatribuir</button>
 
- <button type="submit" class="btn btn-primary" id="btnConfirmarAtribuicaoModal">Confirmar atribuicao</button>
+ <button type="submit" class="btn btn-primary" id="btnConfirmarAtribuicaoModal">Confirmar atribuição</button>
 
 
  </div>
@@ -2020,27 +2020,27 @@
 </div>
 {% endif %}
 
-<!-- Modal para informar motivo da devolucao ao Gabinete -->
+<!-- Modal para informar motivo da devolução ao Gabinete -->
 <div class="modal fade" id="modalDevolverGabinete" tabindex="-1" aria-hidden="true">
  <div class="modal-dialog">
  <div class="modal-content">
  <div class="modal-header">
  <div>
  <h5 class="modal-title">Devolver para o Gabinete</h5>
- <div class="text-muted small" id="textoDevolverSelecionado">Informe o motivo da devolucao.</div>
+ <div class="text-muted small" id="textoDevolverSelecionado">Informe o motivo da devolução.</div>
  </div>
  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
  </div>
  <div class="modal-body">
  <div class="mb-3">
- <label class="form-label">Motivo da devolucao</label>
+ <label class="form-label">Motivo da devolução</label>
  <textarea class="form-control" id="motivoDevolucaoInput" rows="3" placeholder="Descreva o motivo"></textarea>
- <div class="invalid-feedback">Informe o motivo da devolucao.</div>
+ <div class="invalid-feedback">Informe o motivo da devolução.</div>
  </div>
  </div>
  <div class="modal-footer">
  <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
- <button type="button" class="btn btn-danger" id="btnConfirmarDevolucao">Confirmar devolucao</button>
+ <button type="button" class="btn btn-danger" id="btnConfirmarDevolucao">Confirmar devolução</button>
  </div>
  </div>
  </div>
@@ -2382,7 +2382,7 @@ document.addEventListener("DOMContentLoaded", function () {
  const numero = btn.dataset.numero || "";
  textoDevolverSelecionado.textContent = numero
  ? `Processo: ${numero}`
- : "Informe o motivo da devolucao.";
+ : "Informe o motivo da devolução.";
  }
  if (modalDevolver) {
  const instancia = bootstrap.Modal.getOrCreateInstance(modalDevolver);
@@ -2493,7 +2493,7 @@ document.addEventListener("DOMContentLoaded", function () {
  opt.dataset.extra = "1";
  opt.dataset.nome = nome;
  opt.dataset.username = "";
- opt.textContent = `${nome} (sem usuario)`;
+ opt.textContent = `${nome} (sem usuário)`;
  destinatarioSelect.appendChild(opt);
  });
  destinatarioSelect.value = "";
@@ -2745,8 +2745,8 @@ document.addEventListener("DOMContentLoaded", function () {
   }
   if (statusAtribuicaoModal) {
   statusAtribuicaoModal.textContent = possuiAtribuicao
-  ? `Ja atribuido para ${assignedName}.`
-  : "Processo sem atribuicao no momento.";
+  ? `Já atribuído para ${assignedName}.`
+  : "Processo sem atribuição no momento.";
   statusAtribuicaoModal.className = possuiAtribuicao
   ? "alert alert-warning py-2 px-3 small mb-3"
   : "alert alert-info py-2 px-3 small mb-3";
@@ -2757,7 +2757,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (btnConfirmarAtribuicaoModal) {
   btnConfirmarAtribuicaoModal.textContent = possuiAtribuicao
   ? "Reatribuir"
-  : "Confirmar atribuicao";
+  : "Confirmar atribuição";
   }
   if (modalAtribuir) {
   const modalInstance = bootstrap.Modal.getOrCreateInstance(modalAtribuir);
@@ -2790,7 +2790,7 @@ document.addEventListener("DOMContentLoaded", function () {
  badgeNotificacoes.remove();
  }
  } catch (err) {
- console.error("Nao foi possivel marcar notificacoes como lidas.", err);
+ console.error("Não foi possível marcar notificações como lidas.", err);
  }
  });
  }

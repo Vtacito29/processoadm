@@ -67,7 +67,7 @@
  <a class="dropdown-item small" href="{{ url_for('perfil') }}">Editar perfil</a>
  <a class="dropdown-item small" href="{{ url_for('trocar_senha') }}">Trocar senha</a>
  {% if current_user.is_admin or current_user.acesso_total %}
- <a class="dropdown-item small" href="{{ url_for('login', form_action='register') }}">Cadastrar usuario</a>
+ <a class="dropdown-item small" href="{{ url_for('login', form_action='register') }}">Cadastrar usuário</a>
  {% endif %}
  <a class="dropdown-item text-danger small" href="{{ url_for('logout') }}">Sair</a>
  </div>
@@ -332,7 +332,7 @@
  <div class="process-chip ghost">
  <div class="chip-avatar muted">{{ (planilhador or '?')[0]|upper }}</div>
  <div class="chip-body">
- <div class="chip-title">{{ planilhador or "N?o informado" }}</div>
+ <div class="chip-title">{{ planilhador or "Não informado" }}</div>
  <div class="chip-sub">Responsável Adm</div>
  </div>
  </div>
@@ -424,7 +424,7 @@
  <div class="col-12">
  <div class="resumo-box">
  <span class="resumo-label">Observações</span>
- <span class="resumo-value">{{ (processo.observacoes_complementares or processo.observacao or 'Nenhuma observa??o registrada.')|replace('\n', '<br>')|safe }}</span>
+ <span class="resumo-value">{{ (processo.observacoes_complementares or processo.observacao or 'Nenhuma observação registrada.')|replace('\n', '<br>')|safe }}</span>
  </div>
  </div>
  </div>

@@ -39,10 +39,10 @@
  <div class="fw-semibold">{{ current_user.nome or current_user.username }}</div>
  <div class="text-muted">Login: {{ current_user.username }}</div>
  <div class="text-muted">{{ current_user.email or '-' }}</div>
- <div class="text-muted">Gerncia: {{ current_user.gerencia_padrao or '-' }}</div>
+ <div class="text-muted">Gerência: {{ current_user.gerencia_padrao or '-' }}</div>
  <div class="text-muted">
  Perfil:
- {% if current_user.is_admin %}Assessoria{% elif current_user.acesso_total %}Acesso total{% elif current_user.is_gerente %}Gerente{% else %}Usurio{% endif %}
+ {% if current_user.is_admin %}Assessoria{% elif current_user.acesso_total %}Acesso total{% elif current_user.is_gerente %}Gerente{% else %}Usuário{% endif %}
  </div>
  </div>
  <div class="dropdown-divider my-0"></div>
@@ -185,7 +185,7 @@
  {% endif %}
  </div>
  <div class="col-md-6" id="campo_gerencia">
- <label class="form-label">Gerncias destino</label>
+ <label class="form-label">Gerências destino</label>
  {% if modo_edicao and not reenviar_devolvido %}
  <select class="form-select" disabled>
  <option selected>{{ processo.gerencia }}</option>
@@ -467,7 +467,7 @@
  <div class="fw-semibold">{{ processo.numero_sei_base or '-' }}</div>
  </div>
  <div class="col-md-4">
- <div class="text-muted small">Gerncia</div>
+ <div class="text-muted small">Gerência</div>
  <div class="fw-semibold">{{ processo.gerencia or '-' }}</div>
  </div>
  <div class="col-md-4">
@@ -523,7 +523,7 @@
  <table class="table table-sm align-middle">
  <thead class="table-light">
  <tr>
- <th>Gerncia</th>
+ <th>Gerência</th>
  <th>Número SEI</th>
  <th>Status</th>
  <th>Coordenadoria</th>
