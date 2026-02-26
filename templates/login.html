@@ -1,4 +1,4 @@
-<!-- Arquivo: templates/login.html | Objetivo: autenticacao e gestao basica de usuarios -->
+<!-- Arquivo: templates/login.html | Objetivo: autenticação e gestão básica de usuários -->
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -92,24 +92,6 @@
  {% endif %}
  </div>
  <div class="mb-3">
- <label class="form-label">Nome completo</label>
- <input class="form-control" type="text" name="nome" id="cadastro-nome" list="nomes-por-gerencia" required>
- <datalist id="nomes-por-gerencia"></datalist>
- </div>
- <div class="mb-3">
- <label class="form-label">E-mail</label>
- <input class="form-control" type="email" name="email" id="cadastro-email" required>
- </div>
- <div class="mb-3">
- <label class="form-label">Gerências liberadas</label>
- <select class="form-select" name="gerencias_liberadas" multiple required size="6">
- {% for g in gerencias %}
- <option value="{{ g }}">{{ g }}</option>
- {% endfor %}
- </select>
- <div class="form-text">Use Ctrl (ou Command no Mac) para selecionar uma ou mais gerências.</div>
- </div>
- <div class="mb-3">
  <label class="form-label">Coordenadoria</label>
  <select class="form-select js-coord-select" id="cadastro-coord" name="coordenadoria" data-target="#cadastro-equipe">
  <option value="">Selecione (opcional)</option>
@@ -128,6 +110,24 @@
  </select>
  </div>
  <div id="status-usuario-existente" class="alert alert-warning py-2 px-3 small d-none mb-3" role="alert"></div>
+ <div class="mb-3">
+ <label class="form-label">Nome completo</label>
+ <input class="form-control" type="text" name="nome" id="cadastro-nome" list="nomes-por-gerencia" required>
+ <datalist id="nomes-por-gerencia"></datalist>
+ <div class="form-text">Sugestões exibem apenas pessoas sem usuário ativo no contexto selecionado.</div>
+ </div>
+ <div class="mb-3">
+ <label class="form-label">E-mail</label>
+ <input class="form-control" type="email" name="email" id="cadastro-email" required>
+ </div>
+ <div class="mb-3">
+ <label class="form-label">Gerências liberadas</label>
+ <select class="form-select" name="gerencias_liberadas" multiple required size="6">
+ {% for g in gerencias %}
+ <option value="{{ g }}">{{ g }}</option>
+ {% endfor %}
+ </select>
+ <div class="form-text">Use Ctrl (ou Command no Mac) para selecionar uma ou mais gerências.</div>
  </div>
  <div class="mb-3">
  <label class="form-label">Perfil de acesso</label>
@@ -317,6 +317,7 @@
 <script>
 (() => {
  const equipesPorCoord = {{ equipes_por_coordenadoria_cadastro|tojson }};
+ const responsaveisPorEquipe = {{ responsaveis_por_equipe_cadastro|tojson }};
  const coordenadoriasPorGerencia = {{ coordenadorias_por_gerencia_cadastro|tojson }};
  const pessoasPorGerencia = {{ pessoas_por_gerencia_cadastro|tojson }};
  const usuariosExistentes = {{ usuarios_existentes|tojson }};
@@ -387,14 +388,61 @@
  const adicionarAtribuidoInput = document.getElementById("adicionar-atribuido-sei");
  const statusExistente = document.getElementById("status-usuario-existente");
 
- const nomesAtribuidosDaGerencia = () => {
+ const deduplicar = (lista) => {
+ const vistos = new Set();
+ const saida = [];
+ (lista || []).forEach((item) => {
+ const txt = (item || "").toString().trim();
+ const chave = normalizar(txt);
+ if (!txt || vistos.has(chave)) return;
+ vistos.add(chave);
+ saida.push(txt);
+ });
+ return saida;
+ };
+
+ const nomesAtribuidosBaseDoContexto = () => {
+ const equipe = coordCadastro && equipeCadastro ? (equipeCadastro.value || "") : "";
+ const coord = coordCadastro ? (coordCadastro.value || "") : "";
  const ger = gerenciaInput ? (gerenciaInput.value || "") : "";
- return (ger && pessoasPorGerencia[ger]) ? pessoasPorGerencia[ger] : [];
+ if (equipe && responsaveisPorEquipe[equipe]) {
+ return deduplicar(responsaveisPorEquipe[equipe]);
+ }
+ if (coord && equipesPorCoord[coord]) {
+ let nomes = [];
+ (equipesPorCoord[coord] || []).forEach((eq) => {
+ nomes = nomes.concat(responsaveisPorEquipe[eq] || []);
+ });
+ return deduplicar(nomes);
+ }
+ return deduplicar((ger && pessoasPorGerencia[ger]) ? pessoasPorGerencia[ger] : []);
+ };
+
+ const nomeTemUsuarioAtivoNoContexto = (nomePessoa) => {
+ const nomeNormalizado = normalizar(nomePessoa);
+ if (!nomeNormalizado) return false;
+ const gerSelecionada = normalizar(gerenciaInput ? gerenciaInput.value : "");
+ const coordSelecionada = normalizar(coordCadastro ? coordCadastro.value : "");
+ return usuariosExistentes.some((item) => {
+ if (normalizar(item.nome) !== nomeNormalizado) return false;
+ const gerPadraoItem = normalizar(item.gerencia_padrao);
+ const gerenciasItem = (item.gerencias || []).map((valor) => normalizar(valor));
+ const coordItem = normalizar(item.coordenadoria);
+ const bateGerencia = !gerSelecionada || gerPadraoItem === gerSelecionada || gerenciasItem.includes(gerSelecionada);
+ const bateCoordenadoria = !coordSelecionada || coordItem === coordSelecionada;
+ return bateGerencia && bateCoordenadoria;
+ });
+ };
+
+ const nomesAtribuidosDoContexto = (somenteSemUsuarioAtivo = false) => {
+ const nomes = nomesAtribuidosBaseDoContexto();
+ if (!somenteSemUsuarioAtivo) return nomes;
+ return nomes.filter((nomePessoa) => !nomeTemUsuarioAtivoNoContexto(nomePessoa));
  };
 
  const popularNomesPorGerencia = () => {
  if (!gerenciaInput || !datalistNomes) return;
- const nomes = nomesAtribuidosDaGerencia();
+ const nomes = nomesAtribuidosDoContexto(true);
  datalistNomes.innerHTML = "";
  nomes.forEach((nome) => {
  const opt = document.createElement("option");
@@ -430,7 +478,7 @@
  .map((item) => `${item.nome || item.username} (${item.email})`)
  .join(" | ");
  statusExistente.classList.remove("d-none");
- statusExistente.textContent = "Ja existe usuario com esse nome ou e-mail. Cadastro sera bloqueado.";
+ statusExistente.textContent = "Já existe usuário com esse nome ou e-mail. Cadastro será bloqueado.";
  };
 
  const atualizarExibicaoPermissaoFinalizar = (selectPerfil) => {
@@ -457,7 +505,11 @@
  }
 
  if (coordCadastro && equipeCadastro) {
- coordCadastro.addEventListener("change", () => preencherEquipes(coordCadastro, equipeCadastro));
+ coordCadastro.addEventListener("change", () => {
+ preencherEquipes(coordCadastro, equipeCadastro);
+ popularNomesPorGerencia();
+ });
+ equipeCadastro.addEventListener("change", popularNomesPorGerencia);
  }
 
  if (nomeInput && emailInput) {
@@ -480,15 +532,29 @@
  adicionarAtribuidoInput.value = "0";
  const nomeInformado = (nomeInput.value || "").trim();
  if (!nomeInformado) return;
- const nomesLista = nomesAtribuidosDaGerencia();
- const jaExisteNaLista = nomesLista.some((item) => normalizar(item) === normalizar(nomeInformado));
- if (jaExisteNaLista) return;
+ const nomesLista = nomesAtribuidosDoContexto();
+ const matchesExatos = nomesLista.filter((item) => normalizar(item) === normalizar(nomeInformado));
+ if (matchesExatos.length === 1) {
+ adicionarAtribuidoInput.value = "1";
+ return;
+ }
+ if (matchesExatos.length > 1) {
+ const confirmarAmbiguo = confirm(
+ "Existe mais de uma pessoa com esse mesmo nome no contexto selecionado. Deseja continuar e vincular esse nome?"
+ );
+ if (!confirmarAmbiguo) {
+ event.preventDefault();
+ return;
+ }
+ adicionarAtribuidoInput.value = "1";
+ return;
+ }
 
  const coord = coordCadastro ? (coordCadastro.value || "").trim() : "";
  const equipe = equipeCadastro ? (equipeCadastro.value || "").trim() : "";
  if (!coord || !equipe) {
  const continuar = confirm(
- "Nome novo detectado. Para adicionar na lista de Atribuido SEI, selecione Coordenadoria e Equipe/Setor. Deseja continuar sem adicionar?"
+ "Nome novo detectado. Para adicionar na lista de Atribuído SEI, selecione Coordenadoria e Equipe/Setor. Deseja continuar sem adicionar?"
  );
  if (!continuar) {
  event.preventDefault();
@@ -497,7 +563,7 @@
  }
 
  const incluir = confirm(
- `O nome \"${nomeInformado}\" nao esta na lista de Atribuido SEI da gerencia. Deseja adicionar para ${coord} / ${equipe}?`
+ `O nome \"${nomeInformado}\" não está na lista de Atribuído SEI da gerência. Deseja adicionar para ${coord} / ${equipe}?`
  );
  if (incluir) {
  adicionarAtribuidoInput.value = "1";
@@ -508,3 +574,4 @@
 </script>
 </body>
 </html>
+

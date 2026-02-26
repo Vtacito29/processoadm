@@ -1557,6 +1557,30 @@ def obter_responsaveis_por_gerencia(gerencia: Optional[str]) -> List[str]:
     return resultado
 
 
+def listar_responsaveis_por_contexto_cadastro(
+    *,
+    gerencia: Optional[str],
+    coordenadoria: Optional[str],
+    equipe: Optional[str],
+) -> List[str]:
+    """Lista responsaveis considerando prioridade: equipe > coordenadoria > gerencia."""
+    equipe_txt = limpar_texto(equipe, "")
+    if equipe_txt:
+        return obter_responsaveis_por_equipe(equipe_txt)
+
+    coord_txt = limpar_texto(coordenadoria, "")
+    if coord_txt:
+        nomes: List[str] = []
+        for eq in obter_equipes_por_coordenadoria(coord_txt):
+            nomes.extend(obter_responsaveis_por_equipe(eq))
+        return _ordenar_nomes_unicos(nomes)
+
+    ger_txt = normalizar_gerencia(gerencia, permitir_entrada=True)
+    if ger_txt:
+        return obter_responsaveis_por_gerencia(ger_txt)
+    return []
+
+
 def _nome_usuario_exibicao(usuario: "Usuario") -> str:
     nome = limpar_texto(getattr(usuario, "nome", None) or getattr(usuario, "username", None) or "")
     return nome
@@ -1590,6 +1614,18 @@ def listar_usuarios_por_gerencia(gerencia: Optional[str]) -> List["Usuario"]:
         if bool(getattr(usuario, "aparece_atribuido_sei", False))
         and bool(normalizar_gerencia(getattr(usuario, "gerencia_padrao", None), permitir_entrada=True))
         and usuario_tem_liberacao_gerencia(gerencia, usuario=usuario)
+    ]
+
+
+def listar_usuarios_com_liberacao_gerencia(gerencia: Optional[str]) -> List["Usuario"]:
+    """Retorna todos os usuarios que possuem liberacao para a gerencia."""
+    if not gerencia:
+        return []
+    usuarios = Usuario.query.order_by(Usuario.nome.asc()).all()
+    return [
+        usuario
+        for usuario in usuarios
+        if usuario_tem_liberacao_gerencia(gerencia, usuario=usuario)
     ]
 
 
@@ -1652,7 +1688,7 @@ def localizar_usuario_por_texto(
     chave_nome = _normalizar_nome_usuario(nome)
     chave_username = _normalizar_nome_usuario(username) if username else ""
     candidatos = (
-        listar_usuarios_por_gerencia(gerencia)
+        listar_usuarios_com_liberacao_gerencia(gerencia)
         if gerencia
         else Usuario.query.order_by(Usuario.nome.asc()).all()
     )
@@ -2129,6 +2165,15 @@ def login():
                 gerencias_serializadas = serializar_gerencias_liberadas(gerencias_liberadas)
                 coord_padrao = coord
                 equipe_padrao = equipe
+                responsaveis_contexto = listar_responsaveis_por_contexto_cadastro(
+                    gerencia=gerencia_padrao,
+                    coordenadoria=coord_padrao,
+                    equipe=equipe_padrao,
+                )
+                nome_ja_na_lista = any(
+                    normalizar_chave(item) == normalizar_chave(nome)
+                    for item in responsaveis_contexto
+                )
                 novo = Usuario(
                     username=username,
                     email=email,
@@ -2138,7 +2183,7 @@ def login():
                     coordenadoria=coord_padrao,
                     equipe_area=equipe_padrao,
                     aparece_atribuido_sei=bool(
-                        adicionar_atribuido_sei
+                        (adicionar_atribuido_sei or nome_ja_na_lista)
                         and coord_padrao
                         and equipe_padrao
                     ),
@@ -2281,6 +2326,7 @@ def login():
     coordenadorias_cadastro: List[str] = []
     equipes_por_coordenadoria_cadastro: Dict[str, List[str]] = {}
     equipes_cadastro: List[str] = []
+    responsaveis_por_equipe_cadastro: Dict[str, List[str]] = {}
     coordenadorias_por_gerencia_cadastro: Dict[str, List[str]] = {}
     pessoas_por_gerencia_cadastro: Dict[str, List[str]] = {}
     usuarios_existentes = []
@@ -2292,6 +2338,10 @@ def login():
             coordenadorias_por_gerencia_cadastro,
             pessoas_por_gerencia_cadastro,
         ) = _montar_opcoes_usuario_cadastro()
+        responsaveis_por_equipe_cadastro = {
+            equipe: obter_responsaveis_por_equipe(equipe)
+            for equipe in equipes_cadastro
+        }
         for usuario in Usuario.query.order_by(Usuario.nome.asc()).all():
             usuarios_existentes.append(
                 {
@@ -2299,6 +2349,11 @@ def login():
                     "nome": usuario.nome or "",
                     "username": usuario.username or "",
                     "email": usuario.email or "",
+                    "gerencia_padrao": normalizar_gerencia(
+                        usuario.gerencia_padrao, permitir_entrada=True
+                    )
+                    or "",
+                    "gerencias": obter_gerencias_liberadas_usuario(usuario),
                     "coordenadoria": usuario.coordenadoria or "",
                     "equipe_area": usuario.equipe_area or "",
                 }
@@ -2336,6 +2391,7 @@ def login():
         usuarios_para_gerenciar=usuarios_para_gerenciar,
         coordenadorias_cadastro=coordenadorias_cadastro,
         equipes_por_coordenadoria_cadastro=equipes_por_coordenadoria_cadastro,
+        responsaveis_por_equipe_cadastro=responsaveis_por_equipe_cadastro,
         equipes_cadastro=equipes_cadastro,
         coordenadorias_por_gerencia_cadastro=coordenadorias_por_gerencia_cadastro,
         pessoas_por_gerencia_cadastro=pessoas_por_gerencia_cadastro,
@@ -2462,11 +2518,11 @@ def perfil():
                 erros.append("Usuario (ja utilizado)")
 
         if gerencia_raw and not gerencia:
-            erros.append("GerÃªncia (invalida)")
+            erros.append("Gerência (inválida)")
 
         if not usuario_tem_acesso_total(usuario):
             if not gerencia:
-                erros.append("GerÃªncia")
+                erros.append("Gerência")
             if not coordenadoria:
                 erros.append("Coordenadoria")
             if not equipe:
