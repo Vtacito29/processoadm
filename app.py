@@ -3976,7 +3976,7 @@ def garantir_colunas_extra():
         alteracoes_usuarios.append("ALTER TABLE usuarios ADD COLUMN equipe_area VARCHAR(120)")
     if "aparece_atribuido_sei" not in colunas_usuarios:
         alteracoes_usuarios.append(
-            "ALTER TABLE usuarios ADD COLUMN aparece_atribuido_sei BOOLEAN DEFAULT 0"
+            "ALTER TABLE usuarios ADD COLUMN aparece_atribuido_sei BOOLEAN DEFAULT FALSE"
         )
     if "pode_cadastrar_processo" not in colunas_usuarios:
         alteracoes_usuarios.append(
