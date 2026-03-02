@@ -1,13 +1,13 @@
-<!-- Arquivo: templates/verificar_dados.html | Objetivo: tela de verificacao e auditoria de dados/processos -->
+﻿<!-- Arquivo: templates/verificar_dados.html | Objetivo: tela de verificacao e auditoria de dados/processos -->
 <!DOCTYPE html>
 <!--
  Template: verificar_dados.html
  Proposito: Painel de processos finalizados com filtros analiticos e metricas.
  Variaveis esperadas:
- - opcoes: valores distintos para selects (gerências, coordenadorias, equipes, interessados)
- - filtros: dicionario com filtros aplicados (gerência, coordenadoria, equipe, interessado, número_sei, datas)
+ - opcoes: valores distintos para selects (gerÃªncias, coordenadorias, equipes, interessados)
+ - filtros: dicionario com filtros aplicados (gerÃªncia, coordenadoria, equipe, interessado, nÃºmero_sei, datas)
  - processos: lista de Processos finalizados (para tabela)
- - processos_data: versão serializada com movimentações (para export/gráficos)
+ - processos_data: versÃ£o serializada com movimentaÃ§Ãµes (para export/grÃ¡ficos)
  - metricas: totais e tempo medio (processos)
  - metricas_demandas: totais e tempo medio (demandas)
  - SITE_EM_CONFIGURACAO, current_user: controle de exibicao e perfil
@@ -93,7 +93,7 @@
  <p class="filters-subtitle">Combine gerência, equipes e datas para isolar os processos.</p>
  </div>
  <div class="filters-quick">
- <span class="filters-quick-label">Filtro rapido por gerência</span>
+ <span class="filters-quick-label">Filtro rápido por gerência</span>
  <div class="filters-quick-group">
  <button class="btn btn-outline-light btn-sm quick-gerencia" type="button" data-gerencia="">
  Geral
@@ -143,15 +143,15 @@
  {% endfor %}
  </select>
  </div>
- <div class="col-12 col-md-6 col-xl-3">
+ <div class="col-12 col-md-8 col-xl-4 numero-sei-filter-col">
  <label class="form-label">Número SEI</label>
  <input class="form-control" type="text" name="numero_sei" value="{{ filtros.numero_sei }}" placeholder="Buscar por número SEI">
  </div>
- <div class="col-6 col-md-3 col-xl-2">
+ <div class="col-6 col-md-4 col-xl-3 date-filter-col">
  <label class="form-label">Data inicial</label>
  <input class="form-control" type="date" name="data_inicio" value="{{ filtros.data_inicio }}">
  </div>
- <div class="col-6 col-md-3 col-xl-2">
+ <div class="col-6 col-md-4 col-xl-3 date-filter-col">
  <label class="form-label">Data final</label>
  <input class="form-control" type="date" name="data_fim" value="{{ filtros.data_fim }}">
  </div>
@@ -167,7 +167,7 @@
  </form>
  <aside class="hero-summary">
  <div class="summary-header">
- <span class="summary-kicker">Informacoes</span>
+ <span class="summary-kicker">Informações</span>
  <h2 class="summary-title">Indicadores do periodo</h2>
  <p class="summary-subtitle">Visao consolidada do fluxo de processos.</p>
  </div>
@@ -180,7 +180,7 @@
  <div class="metric-card">
  <span class="metric-label" data-label-finalizados="Em andamento" data-label-demandas="Em andamento">Em andamento</span>
  <span class="metric-value" data-valor-finalizados="{{ metricas.andamento }}" data-valor-demandas="{{ metricas_demandas.andamento }}">{{ metricas.andamento }}</span>
- <span class="metric-foot" data-foot-finalizados="Gerencias com carga" data-foot-demandas="Gerencias com carga">Gerências com carga</span>
+ <span class="metric-foot" data-foot-finalizados="Gerências com carga" data-foot-demandas="Gerências com carga">Gerências com carga</span>
  </div>
  <div class="metric-card">
  <span class="metric-label" data-label-finalizados="Finalizados" data-label-demandas="Demandas finalizadas">Finalizados</span>
@@ -193,7 +193,7 @@
  <span class="metric-foot" data-foot-finalizados="Da entrada ao encerramento" data-foot-demandas="Da entrada ao encerramento">Da entrada ao encerramento</span>
  </div>
  </div>
- <div class="summary-note">Clique em um processo para ver o historico completo.</div>
+ <div class="summary-note">Clique em um processo para ver o histórico completo.</div>
  </aside>
  </div>
  </div>
@@ -220,19 +220,19 @@
  <label class="btn btn-outline-secondary" for="visaoTabelaDemanda">Demandas Finalizadas</label>
  </div>
  <div class="d-flex align-items-center gap-2 d-none" id="acoesSelecao">
- <span class="text-muted small">Ações</span>
+ <span class="text-muted small d-none">Ações</span>
  <button class="btn btn-link btn-sm px-0 d-none" type="button" id="btnLimparSelecao">Limpar seleção</button>
- <button class="btn btn-outline-secondary btn-sm" type="button" id="btnVerFicha" disabled>Ver ficha</button>
- <button class="btn btn-outline-secondary btn-sm" type="button" id="btnVerHistorico" disabled>Ver histórico</button>
+ <button class="btn btn-outline-secondary btn-sm d-none" type="button" id="btnVerFicha" disabled>Ver ficha</button>
+ <button class="btn btn-outline-secondary btn-sm d-none" type="button" id="btnVerHistorico" disabled>Ver histórico</button>
  </div>
  </div>
  <div id="tabelaProcessosWrapper" class="table-responsive process-list-wrapper">
- <table class="table process-table align-middle lista-processos" id="tabelaProcessos">
+ <table class="table process-table align-middle lista-processos historico-compactando" id="tabelaProcessos">
  <thead>
  <tr>
  <th>Número SEI</th>
  <th>Data de entrada</th>
- <th>Data da finalizacao</th>
+ <th>Data da finalização</th>
  <th>Interessado</th>
  <th>Concessionária</th>
  <th>Gerências envolvidas</th>
@@ -245,7 +245,7 @@
  <th>Data de entrada na gerência</th>
  <th>Descricao melhorada</th>
  <th>Coordenadoria</th>
- <th>Equipe / ?rea</th>
+ <th>Equipe / Área</th>
  <th>Responsavel (Equipe)</th>
  <th>Tipo de processo</th>
  <th>Palavras-chave</th>
@@ -340,7 +340,7 @@
  <div class="process-chip ghost">
  <div class="chip-avatar muted">{{ (planilhador or '?')[0]|upper }}</div>
  <div class="chip-body">
- <div class="chip-title">{{ planilhador or "Nao informado" }}</div>
+ <div class="chip-title">{{ planilhador or "Não informado" }}</div>
  <div class="chip-sub">Responsável Adm</div>
  </div>
  </div>
@@ -435,12 +435,12 @@
  </div>
  </div>
  
- <table class="table process-table align-middle" id="tabelaDemandas">
+ <table class="table process-table align-middle historico-compactando" id="tabelaDemandas">
  <thead>
  <tr>
  <th>Número SEI</th>
  <th>Data de entrada</th>
- <th>Data da finalizacao</th>
+ <th>Data da finalização</th>
  <th>Interessado</th>
  <th>Concessionária</th>
  <th>Gerência</th>
@@ -453,7 +453,7 @@
  <th>Data de entrada na gerência</th>
  <th>Descricao melhorada</th>
  <th>Coordenadoria</th>
- <th>Equipe / ?rea</th>
+ <th>Equipe / Área</th>
  <th>Responsavel (Equipe)</th>
  <th>Tipo de processo</th>
  <th>Palavras-chave</th>
@@ -515,7 +515,7 @@
  <div class="process-chip ghost">
  <div class="chip-avatar muted">{{ (planilhador or '?')[0]|upper }}</div>
  <div class="chip-body">
- <div class="chip-title">{{ planilhador or "Nao informado" }}</div>
+ <div class="chip-title">{{ planilhador or "Não informado" }}</div>
  <div class="chip-sub">Responsável Adm</div>
  </div>
  </div>
@@ -617,6 +617,72 @@
 {% if not SITE_EM_CONFIGURACAO %}
 <script>
 (() => {
+ const compactarTabelaHistorico = (tabelaId) => {
+ const tabela = document.getElementById(tabelaId);
+ if (!tabela || tabela.dataset.compactada === "1") return;
+
+ const ordemDesejada =
+ tabelaId === "tabelaDemandas"
+ ? [0, 1, 5, 3, 7, 2]
+ : [0, 1, 5, 3, 7, 2];
+ const totalColunas = 1 + ordemDesejada.length;
+ const linhas = tabela.querySelectorAll("thead tr, tbody tr");
+
+ linhas.forEach((linha) => {
+ const celulas = Array.from(linha.children);
+ if (!celulas.length) return;
+
+ if (celulas.length === 1 && celulas[0].hasAttribute("colspan")) {
+ celulas[0].setAttribute("colspan", String(totalColunas));
+ return;
+ }
+
+ const ehCabecalho = linha.parentElement?.tagName === "THEAD";
+ if (ehCabecalho) {
+ const selecionadas = ordemDesejada.map((idx) => celulas[idx]).filter(Boolean);
+ if (tabelaId === "tabelaProcessos" && selecionadas[2]) {
+ selecionadas[2].textContent = "Gerências envolvidas";
+ }
+ const thAcoes = document.createElement("th");
+ thAcoes.textContent = "Ações";
+ linha.innerHTML = "";
+ linha.appendChild(thAcoes);
+ selecionadas.forEach((celula) => linha.appendChild(celula));
+ return;
+ }
+
+ if (celulas.length <= totalColunas) return;
+
+ const selecionadas = ordemDesejada.map((idx) => celulas[idx]).filter(Boolean);
+ const tdAcoes = document.createElement("td");
+ tdAcoes.className = "col-acoes text-center";
+ tdAcoes.innerHTML = `
+ <div class="d-flex gap-1 justify-content-center">
+ <button class="btn btn-sm btn-outline-primary btn-quick-ficha" type="button" aria-label="Ficha técnica" title="Ficha técnica">
+ <i class="bi bi-journal-text"></i>
+ </button>
+ <button class="btn btn-sm btn-outline-secondary btn-quick-historico" type="button" aria-label="Ver histórico" title="Ver histórico">
+ <i class="bi bi-clock-history"></i>
+ </button>
+ </div>
+ `;
+ linha.innerHTML = "";
+ linha.appendChild(tdAcoes);
+ selecionadas.forEach((celula) => linha.appendChild(celula));
+ });
+
+ tabela.dataset.compactada = "1";
+ tabela.classList.remove("historico-compactando");
+ };
+
+ compactarTabelaHistorico("tabelaProcessos");
+ compactarTabelaHistorico("tabelaDemandas");
+})();
+</script>
+{% endif %}
+{% if not SITE_EM_CONFIGURACAO %}
+<script>
+(() => {
  const processosData = {{ processos_data|tojson }};
  const demandasData = {{ demandas|tojson }};
  const camposExtraLabels = {{ campos_extra_labels|tojson }};
@@ -672,6 +738,25 @@ let fichaAberta = false;
  const LIMITE_PASSO = 10;
  let limiteProcessos = LIMITE_PASSO;
  let limiteDemandas = LIMITE_PASSO;
+
+ const abrirHistoricoSelecionado = () => {
+ if (!demandaSelecionada && !processoSelecionado) return;
+ const processoHistorico =
+ processoSelecionado ||
+ (demandaSelecionada ? obterProcessoPorBase(demandaSelecionada.numero_sei) : null);
+ if (!processoHistorico && !demandaSelecionada) return;
+ renderizarMovimentacoes(processoHistorico);
+ if (demandaSelecionada) {
+ renderizarHistorico(processoHistorico, {
+ demandaSelecionada,
+ numeroSeiDemanda: demandaSelecionada.numero_sei,
+ });
+ } else {
+ renderizarHistorico(processoHistorico);
+ }
+ historicoAberto = true;
+ if (refs.btnVerHistorico) refs.btnVerHistorico.textContent = "Ocultar histórico";
+ };
 
  const possuiValor = (valor) => valor !== null && valor !== undefined && valor !== "";
 
@@ -821,10 +906,6 @@ let fichaAberta = false;
  const filtroAtivo = Boolean(estado.filtros[idx] && estado.filtros[idx].size);
  const sortAtivo = estado.sort.col === idx;
  th.classList.toggle("col-filter-active", filtroAtivo || sortAtivo);
- const icon = th.querySelector(".col-filter-icon");
- if (icon) {
- icon.className = `bi ${filtroAtivo ? "bi-funnel-fill" : "bi-caret-down-fill"} col-filter-icon`;
- }
  });
 
  atualizarLimites();
@@ -849,6 +930,9 @@ let fichaAberta = false;
  painel.className = "excel-filter-menu";
  painel.innerHTML = `
  <div class="excel-filter-actions">
+   <button type="button" class="btn btn-outline-secondary btn-sm" data-sort="asc">Ordem crescente</button>
+   <button type="button" class="btn btn-outline-secondary btn-sm" data-sort="desc">Ordem decrescente</button>
+   <button type="button" class="btn btn-outline-secondary btn-sm" data-sort="clear">Limpar ordenação</button>
  </div>
  <input type="search" class="form-control form-control-sm excel-filter-search" placeholder="Pesquisar">
  <div class="excel-filter-list"></div>
@@ -906,6 +990,19 @@ let fichaAberta = false;
  renderLista();
  });
 
+ Array.from(painel.querySelectorAll("[data-sort]")).forEach((botaoSort) => {
+ botaoSort.addEventListener("click", () => {
+ const direcao = botaoSort.getAttribute("data-sort");
+ if (direcao === "clear") {
+ estado.sort = { col: null, dir: null };
+ } else {
+ estado.sort = { col: idx, dir: direcao };
+ }
+ aplicarEstadoTabela();
+ fecharPainel();
+ });
+ });
+
  painel.querySelector("[data-cancel]")?.addEventListener("click", () => fecharPainel());
  painel.querySelector("[data-ok]")?.addEventListener("click", () => {
  const todos = new Set(valoresUnicos.map(([k]) => k));
@@ -925,7 +1022,7 @@ let fichaAberta = false;
  const btn = document.createElement("button");
  btn.type = "button";
  btn.className = "col-filter-trigger";
- btn.innerHTML = '<i class="bi bi-caret-down-fill col-filter-icon" aria-hidden="true"></i>';
+ btn.innerHTML = '<i class="bi bi-search col-filter-icon" aria-hidden="true"></i>';
  btn.addEventListener("click", (ev) => {
  ev.stopPropagation();
  abrirPainelColuna(idx, btn);
@@ -1065,8 +1162,8 @@ const formatarDataHistorico = (evento) => {
 
  const formatarDataCurta = (iso) => {
  if (!possuiValor(iso)) return "";
- const dt = new Date(iso);
- if (Number.isNaN(dt.getTime())) {
+ const dt = parserDataHora(iso);
+ if (!dt || Number.isNaN(dt.getTime())) {
  return htmlEscape(iso);
  }
  return dt.toLocaleDateString("pt-BR");
@@ -1184,7 +1281,7 @@ const removerFichaTecnica = () => {
  ["Interessado", item.interessado],
  ["Concessionaria", item.concessionaria],
  ["Coordenadoria", item.coordenadoria],
- ["Equipe / ?rea", item.equipe_area],
+ ["Equipe / Área", item.equipe_area],
  ["Responsavel Adm", item.responsavel_adm],
  ["Responsavel equipe", item.responsavel_equipe],
  ["Tipo de processo", item.tipo_processo],
@@ -1212,7 +1309,7 @@ const removerFichaTecnica = () => {
  ${blocos}
  <div class="col-12">
  <div class="resumo-box">
- <span class="resumo-label">ObservacAµes</span>
+ <span class="resumo-label">Observações</span>
  <span class="resumo-value">${obs}</span>
  </div>
  </div>
@@ -1226,7 +1323,7 @@ const removerFichaTecnica = () => {
  <div class="col-12">
  <div class="resumo-box">
  <span class="resumo-label">Demandas deste processo</span>
- <div class="text-muted small mb-2">InformacAµes completas de cada gerencia.</div>
+ <div class="text-muted small mb-2">Informações completas de cada gerência.</div>
  <div class="row g-3">${cards}</div>
  </div>
  </div>
@@ -1371,6 +1468,37 @@ const removerFichaTecnica = () => {
  });
  return badges.length ? badges.join(" " ) : "--";
  };
+ const renderizarCampoColoridoPorDemanda = (chave, formatador = null, opcoes = {}) => {
+ const listaBase = modoDemanda ? [processo].filter(Boolean) : demandasOrdenadas;
+ return renderizarBadgesPorDemanda(listaBase, (item) => {
+ const valorItem = item ? item[chave] : "";
+ if (possuiValor(valorItem)) {
+ return formatador ? formatador(valorItem) : valorItem;
+ }
+ if (opcoes.fallbackProcesso && processo) {
+ const valorProcesso = processo[chave];
+ if (possuiValor(valorProcesso)) {
+ return formatador ? formatador(valorProcesso) : valorProcesso;
+ }
+ }
+ return opcoes.vazio ?? "--";
+ });
+ };
+ const renderizarDatasEntradaDaTabela = () => {
+ if (modoDemanda) {
+ return renderizarCampoColoridoPorDemanda("data_entrada_gerencia", formatarOuVazio, { fallbackProcesso: true });
+ }
+ const pares = Array.isArray(processo?.pares_datas) ? processo.pares_datas : [];
+ if (pares.length) {
+ const badges = pares.map((par) => {
+ const valor = par?.entrada_str || formatarOuVazio(par?.entrada) || "--";
+ const classe = htmlEscape(par?.cor || "pareado-1");
+ return `<span class="badge rounded-pill ${classe} me-1 mb-1">${htmlEscape(valor)}</span>`;
+ });
+ return badges.join(" ");
+ }
+ return renderizarCampoColoridoPorDemanda("data_entrada_gerencia", formatarOuVazio, { fallbackProcesso: true });
+ };
  const filtrarDemandasUnicasPorValor = (demandasLista, obterValor) => {
  const vistos = new Set();
  const resultado = [];
@@ -1391,67 +1519,54 @@ const removerFichaTecnica = () => {
  const labelInteressado = "Interessado";
  const labelConcessionaria = "Concessionaria";
  const labelCoordenadoria = modoDemanda ? "Coordenadoria" : "Coordenadorias";
- const labelEquipeArea = modoDemanda ? "Equipe / ?rea" : "Equipes / ?reas";
+ const labelEquipeArea = modoDemanda ? "Equipe / Área" : "Equipes / Áreas";
  const labelRespAdm = modoDemanda ? "Responsavel Adm" : "Responsaveis Adm";
  const labelRespEquipe = modoDemanda ? "Responsavel equipe" : "Responsaveis equipe";
  const labelTipoProcesso = "Tipo de processo";
- const labelPalavrasChave = "Palavra-chave";
- const labelObservacoes = "Observacao";
+ const labelPalavrasChave = "Palavras-chave";
+ const labelObservacoes = "Observação";
+ const formatarOuVazio = (valor) => (possuiValor(valor) ? formatarDataCurta(valor) : "");
+ const unirDemandas = (chave, formatador = null) =>
+ juntarValores(
+ demandasOrdenadas.map((d) => {
+ const valor = d ? d[chave] : "";
+ if (!possuiValor(valor)) return "";
+ return formatador ? formatador(valor) : valor;
+ }),
+ );
+ const valorProcessoOuDemandas = (chave, formatador = null) => {
+ const valorProcesso = processo ? processo[chave] : "";
+ if (possuiValor(valorProcesso)) {
+ return formatador ? formatador(valorProcesso) : valorProcesso;
+ }
+ return unirDemandas(chave, formatador);
+ };
  const campos = [
  ["Numero SEI", htmlEscape(numeroSeiBase(processo) || "--")],
- [labelGerencia, renderizarGerenciasColoridas(processo, demandasOrdenadas)],
- ["Status", renderizarBadgesPorDemanda(demandasOrdenadas, (d) => d.status || "Finalizado")],
- [
- labelDataEntrada,
- renderizarBadgesPorDemanda(
- demandasOrdenadas,
- (d) => (d.data_entrada ? formatarDataCurta(d.data_entrada) : ""),
- ),
- ],
- [
- labelPrazo,
- juntarValores(
- demandasOrdenadas.map((d) => (d.prazo ? formatarDataCurta(d.prazo) : "")),
- ),
- ],
- [labelAssunto, juntarValores(demandasOrdenadas.map((d) => d.assunto))],
- [labelInteressado, juntarValores(demandasOrdenadas.map((d) => d.interessado))],
- [labelConcessionaria, juntarValores(demandasOrdenadas.map((d) => d.concessionaria))],
- [labelCoordenadoria, renderizarBadgesPorDemanda(demandasOrdenadas, (d) => d.coordenadoria)],
- [labelEquipeArea, renderizarBadgesPorDemanda(demandasOrdenadas, (d) => d.equipe_area)],
- [
- labelRespAdm,
- modoDemanda
- ? renderizarBadgesPorDemanda(demandasOrdenadas, (d) => d.responsavel_adm)
- : renderizarBadgesPorDemanda(
- filtrarDemandasUnicasPorValor(demandasOrdenadas, (d) => d.responsavel_adm),
- (d) => d.responsavel_adm,
- ),
- ],
- [labelRespEquipe, renderizarBadgesPorDemanda(demandasOrdenadas, (d) => d.responsavel_equipe)],
- [
- labelTipoProcesso,
- modoDemanda
- ? renderizarBadgesPorDemanda(demandasOrdenadas, (d) => d.tipo_processo)
- : juntarValores(demandasOrdenadas.map((d) => d.tipo_processo)),
- ],
- [
- labelPalavrasChave,
- modoDemanda
- ? renderizarBadgesPorDemanda(demandasOrdenadas, (d) => d.palavras_chave)
- : juntarValores(demandasOrdenadas.map((d) => d.palavras_chave)),
- ],
- [
- labelObservacoes,
- modoDemanda
- ? renderizarBadgesPorDemanda(
- demandasOrdenadas,
- (d) => d.observacoes_complementares || d.observacao,
- )
- : juntarValores(
- demandasOrdenadas.map((d) => d.observacoes_complementares || d.observacao),
- ),
- ],
+ [labelAssunto, valorProcessoOuDemandas("assunto")],
+ [labelInteressado, valorProcessoOuDemandas("interessado")],
+ [labelConcessionaria, valorProcessoOuDemandas("concessionaria")],
+ [labelGerencia, renderizarBadgesPorDemanda(modoDemanda ? [processo].filter(Boolean) : demandasOrdenadas, (d) => chaveGerenciaDemanda(d) || (d && d.gerencia) || (processo ? processo.gerencia : "") || "--")],
+ [labelDataEntrada, renderizarDatasEntradaDaTabela()],
+ [labelPrazo, renderizarCampoColoridoPorDemanda("prazo", formatarOuVazio)],
+ [labelRespAdm, valorProcessoOuDemandas("responsavel_adm")],
+ [labelObservacoes, valorProcessoOuDemandas("observacao")],
+ ["Observações complementares", valorProcessoOuDemandas("observacoes_complementares")],
+ [labelCoordenadoria, renderizarCampoColoridoPorDemanda("coordenadoria")],
+ [labelEquipeArea, renderizarCampoColoridoPorDemanda("equipe_area")],
+ [labelRespEquipe, renderizarCampoColoridoPorDemanda("responsavel_equipe")],
+ [labelTipoProcesso, valorProcessoOuDemandas("tipo_processo")],
+ [labelPalavrasChave, valorProcessoOuDemandas("palavras_chave")],
+ ["Status", valorProcessoOuDemandas("status")],
+ ["Status da gerencia", renderizarBadgesPorDemanda(modoDemanda ? [processo].filter(Boolean) : demandasOrdenadas, (d) => d.status || "Finalizado")],
+ ["Data status", renderizarCampoColoridoPorDemanda("data_status", formatarOuVazio)],
+ ["Prazo equipe", renderizarCampoColoridoPorDemanda("prazo_equipe", formatarOuVazio)],
+ ["Tramitado para", renderizarCampoColoridoPorDemanda("tramitado_para")],
+ ["Classificação institucional", valorProcessoOuDemandas("classificacao_institucional")],
+ ["Descrição melhorada", valorProcessoOuDemandas("descricao_melhorada")],
+ ["Finalizado em", renderizarCampoColoridoPorDemanda("finalizado_em", formatarOuVazio, { fallbackProcesso: true })],
+ ["Finalizado por", renderizarCampoColoridoPorDemanda("finalizado_por", null, { fallbackProcesso: true })],
+ ["Data de saída", renderizarCampoColoridoPorDemanda("data_saida", formatarOuVazio, { fallbackProcesso: true })],
  ];
 
  const boxes = campos
@@ -1473,7 +1588,7 @@ const removerFichaTecnica = () => {
  return `
  <div class="ficha-tecnica-wrapper">
  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
- <div class="ficha-tecnica-title">Ficha tecnica</div>
+ <div class="ficha-tecnica-title">Ficha técnica</div>
  <span class="badge bg-light text-muted border">${labelCabecalho} ${htmlEscape(numeroRef)}</span>
  </div>
  <div class="row g-3">
@@ -1566,7 +1681,7 @@ const inserirFichaTecnicaNaTabela = (processo) => {
 
  const campos = [
  ["coordenadoria", "Coordenadoria"],
- ["equipe_area", "Equipe / ?rea"],
+ ["equipe_area", "Equipe / Área"],
  ["responsavel_equipe", "Responsavel equipe"],
  ["tipo_processo", "Tipo de processo"],
  ["palavras_chave", "Palavras-chave"],
@@ -1593,7 +1708,7 @@ const inserirFichaTecnicaNaTabela = (processo) => {
  const observacoes = possuiValor(snapshot.observacoes_complementares)
  ? `
  <div class="col-12">
- <span class="resumo-label">ObservacAµes da gerencia</span>
+ <span class="resumo-label">Observações da gerência</span>
  <span class="resumo-value">${formatarMultiline(snapshot.observacoes_complementares)}</span>
  </div>
  `
@@ -1734,8 +1849,9 @@ const inserirFichaTecnicaNaTabela = (processo) => {
  const filtrar = (tabela) => {
  if (!tabela) return;
  tabela.querySelectorAll("tbody tr").forEach((linha) => {
+ if (linha.classList.contains("ficha-tecnica-row")) return;
  const linhaSei = chaveSelecaoSei(linha.getAttribute("data-processo"));
- const esconder = alvo && linhaSei !== alvo;
+ const esconder = Boolean(alvo) && linhaSei !== alvo;
  linha.classList.toggle("d-none", esconder);
  });
  };
@@ -1753,16 +1869,16 @@ const inserirFichaTecnicaNaTabela = (processo) => {
  refs.historicoLista.classList.add("d-none");
  }
  if (refs.historicoTitulo) {
- refs.historicoTitulo.textContent = "Historico do processo";
+ refs.historicoTitulo.textContent = "Histórico do processo";
  }
  if (refs.historicoMensagem) {
- refs.historicoMensagem.textContent = "Selecione um processo para ver o historico.";
+ refs.historicoMensagem.textContent = "Selecione um processo para ver o histórico.";
  }
  refs.historicoMensagem?.classList.remove("d-none");
  refs.historicoWrapper?.classList.add("d-none");
  historicoAberto = false;
  if (refs.btnVerHistorico) {
- refs.btnVerHistorico.textContent = "Ver historico";
+ refs.btnVerHistorico.textContent = "Ver histórico";
  }
  };
 
@@ -2000,7 +2116,7 @@ const limparResultados = () => {
  refs.listaMovimentacoes.innerHTML = "";
  const movimentos = Array.isArray(processo.movimentacoes) ? processo.movimentacoes : [];
  if (!movimentos.length) {
- refs.listaMovimentacoes.innerHTML = '<div class="list-group-item text-muted">Nao existem movimentacAµes cadastradas para este processo.</div>';
+ refs.listaMovimentacoes.innerHTML = '<div class="list-group-item text-muted">Não existem movimentações cadastradas para este processo.</div>';
  refs.mensagemDemanda?.classList.add("d-none");
  return;
  }
@@ -2049,7 +2165,7 @@ const limparResultados = () => {
  <th>Data</th>
  <th>Status</th>
  <th>Coordenadoria</th>
- <th>Equipe / ?rea</th>
+ <th>Equipe / Área</th>
  <th>Responsavel equipe</th>
  <th>Motivo</th>
  </tr>
@@ -2330,12 +2446,12 @@ const renderizarHistorico = (processo, opcoes = {}) => {
  const eventos = construirHistorico(processo, opcoes);
  const ehDemanda = Boolean(opcoes.demandaSelecionada);
  if (refs.historicoTitulo) {
- refs.historicoTitulo.textContent = ehDemanda ? "Historico da demanda" : "Historico do processo";
+ refs.historicoTitulo.textContent = ehDemanda ? "Histórico da demanda" : "Histórico do processo";
  }
  if (!eventos.length) {
  refs.historicoMensagem.textContent = ehDemanda
- ? "Nenhum historico encontrado para esta demanda."
- : "Nenhum historico encontrado para este processo.";
+ ? "Nenhum histórico encontrado para esta demanda."
+ : "Nenhum histórico encontrado para este processo.";
  refs.historicoMensagem.classList.remove("d-none");
  refs.historicoLista.classList.add("d-none");
  return;
@@ -2367,15 +2483,22 @@ const eventosVisual = [...eventos].sort(
  refs.historicoWrapper?.classList.remove("d-none");
  historicoAberto = true;
  if (refs.btnVerHistorico) {
- refs.btnVerHistorico.textContent = "Ocultar historico";
+ refs.btnVerHistorico.textContent = "Ocultar histórico";
  }
  };
 
- const selecionarProcesso = (numeroSei, origem = "auto", demandaDireta = null, demandaIdx = null) => {
+ const selecionarProcesso = (
+ numeroSei,
+ origem = "auto",
+ demandaDireta = null,
+ demandaIdx = null,
+ opcoes = {},
+ ) => {
+ const manterSelecaoAtual = !!opcoes.manterSelecaoAtual;
  limparAlerta();
  if (!numeroSei) {
  limparResultados();
- mostrarAlerta("Informe um numero SEI para realizar a busca.");
+ mostrarAlerta("Informe um número SEI para realizar a busca.");
  return;
  }
 
@@ -2385,7 +2508,7 @@ const eventosVisual = [...eventos].sort(
  origem === "processo" ? null : (demandaDireta || obterDemanda(numeroSei));
  if (!processo && !demandaLocal) {
  limparResultados();
- mostrarAlerta("Nenhum processo finalizado encontrado para o numero informado.");
+ mostrarAlerta("Nenhum processo finalizado encontrado para o número informado.");
  return;
  }
  const referencia = processo || demandaLocal;
@@ -2397,6 +2520,12 @@ const eventosVisual = [...eventos].sort(
  ? `D:${chaveDemandaSelecionada(demandaLocal, demandaIdx)}`
  : `P:${chaveSelecaoSei(referencia.numero_sei)}`;
  if (chaveAtual && chaveAtual === chaveNovo) {
+ if (manterSelecaoAtual) {
+ if (refs.buscaSei) {
+ refs.buscaSei.value = numeroSeiBase(referencia);
+ }
+ return referencia;
+ }
  if (refs.buscaSei) {
  refs.buscaSei.value = "";
  }
@@ -2499,24 +2628,14 @@ refs.btnVerHistorico?.addEventListener("click", () => {
  if (refs.listaMovimentacoes) refs.listaMovimentacoes.innerHTML = "";
  ocultarHistorico();
  historicoAberto = false;
- refs.btnVerHistorico.textContent = "Ver historico";
+ refs.btnVerHistorico.textContent = "Ver histórico";
  return;
  }
- const usarHistoricoDemanda = Boolean(demandaSelecionada);
- if (processoHistorico && usarHistoricoDemanda) {
- renderizarMovimentacoes(processoHistorico);
- renderizarHistorico(processoHistorico, {
- demandaSelecionada,
- numeroSeiDemanda: demandaSelecionada.numero_sei,
- });
- } else if (processoHistorico) {
- renderizarMovimentacoes(processoHistorico);
- renderizarHistorico(processoHistorico);
- } else {
- mostrarAlerta("Nenhum historico encontrado para este numero.");
+ if (!processoHistorico && !demandaSelecionada) {
+ mostrarAlerta("Nenhum histórico encontrado para este número.");
+ return;
  }
- historicoAberto = true;
- if (refs.btnVerHistorico) refs.btnVerHistorico.textContent = "Ocultar historico";
+ abrirHistoricoSelecionado();
 });
 
  refs.btnVerFicha?.addEventListener("click", () => {
@@ -2552,6 +2671,41 @@ refs.btnVerHistorico?.addEventListener("click", () => {
  }
  });
  });
+
+ refs.tabelaProcessos.querySelectorAll(".btn-quick-ficha").forEach((botao) => {
+ botao.addEventListener("click", (evento) => {
+ evento.stopPropagation();
+ const linha = botao.closest("tr");
+ const numero = (linha?.getAttribute("data-processo") || "").trim();
+ if (!numero) return;
+ const mesmaSelecao =
+ processoSelecionado && chaveSelecaoSei(processoSelecionado.numero_sei) === chaveSelecaoSei(numero);
+ if (mesmaSelecao && fichaAberta) {
+ fecharFicha();
+ return;
+ }
+ selecionarProcesso(numero, "processo", null, null, { manterSelecaoAtual: true });
+ abrirFicha();
+ });
+ });
+
+ refs.tabelaProcessos.querySelectorAll(".btn-quick-historico").forEach((botao) => {
+ botao.addEventListener("click", (evento) => {
+ evento.stopPropagation();
+ const linha = botao.closest("tr");
+ const numero = (linha?.getAttribute("data-processo") || "").trim();
+ if (!numero) return;
+ const mesmaSelecao =
+ processoSelecionado && chaveSelecaoSei(processoSelecionado.numero_sei) === chaveSelecaoSei(numero);
+ if (mesmaSelecao && historicoAberto) {
+ if (refs.listaMovimentacoes) refs.listaMovimentacoes.innerHTML = "";
+ ocultarHistorico();
+ return;
+ }
+ selecionarProcesso(numero, "processo", null, null, { manterSelecaoAtual: true });
+ abrirHistoricoSelecionado();
+ });
+ });
  }
  if (refs.tabelaDemandas) {
  refs.tabelaDemandas.querySelectorAll("tbody tr").forEach((linha) => {
@@ -2568,6 +2722,57 @@ refs.btnVerHistorico?.addEventListener("click", () => {
  }
  });
  });
+
+ refs.tabelaDemandas.querySelectorAll(".btn-quick-ficha").forEach((botao) => {
+ botao.addEventListener("click", (evento) => {
+ evento.stopPropagation();
+ const linha = botao.closest("tr");
+ const numero = (linha?.getAttribute("data-processo") || "").trim();
+ const idxBruto = linha?.getAttribute("data-demanda-idx");
+ const idx = idxBruto === null || idxBruto === "" ? null : Number(idxBruto);
+ const demandaDaLinha =
+ idx !== null && Number.isFinite(idx) && idx >= 0 && idx < listaDemandas.length
+ ? listaDemandas[idx]
+ : null;
+ if (!numero) return;
+ const mesmaSelecao =
+ demandaSelecionada &&
+ demandaSelecionadaIdx === idx &&
+ normalizarSei(demandaSelecionada.numero_sei) === normalizarSei(numero);
+ if (mesmaSelecao && fichaAberta) {
+ fecharFicha();
+ return;
+ }
+ selecionarProcesso(numero, "demanda", demandaDaLinha, idx, { manterSelecaoAtual: true });
+ abrirFicha();
+ });
+ });
+
+ refs.tabelaDemandas.querySelectorAll(".btn-quick-historico").forEach((botao) => {
+ botao.addEventListener("click", (evento) => {
+ evento.stopPropagation();
+ const linha = botao.closest("tr");
+ const numero = (linha?.getAttribute("data-processo") || "").trim();
+ const idxBruto = linha?.getAttribute("data-demanda-idx");
+ const idx = idxBruto === null || idxBruto === "" ? null : Number(idxBruto);
+ const demandaDaLinha =
+ idx !== null && Number.isFinite(idx) && idx >= 0 && idx < listaDemandas.length
+ ? listaDemandas[idx]
+ : null;
+ if (!numero) return;
+ const mesmaSelecao =
+ demandaSelecionada &&
+ demandaSelecionadaIdx === idx &&
+ normalizarSei(demandaSelecionada.numero_sei) === normalizarSei(numero);
+ if (mesmaSelecao && historicoAberto) {
+ if (refs.listaMovimentacoes) refs.listaMovimentacoes.innerHTML = "";
+ ocultarHistorico();
+ return;
+ }
+ selecionarProcesso(numero, "demanda", demandaDaLinha, idx, { manterSelecaoAtual: true });
+ abrirHistoricoSelecionado();
+ });
+ });
  }
 
  atualizarLimites();
@@ -2578,6 +2783,10 @@ refs.btnVerHistorico?.addEventListener("click", () => {
 </body>
 
 </html>
+
+
+
+
 
 
 

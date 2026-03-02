@@ -525,7 +525,7 @@
  <i class="bi bi-arrow-counterclockwise"></i>
  </button>
  </form>
- <button class="icon-btn neutral btn-atribuir" type="button" data-proc="{{ processo.id }}" data-número="{{ numero_display }}" data-assigned-name="{{ processo.responsavel_equipe or ((processo.assigned_to.nome or processo.assigned_to.username) if processo.assigned_to else '') }}" data-coordenadoria="{{ processo.coordenadoria or '' }}" data-equipe="{{ processo.equipe_area or '' }}" title="Atribuir">
+ <button class="icon-btn neutral btn-atribuir" type="button" data-proc="{{ processo.id }}" data-número="{{ numero_display }}" data-assigned-name="{{ processo.responsavel_equipe or ((processo.assigned_to.nome or processo.assigned_to.username) if processo.assigned_to else '') }}" data-gerencia="{{ processo.gerencia or '' }}" data-coordenadoria="{{ processo.coordenadoria or '' }}" data-equipe="{{ processo.equipe_area or '' }}" title="Atribuir">
  <i class="bi bi-person-plus"></i>
  </button>
  {% endif %}
@@ -966,102 +966,18 @@
  <div class="table-responsive process-list-wrapper mb-3">
 
 
- <table class="table process-table align-middle">
+ <table class="table process-table align-middle table-arquivos-fixa">
 
 
  <thead>
-
-
  <tr>
-
-
  <th class="col-check"><input class="form-check-input" type="checkbox" disabled></th>
-
-
- <th><div class="resizable">Número SEI</div></th>
-
-
+ <th><div class="resizable">N?mero SEI</div></th>
  <th><div class="resizable">Data de entrada</div></th>
-
-
- <th><div class="resizable">Finalizado em</div></th>
-
-
  <th><div class="resizable">Interessado</div></th>
-
-
- <th><div class="resizable">Concessionária</div></th>
-
-
- <th><div class="resizable">{{ 'Gerencias envolvidas' if gerencia == 'SAIDA' else 'Gerencia' }}</div></th>
-
-
  <th><div class="resizable">Assunto</div></th>
-
-
- <th><div class="resizable">Status</div></th>
-
-
- <th><div class="resizable">Responsável Adm</div></th>
-
-
- <th><div class="resizable">Classificacao institucional</div></th>
-
-
- {% if gerencia == 'SAIDA' %}
-
-
- <th><div class="resizable">Data de entrada na gerência</div></th>
-
-
- {% else %}
-
-
- <th><div class="resizable">Data de entrada no GABINETE</div></th>
-
-
- {% endif %}
-
-
- <th><div class="resizable">Descrição melhorada</div></th>
-
-
- <th><div class="resizable">Coordenadoria</div></th>
-
-
- <th><div class="resizable">Equipe / Área</div></th>
-
-
- <th><div class="resizable">Responsável (Equipe)</div></th>
-
-
- <th><div class="resizable">Tipo de processo</div></th>
-
-
- <th><div class="resizable">Palavras-chave</div></th>
-
-
- <th><div class="resizable">Status (Equipe)</div></th>
-
-
- <th><div class="resizable">Prazo equipe</div></th>
-
-
- <th><div class="resizable">Observações complementares</div></th>
-
-
- {% for campo in campos_extra %}
-
-
- <th><div class="resizable">{{ campo.label }}</div></th>
-
-
- {% endfor %}
-
-
+ <th><div class="resizable">Finalizado em</div></th>
  </tr>
-
-
  </thead>
 
 
@@ -1083,208 +999,30 @@
 
 
  <tr class="process-row" data-proc-id="{{ processo.id }}">
-
-
  <td class="col-check">
-
-
  <div class="d-flex align-items-center gap-2">
-
-
  <div class="d-flex gap-1">
-
-
- <button class="btn btn-sm btn-outline-primary btn-toggle-ficha" type="button" data-ficha-target="ficha-finalizado-{{ processo.id }}" data-proc-id="{{ processo.id }}" aria-expanded="false" aria-label="Ficha técnica" title="Ficha técnica">
-
-
+ <button class="btn btn-sm btn-outline-primary btn-toggle-ficha" type="button" data-ficha-target="ficha-finalizado-{{ processo.id }}" data-proc-id="{{ processo.id }}" aria-expanded="false" aria-label="Ficha t?cnica" title="Ficha t?cnica">
  <i class="bi bi-journal-text"></i>
-
-
  </button>
-
-
- <button class="btn btn-sm btn-outline-secondary btn-toggle-hist" type="button" data-hist-target="hist{{ processo.id }}" data-proc-id="{{ processo.id }}" aria-expanded="false" aria-label="Ver histórico" title="Ver histórico">
-
-
+ <button class="btn btn-sm btn-outline-secondary btn-toggle-hist" type="button" data-hist-target="hist{{ processo.id }}" data-proc-id="{{ processo.id }}" aria-expanded="false" aria-label="Ver hist?rico" title="Ver hist?rico">
  <i class="bi bi-clock-history"></i>
-
-
  </button>
-
-
  </div>
-
-
  </div>
-
-
  </td>
-
-
  <td class="fw-semibold text-nowrap numero-sei">{{ numero_display }}</td>
-
-
  <td><div class="pill light">{{ processo.data_entrada|date_br if processo.data_entrada else "-" }}</div></td>
-
-
- <td><div class="pill secondary">{{ processo.finalizado_em.strftime('%d/%m/%Y') if processo.finalizado_em else '-' }}</div></td>
-
-
  <td><div class="text-truncate process-assunto" title="{{ processo.interessado or '-' }}">{{ processo.interessado or "-" }}</div></td>
-
-
- <td><div class="text-truncate process-assunto" title="{{ processo.concessionaria or '-' }}">{{ processo.concessionaria or "-" }}</div></td>
-
-
- <td>
-
-
- <div class="pill outline gerencias-pill{% if gerencia == 'SAIDA' %} trilhas{% endif %}">
- {% set gerencias_env = gerencias_envolvidas_map.get(processo.id, []) if gerencias_envolvidas_map else [] %}
- {% set gerencias_abertas = gerencias_abertas_map.get(processo.id, []) if gerencias_abertas_map else [] %}
- {% set trilhas_saida = trilhas_saida_map.get(processo.id, []) if trilhas_saida_map else [] %}
- {% set tooltip_demanda_aberta = "Ainda existe uma demanda ativa nesta gerencia. O processo so pode ser finalizado apos finalizar essa demanda." %}
- {% if gerencia == 'SAIDA' %}
- {% if trilhas_saida %}
- {% for item in trilhas_saida %}
- <span class="gerencia-chip{% if item.aberta %} aberta{% endif %}"{% if item.aberta %} title="{{ tooltip_demanda_aberta }}"{% endif %}>{{ item.texto }}</span>
- {% endfor %}
- {% elif gerencias_env %}
- <span class="gerencia-chip{% if gerencias_abertas %} aberta{% endif %}">{{ gerencias_env|trilha_gerencias }}</span>
- {% else %}
- <span class="gerencia-chip">{{ processo.gerencia }}</span>
- {% endif %}
- {% else %}
- {% if gerencias_env %}
- {% for ger in gerencias_env %}
- <span class="gerencia-chip{% if ger in gerencias_abertas %} aberta{% endif %}">{{ ger }}</span>
- {% endfor %}
- {% elif processo.gerencia == 'SAIDA' and gerencia != 'SAIDA' %}
- <span class="gerencia-chip">{{ gerencia }}</span>
- {% else %}
- <span class="gerencia-chip">{{ processo.gerencia }}</span>
- {% endif %}
- {% endif %}
- </div>
-
-
- </td>
-
-
  <td><div class="text-truncate process-assunto" title="{{ processo.assunto or '-' }}">{{ processo.assunto or "-" }}</div></td>
-
-
- <td><div class="pill status">{{ snapshot_status or processo.status or "Finalizado" }}</div></td>
-
-
- <td>
-
-
- {% set planilhador = snapshot.get('planilhado_por')
- or snapshot.get('responsavel_adm')
- or processo.responsavel_adm
- or (processo.assigned_to.nome if processo.assigned_to else None)
- or (processo.assigned_to.username if processo.assigned_to else None)
- %}
-
-
- <div class="process-chip ghost" title="{{ planilhador or 'Não informado' }}">
-
-
- <div class="chip-avatar muted">{{ (planilhador or '?')[0]|upper }}</div>
-
-
- <div class="chip-body">
-
-
- <div class="chip-title">{{ planilhador or "Não informado" }}</div>
-
-
- <div class="chip-sub">Responsável Adm{% if processo.responsavel_equipe %} | Atribuído para {{ processo.responsavel_equipe }}{% endif %}</div>
-
-
- </div>
-
-
- </div>
-
-
- </td>
-
-
- <td>{{ snapshot.get('classificacao_institucional') or processo.classificacao_institucional or '-' }}</td>
-
-
- {% if gerencia == 'SAIDA' %}
-
-
- <td>{{ calcular_data_entrada_na_gerencia(processo, gerencia)|date_br if calcular_data_entrada_na_gerencia(processo, gerencia) else '-' }}</td>
-
-
- {% else %}
-
-
- <td>{{ calcular_data_entrada_na_gerencia(processo, 'GABINETE')|date_br if calcular_data_entrada_na_gerencia(processo, 'GABINETE') else '-' }}</td>
-
-
- {% endif %}
-
-
- <td><div class="text-truncate process-assunto" title="{{ snapshot.get('descricao_melhorada') or processo.descricao_melhorada or '-' }}">{{ snapshot.get('descricao_melhorada') or processo.descricao_melhorada or '-' }}</div></td>
-
-
- <td>{{ snapshot.get('coordenadoria') or processo.coordenadoria or "-" }}</td>
-
-
- <td>{{ snapshot.get('equipe_area') or processo.equipe_area or "-" }}</td>
-
-
- <td>{{ snapshot.get('responsavel_equipe') or processo.responsavel_equipe or "-" }}</td>
-
-
- <td>{{ snapshot.get('tipo_processo') or processo.tipo_processo or "-" }}</td>
-
-
- <td>{{ snapshot.get('palavras_chave') or processo.palavras_chave or "-" }}</td>
-
-
- <td><div class="pill status {{ 'muted' if not (snapshot_status or processo.status) else '' }}">{{ snapshot_status or processo.status or "Finalizado" }}</div></td>
-
-
- <td><div class="pill secondary">{{ snapshot_prazo_equipe|date_br if snapshot_prazo_equipe else (processo.prazo_equipe|date_br if processo.prazo_equipe else "Sem prazo") }}</div></td>
-
-
- <td><div class="text-truncate process-assunto" title="{{ snapshot_obs or processo.observacoes_complementares or '-' }}">{{ snapshot_obs or processo.observacoes_complementares or "-" }}</div></td>
-
-
- {% for campo in campos_extra %}
-
-
- {% set extra_valor = (snapshot_extras or processo.dados_extra or {}).get(campo.slug) %}
-
-
- {% if not extra_valor and campo.slug == 'tipodeprocesso' %}
-
-
- {% set extra_valor = processo.tipo_processo %}
-
-
- {% endif %}
-
-
- <td><div class="text-truncate process-assunto" title="{{ extra_valor or '-' }}">{{ extra_valor or '-' }}</div></td>
-
-
- {% endfor %}
-
-
+ <td><div class="pill secondary">{{ processo.finalizado_em.strftime('%d/%m/%Y') if processo.finalizado_em else '-' }}</div></td>
  </tr>
 
 
  <tr class="ficha-tecnica-row d-none ficha-finalizados" id="ficha-finalizado-{{ processo.id }}" data-proc-id="{{ processo.id }}">
 
 
- <td colspan="{{ 21 + (campos_extra|length) }}">
+ <td colspan="6">
 
 
  <div class="ficha-tecnica-wrapper">
@@ -1326,242 +1064,133 @@
  </div>
 
 
- <div class="row g-3">
-
-
+ <div class="row g-3 ficha-grid-finalizados">
  <div class="col-md-6 col-lg-4">
-
-
- <div class="resumo-box">
-
-
- <span class="resumo-label">Assunto</span>
-
-
- <span class="resumo-value">{{ snapshot.get('assunto') or processo.assunto or "-" }}</span>
-
-
+ <div class="resumo-box resumo-critico">
+ <span class="resumo-label">Número SEI</span>
+ <span class="resumo-value">{{ numero_display }}</span>
  </div>
-
-
  </div>
-
-
  <div class="col-md-6 col-lg-4">
-
-
+ <div class="resumo-box resumo-critico">
+ <span class="resumo-label">Data de entrada</span>
+ <span class="resumo-value">{{ processo.data_entrada|date_br if processo.data_entrada else "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box resumo-critico">
+ <span class="resumo-label">Finalizado em</span>
+ <span class="resumo-value">{{ processo.finalizado_em|date_br if processo.finalizado_em else "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
  <div class="resumo-box">
-
-
  <span class="resumo-label">Interessado</span>
-
-
  <span class="resumo-value">{{ snapshot.get('interessado') or processo.interessado or "-" }}</span>
-
-
  </div>
-
-
  </div>
-
-
  <div class="col-md-6 col-lg-4">
-
-
- <div class="resumo-box">
-
-
+ <div class="resumo-box resumo-critico">
  <span class="resumo-label">Concessionária</span>
-
-
  <span class="resumo-value">{{ snapshot.get('concessionaria') or processo.concessionaria or "-" }}</span>
-
-
  </div>
-
-
  </div>
-
-
  <div class="col-md-6 col-lg-4">
-
-
- <div class="resumo-box">
-
-
- <span class="resumo-label">Gerência</span>
-
-
+ <div class="resumo-box resumo-critico">
+ <span class="resumo-label">Gerencia</span>
  <span class="resumo-value">
-
-
  {% if processo.gerencia == 'SAIDA' and gerencia != 'SAIDA' %}
-
-
  {{ gerencia }}
-
-
  {% else %}
-
-
  {{ processo.gerencia or "-" }}
-
-
  {% endif %}
-
-
  </span>
-
-
  </div>
-
-
  </div>
-
-
  <div class="col-md-6 col-lg-4">
-
-
- <div class="resumo-box">
-
-
- <span class="resumo-label">Coordenadoria</span>
-
-
- <span class="resumo-value">{{ snapshot.get('coordenadoria') or processo.coordenadoria or "-" }}</span>
-
-
+ <div class="resumo-box resumo-box-wide">
+ <span class="resumo-label">Assunto</span>
+ <span class="resumo-value">{{ snapshot.get('assunto') or processo.assunto or "-" }}</span>
  </div>
-
-
  </div>
-
-
  <div class="col-md-6 col-lg-4">
-
-
- <div class="resumo-box">
-
-
- <span class="resumo-label">Equipe / Área</span>
-
-
- <span class="resumo-value">{{ snapshot.get('equipe_area') or processo.equipe_area or "-" }}</span>
-
-
- </div>
-
-
- </div>
-
-
- <div class="col-md-6 col-lg-4">
-
-
- <div class="resumo-box">
-
-
- <span class="resumo-label">Responsável equipe</span>
-
-
- <span class="resumo-value">{{ snapshot.get('responsavel_equipe') or processo.responsavel_equipe or "-" }}</span>
-
-
- </div>
-
-
- </div>
-
-
- <div class="col-md-6 col-lg-4">
-
-
- <div class="resumo-box">
-
-
- <span class="resumo-label">Palavras-chave</span>
-
-
- <span class="resumo-value">{{ snapshot.get('palavras_chave') or processo.palavras_chave or "-" }}</span>
-
-
- </div>
-
-
- </div>
-
-
- <div class="col-md-6 col-lg-4">
-
-
- <div class="resumo-box">
-
-
- <span class="resumo-label">Tipo de processo</span>
-
-
- <span class="resumo-value">{{ snapshot.get('tipo_processo') or processo.tipo_processo or "-" }}</span>
-
-
- </div>
-
-
- </div>
-
-
- <div class="col-md-6 col-lg-4">
-
-
- <div class="resumo-box">
-
-
- <span class="resumo-label">Responsável Adm</span>
-
-
- <span class="resumo-value">{{ snapshot.get('responsavel_adm') or processo.responsavel_adm or "-" }}</span>
-
-
- </div>
-
-
- </div>
-
-
- <div class="col-md-6 col-lg-4">
-
-
- <div class="resumo-box">
-
-
+ <div class="resumo-box resumo-critico">
  <span class="resumo-label">Status</span>
-
-
  <span class="resumo-value">{{ snapshot_status or processo.status or "Finalizado" }}</span>
-
-
  </div>
-
-
  </div>
-
-
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box resumo-critico">
+ <span class="resumo-label">Responsável Adm</span>
+ <span class="resumo-value">{{ snapshot.get('responsavel_adm') or processo.responsavel_adm or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box resumo-critico">
+ <span class="resumo-label">Classificacao institucional</span>
+ <span class="resumo-value">{{ snapshot.get('classificacao_institucional') or processo.classificacao_institucional or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box resumo-critico">
+ <span class="resumo-label">Data de entrada no GABINETE</span>
+ <span class="resumo-value">{{ calcular_data_entrada_na_gerencia(processo, 'GABINETE')|date_br if calcular_data_entrada_na_gerencia(processo, 'GABINETE') else "-" }}</span>
+ </div>
+ </div>
  <div class="col-12">
-
-
+ <div class="resumo-box resumo-box-wide">
+ <span class="resumo-label">Descrição melhorada</span>
+ <span class="resumo-value">{{ snapshot.get('descricao_melhorada') or processo.descricao_melhorada or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
  <div class="resumo-box">
-
-
- <span class="resumo-label">Observações</span>
-
-
- <span class="resumo-value">{{ (snapshot_obs or snapshot.get('observacao') or processo.observacoes_complementares or processo.observacao or 'Nenhuma observacao registrada.')|replace('\n', '<br>')|safe }}</span>
-
-
+ <span class="resumo-label">Coordenadoria</span>
+ <span class="resumo-value">{{ snapshot.get('coordenadoria') or processo.coordenadoria or "-" }}</span>
  </div>
-
-
  </div>
-
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box">
+ <span class="resumo-label">Equipe / Área</span>
+ <span class="resumo-value">{{ snapshot.get('equipe_area') or processo.equipe_area or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box resumo-critico">
+ <span class="resumo-label">Responsável (Equipe)</span>
+ <span class="resumo-value">{{ snapshot.get('responsavel_equipe') or processo.responsavel_equipe or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box">
+ <span class="resumo-label">Tipo de processo</span>
+ <span class="resumo-value">{{ snapshot.get('tipo_processo') or processo.tipo_processo or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box">
+ <span class="resumo-label">Palavras-chave</span>
+ <span class="resumo-value">{{ snapshot.get('palavras_chave') or processo.palavras_chave or "-" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box resumo-critico">
+ <span class="resumo-label">Status (Equipe)</span>
+ <span class="resumo-value">{{ snapshot_status or processo.status or "Finalizado" }}</span>
+ </div>
+ </div>
+ <div class="col-md-6 col-lg-4">
+ <div class="resumo-box resumo-critico">
+ <span class="resumo-label">Prazo equipe</span>
+ <span class="resumo-value">{{ snapshot_prazo_equipe|date_br if snapshot_prazo_equipe else (processo.prazo_equipe|date_br if processo.prazo_equipe else "Sem prazo") }}</span>
+ </div>
+ </div>
+ <div class="col-12">
+ <div class="resumo-box resumo-box-wide">
+ <span class="resumo-label">Observações complementares</span>
+ <span class="resumo-value">{{ (snapshot_obs or processo.observacoes_complementares or processo.observacao or 'Nenhuma observação registrada.')|replace('\n', '<br>')|safe }}</span>
+ </div>
+ </div>
 
  {% for campo in campos_extra %}
 
@@ -1983,7 +1612,7 @@
  {% for usuario in usuarios_disponiveis %}
 
 
- <option value="{{ usuario.id }}" data-coordenadoria="{{ usuario.coordenadoria or '' }}" data-equipe="{{ usuario.equipe_area or '' }}" data-nome="{{ usuario.nome or usuario.username }}" data-username="{{ usuario.username }}">{{ usuario.nome }} ({{ usuario.username }})</option>
+ <option value="{{ usuario.id }}" data-gerencia="{{ usuario.gerencia_padrao or '' }}" data-coordenadoria="{{ usuario.coordenadoria or '' }}" data-equipe="{{ usuario.equipe_area or '' }}" data-nome="{{ usuario.nome or usuario.username }}" data-username="{{ usuario.username }}">{{ usuario.nome }} ({{ usuario.username }})</option>
 
 
  {% endfor %}
@@ -2432,14 +2061,15 @@ document.addEventListener("DOMContentLoaded", function () {
  });
  }
 
- const filtrarDestinatarios = (coordenadoria, equipe) => {
+ const filtrarDestinatarios = (gerencia, coordenadoria, equipe) => {
  if (!destinatarioSelect) return;
  const limparExtras = () => {
  Array.from(destinatarioSelect.querySelectorAll("option[data-extra=\"1\"]")).forEach((opt) => opt.remove());
  };
- const coletarPermitidos = () => {
+ const gerenciaNorm = normalizarTexto(gerencia);
  const coordNorm = normalizarTexto(coordenadoria);
  const equipeNorm = normalizarTexto(equipe);
+ const coletarPermitidos = () => {
  if (equipeNorm) {
  return (mapaResponsaveisEquipeNorm[equipeNorm] || []).slice();
  }
@@ -2451,29 +2081,41 @@ document.addEventListener("DOMContentLoaded", function () {
  });
  return nomes;
  }
+ if (gerenciaNorm) {
+ return (responsaveisGerencia || []).slice();
+ }
  return null;
  };
- const coordNorm = normalizarTexto(coordenadoria);
- const equipeNorm = normalizarTexto(equipe);
  const nomesPermitidos = coletarPermitidos() || [];
  const setPermitidos = new Set(
  (nomesPermitidos || []).map((nome) => normalizarTexto(nome))
  );
- const aplicarFiltro = Boolean(coordNorm || equipeNorm);
+ const aplicarFiltro = Boolean(gerenciaNorm || coordNorm || equipeNorm);
  limparExtras();
  Array.from(destinatarioSelect.options).forEach((opt) => {
  if (!opt.value) return;
  const isExtra = opt.dataset.extra === "1";
+ const optGer = normalizarTexto(opt.dataset.gerencia || "");
  const optNome = normalizarTexto(opt.dataset.nome || "");
  const optUser = normalizarTexto(opt.dataset.username || "");
  const optCoord = normalizarTexto(opt.dataset.coordenadoria || "");
  const optEquipe = normalizarTexto(opt.dataset.equipe || "");
+ const correspondeGerencia = !gerenciaNorm || optGer === gerenciaNorm;
+ const usuarioSomenteGerencia = correspondeGerencia && !optCoord && !optEquipe;
  const correspondeLista = !aplicarFiltro || setPermitidos.has(optNome) || setPermitidos.has(optUser);
- const correspondeUsuario =
- !aplicarFiltro
+ const correspondeContexto =
+ correspondeGerencia
+ && (
+ (!coordNorm && !equipeNorm)
  || (equipeNorm && optEquipe === equipeNorm)
- || (coordNorm && optCoord === coordNorm);
- const corresponde = isExtra ? correspondeLista : (correspondeUsuario || correspondeLista);
+ || (coordNorm && optCoord === coordNorm)
+ );
+ const corresponde = isExtra
+ ? correspondeLista
+ : (
+ usuarioSomenteGerencia
+ || correspondeContexto
+ );
  opt.hidden = !corresponde;
  opt.disabled = !corresponde;
  });
@@ -2491,6 +2133,7 @@ document.addEventListener("DOMContentLoaded", function () {
  opt.value = `lista:${nome}`;
  opt.disabled = false;
  opt.dataset.extra = "1";
+ opt.dataset.gerencia = gerencia || "";
  opt.dataset.nome = nome;
  opt.dataset.username = "";
  opt.textContent = `${nome} (sem usuário)`;
@@ -2723,11 +2366,89 @@ document.addEventListener("DOMContentLoaded", function () {
  });
  });
 
+ const habilitarResizeColunas = (table) => {
+ if (table.classList.contains("table-arquivos-fixa")) return;
+ const cabecalhos = Array.from(table.querySelectorAll("thead th"));
+ if (!cabecalhos.length) return;
+
+ let colgroup = table.querySelector("colgroup.js-resize-cols");
+ if (!colgroup) {
+ colgroup = document.createElement("colgroup");
+ colgroup.className = "js-resize-cols";
+ table.insertBefore(colgroup, table.firstChild);
+ }
+ if (colgroup.children.length !== cabecalhos.length) {
+ colgroup.innerHTML = "";
+ cabecalhos.forEach(() => {
+ colgroup.appendChild(document.createElement("col"));
+ });
+ }
+ const cols = Array.from(colgroup.children);
+
+ const atualizarLarguraTabela = () => {
+ const total = cols.reduce((acc, col, idx) => {
+ const largura = parseFloat(col.style.width) || cabecalhos[idx].getBoundingClientRect().width;
+ return acc + largura;
+ }, 0);
+ table.style.width = `${Math.max(total, table.parentElement?.clientWidth || 0)}px`;
+ table.style.tableLayout = "fixed";
+ };
+
+ cols.forEach((col, idx) => {
+ if (!col.style.width) {
+ const largura = cabecalhos[idx].getBoundingClientRect().width;
+ col.style.width = `${Math.max(70, Math.round(largura))}px`;
+ }
+ });
+ atualizarLarguraTabela();
+
+ cabecalhos.forEach((th, indice) => {
+ if (indice === 0) return;
+ if (th.querySelector(".col-resize-handle")) return;
+ th.style.position = "relative";
+ const handle = document.createElement("span");
+ handle.className = "col-resize-handle";
+ handle.setAttribute("aria-hidden", "true");
+ th.appendChild(handle);
+
+ let inicioX = 0;
+ let larguraInicial = 0;
+ const larguraMin = 90;
+
+ const aoMover = (evt) => {
+ const delta = evt.clientX - inicioX;
+ const novaLargura = Math.max(larguraMin, Math.round(larguraInicial + delta));
+ cols[indice].style.width = `${novaLargura}px`;
+ atualizarLarguraTabela();
+ };
+
+ const aoSoltar = () => {
+ document.body.classList.remove("col-resizing");
+ document.removeEventListener("mousemove", aoMover);
+ };
+
+ handle.addEventListener("mousedown", (evt) => {
+ evt.preventDefault();
+ evt.stopPropagation();
+ inicioX = evt.clientX;
+ larguraInicial = parseFloat(cols[indice].style.width) || th.getBoundingClientRect().width;
+ document.body.classList.add("col-resizing");
+ document.addEventListener("mousemove", aoMover);
+ document.addEventListener("mouseup", aoSoltar, { once: true });
+ });
+ });
+ };
+
+ document.querySelectorAll(".process-table").forEach((table) => {
+ habilitarResizeColunas(table);
+ });
+
  document.querySelectorAll(".btn-atribuir").forEach(function (btn) {
  btn.addEventListener("click", function () {
  const procId = btn.dataset.proc;
  const numero = btn.dataset.numero || "";
  const assignedName = (btn.dataset.assignedName || "").trim();
+ const gerProc = btn.dataset.gerencia || "";
  const coordProc = btn.dataset.coordenadoria || "";
  const equipeProc = btn.dataset.equipe || "";
  const possuiAtribuicao = assignedName.length > 0;
@@ -2738,7 +2459,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (destinatarioSelect) destinatarioSelect.required = true;
   }
   if (destinatarioSelect) {
-  filtrarDestinatarios(coordProc, equipeProc);
+  filtrarDestinatarios(gerProc, coordProc, equipeProc);
   }
   if (textoSelecionado) {
   textoSelecionado.textContent = numero ? "Processo: " + numero : "Processo selecionado";
@@ -2766,13 +2487,13 @@ document.addEventListener("DOMContentLoaded", function () {
  });
  });
 
- if (btnDesatribuirModal && formAtribuir) {
+if (btnDesatribuirModal && formAtribuir) {
  btnDesatribuirModal.addEventListener("click", function () {
  if (acaoAtribuirHidden) acaoAtribuirHidden.value = "liberar";
  if (destinatarioSelect) destinatarioSelect.required = false;
  formAtribuir.submit();
  });
- }
+}
 
  // Marca notificacoes como lidas ao abrir o painel
  const painelNotificacoes = document.getElementById("painelNotificacoes");

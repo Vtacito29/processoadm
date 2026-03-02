@@ -594,9 +594,6 @@
  <input class="form-control" type="text" id="coordenadoria" name="coordenadoria" value="{{ coordenadoria_atual }}" placeholder="Digite para buscar..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-required-finalize="1" data-options-id="lista_coordenadorias" data-validate-list="1">
  <div class="select-dropdown" data-options-id="lista_coordenadorias"></div>
  <datalist id="lista_coordenadorias">
- {% if coordenadoria_atual and coordenadoria_atual not in lista_coordenadorias %}
- <option value="{{ coordenadoria_atual }}"></option>
- {% endif %}
  {% for opcao in lista_coordenadorias %}
  <option value="{{ opcao }}"></option>
  {% endfor %}
@@ -614,9 +611,6 @@
  <input class="form-control" type="text" id="equipe_area" name="equipe_area" value="{{ equipe_atual }}" placeholder="Digite para buscar..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-required-finalize="1" data-options-id="lista_equipe_area" data-validate-list="1">
  <div class="select-dropdown" data-options-id="lista_equipe_area"></div>
  <datalist id="lista_equipe_area">
- {% if equipe_atual and equipe_atual not in lista_equipes %}
- <option value="{{ equipe_atual }}"></option>
- {% endif %}
  {% for opcao in lista_equipes %}
  <option value="{{ opcao }}"></option>
  {% endfor %}
@@ -634,9 +628,6 @@
  <input class="form-control" type="text" id="responsavel_equipe" name="responsavel_equipe" value="{{ responsavel_atual }}" placeholder="Digite para buscar..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-required-finalize="1" data-options-id="lista_responsaveis" data-validate-list="1">
  <div class="select-dropdown" data-options-id="lista_responsaveis"></div>
  <datalist id="lista_responsaveis">
- {% if responsavel_atual and responsavel_atual not in lista_responsaveis %}
- <option value="{{ responsavel_atual }}"></option>
- {% endif %}
  {% for opcao in lista_responsaveis %}
  <option value="{{ opcao }}"></option>
  {% endfor %}
@@ -1338,13 +1329,6 @@
  const chave = normalizarTexto(inputCoord.value);
  const opcoes = mapaEquipesNormalizado[chave] || [];
  datalistEquipe.innerHTML = "";
- const atual = inputEquipe.value.trim();
- const setOpcoes = new Set(opcoes);
- if (atual && !setOpcoes.has(atual)) {
- const optAtual = document.createElement("option");
- optAtual.value = atual;
- datalistEquipe.appendChild(optAtual);
- }
  opcoes.forEach((opcao) => {
  const opt = document.createElement("option");
  opt.value = opcao;
@@ -1367,16 +1351,22 @@
  });
 
  const atualizarResponsaveis = () => {
- const chave = normalizarTexto(inputEquipe.value);
- const opcoes = chave ? (mapaRespNormalizado[chave] || []) : (listaResponsaveis || []);
- datalistResponsavel.innerHTML = "";
- const atual = inputResponsavel.value.trim();
- const setOpcoes = new Set(opcoes);
- if (atual && !setOpcoes.has(atual)) {
- const optAtual = document.createElement("option");
- optAtual.value = atual;
- datalistResponsavel.appendChild(optAtual);
+ const equipeChave = normalizarTexto(inputEquipe.value);
+ const coordChave = inputCoord ? normalizarTexto(inputCoord.value) : "";
+ let opcoes = [];
+ if (equipeChave) {
+ opcoes = mapaRespNormalizado[equipeChave] || [];
+ } else if (coordChave) {
+ const equipesCoord = mapaEquipesNormalizado[coordChave] || [];
+ let agregados = [];
+ equipesCoord.forEach((eq) => {
+ agregados = agregados.concat(mapaRespNormalizado[normalizarTexto(eq)] || []);
+ });
+ opcoes = deduplicar(agregados);
+ } else {
+ opcoes = listaResponsaveis || [];
  }
+ datalistResponsavel.innerHTML = "";
  opcoes.forEach((opcao) => {
  const opt = document.createElement("option");
  opt.value = opcao;
@@ -1385,6 +1375,10 @@
  inputResponsavel.dispatchEvent(new Event("input", { bubbles: true }));
  };
 
+ if (inputCoord) {
+ inputCoord.addEventListener("input", atualizarResponsaveis);
+ inputCoord.addEventListener("change", atualizarResponsaveis);
+ }
  inputEquipe.addEventListener("input", atualizarResponsaveis);
  inputEquipe.addEventListener("change", atualizarResponsaveis);
  atualizarResponsaveis();

@@ -1,4 +1,4 @@
-"""Arquivo: app.py | Objetivo: Aplicacao Flask completa para gestao de processos, usuarios, importacao/exportacao e historico."""
+﻿"""Arquivo: app.py | Objetivo: Aplicacao Flask completa para gestao de processos, usuarios, importacao/exportacao e historico."""
 """
 Aplicacao Flask para controlar o ciclo de vida de processos entre gerencias.
 
@@ -23,6 +23,7 @@ from datetime import date, datetime, timedelta
 from io import BytesIO
 from typing import Dict, List, Optional, Set
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
@@ -525,9 +526,9 @@ RESPONSAVEIS_POR_EQUIPE = {
         "JOSIANE SANTOS",
         "BERNARDO GUERRA",
     ],
-    "SEGUROS": ["JULIEL OLIVEIRA", "MARCIA TEODORO", "CAROLINE DRUMOND", "BERNARDO GUERRA"],
-    "CONTROLE_EXTERNO": ["VINICIUS SYBILLA", "CARLA NOGUEIRÃO", "FABIANA VARONE", "BERNARDO GUERRA"],
-    "NORMATIVO": ["THIAGO ALVARES", "BERNARDO GUERRA", "SIDNEY JUNIOR", "FABIANA VARONE", "EDUARDO SIMON"],
+    "SEGUROS": ["JULIEL OLIVEIRA", "MARCIA TEODORO", "CAROLINE DRUMOND"],
+    "CONTROLE_EXTERNO": ["VINICIUS SYBILLA", "CARLA NOGUEIRÃO", "FABIANA VARONE"],
+    "NORMATIVO": ["THIAGO ALVARES", "SIDNEY JUNIOR", "FABIANA VARONE", "EDUARDO SIMON"],
     "CRONOGRAMA_COTEC": [
         "ALICE TELES",
         "THAIS",
@@ -1285,25 +1286,8 @@ def _montar_opcoes_usuario_cadastro() -> tuple[
         for equipe in equipes:
             _registrar_equipe(coord, equipe)
 
-    for usuario in Usuario.query.order_by(Usuario.nome.asc()).all():
-        _registrar_coord(usuario.coordenadoria)
-        _registrar_equipe(usuario.coordenadoria, usuario.equipe_area)
-        _registrar_coord_em_gerencia(usuario.gerencia_padrao, usuario.coordenadoria)
-
-    pares_processo = db.session.query(
-        Processo.gerencia,
-        Processo.coordenadoria,
-        Processo.equipe_area,
-        Processo.responsavel_adm,
-        Processo.responsavel_equipe,
-    ).all()
-    for ger, coord, equipe, resp_adm, resp_eq in pares_processo:
-        _registrar_coord(coord)
-        _registrar_equipe(coord, equipe)
-        _registrar_coord_em_gerencia(ger, coord)
-
     for ger in GERENCIAS_DESTINOS:
-        for nome_resp in obter_responsaveis_por_gerencia(ger):
+        for nome_resp in obter_responsaveis_por_gerencia_base(ger):
             _registrar_pessoa_em_gerencia(ger, nome_resp)
 
     coordenadorias = _ordenar_nomes_unicos(coords_coletadas)
@@ -1428,6 +1412,14 @@ def obter_coordenadorias_por_gerencia(gerencia: Optional[str]) -> List[str]:
     return _ordenar_nomes_unicos(valores)
 
 
+def obter_coordenadorias_por_gerencia_base(gerencia: Optional[str]) -> List[str]:
+    """Lista apenas as coordenadorias-base configuradas para a gerencia."""
+    ger_norm = normalizar_gerencia(gerencia, permitir_entrada=True)
+    if not ger_norm:
+        return []
+    return list(COORDENADORIAS_POR_GERENCIA.get(ger_norm, []))
+
+
 def obter_equipes_por_coordenadoria(coordenadoria: Optional[str]) -> List[str]:
     """Lista equipes disponiveis para a coordenadoria informada (fixas + dinamicas)."""
     coord = limpar_texto(coordenadoria, "")
@@ -1477,6 +1469,29 @@ def obter_equipes_por_coordenadoria(coordenadoria: Optional[str]) -> List[str]:
     return _ordenar_nomes_unicos(valores)
 
 
+def obter_equipes_por_coordenadoria_base(coordenadoria: Optional[str]) -> List[str]:
+    """Lista apenas as equipes-base configuradas para a coordenadoria."""
+    coord = limpar_texto(coordenadoria, "")
+    if not coord:
+        return []
+    coord_norm = normalizar_chave(coord)
+    coord_chave = next(
+        (item for item in EQUIPES_POR_COORDENADORIA if normalizar_chave(item) == coord_norm),
+        "",
+    )
+    if not coord_chave:
+        return []
+    return list(EQUIPES_POR_COORDENADORIA.get(coord_chave, []))
+
+
+def montar_mapa_equipes_por_coordenadoria_base(gerencia: Optional[str]) -> Dict[str, List[str]]:
+    """Retorna apenas o mapa-base de equipes para as coordenadorias da gerencia."""
+    mapa: Dict[str, List[str]] = {}
+    for coordenadoria in obter_coordenadorias_por_gerencia_base(gerencia):
+        mapa[coordenadoria] = obter_equipes_por_coordenadoria_base(coordenadoria)
+    return mapa
+
+
 def obter_responsaveis_por_equipe(equipe: Optional[str]) -> List[str]:
     """Lista responsaveis disponiveis para a equipe informada."""
     equipe_txt = limpar_texto(equipe, "")
@@ -1495,19 +1510,12 @@ def obter_responsaveis_por_equipe(equipe: Optional[str]) -> List[str]:
         .all()
     )
     for usuario in usuarios:
-        nome = limpar_texto(usuario.nome or usuario.username, "")
-        if nome:
-            nomes.append(nome)
-
-    resp_processos = (
-        db.session.query(Processo.responsavel_equipe)
-        .filter(Processo.equipe_area.isnot(None))
-        .filter(Processo.responsavel_equipe.isnot(None))
-        .filter(func.lower(Processo.equipe_area) == equipe_txt.lower())
-        .all()
-    )
-    for (nome_proc,) in resp_processos:
-        nome = limpar_texto(nome_proc, "")
+        nome = limpar_texto(
+            getattr(usuario, "nome_vinculo_atribuido", None)
+            or usuario.nome
+            or usuario.username,
+            "",
+        )
         if nome:
             nomes.append(nome)
 
@@ -1539,22 +1547,85 @@ def obter_responsaveis_por_gerencia(gerencia: Optional[str]) -> List[str]:
                 continue
             vistos.add(responsavel)
             resultado.append(responsavel)
-    ger_norm = normalizar_gerencia(gerencia, permitir_entrada=True)
-    if ger_norm:
-        extras = (
-            db.session.query(Processo.responsavel_equipe)
-            .filter(Processo.gerencia.isnot(None))
-            .filter(Processo.responsavel_equipe.isnot(None))
-            .filter(func.lower(Processo.gerencia) == ger_norm.lower())
-            .all()
-        )
-        for (nome_extra,) in extras:
-            nome = limpar_texto(nome_extra, "")
-            if not nome or nome in vistos:
-                continue
-            vistos.add(nome)
-            resultado.append(nome)
     return resultado
+
+
+def montar_mapa_responsaveis_por_equipe(gerencia: Optional[str] = None) -> Dict[str, List[str]]:
+    """Monta um mapa dinâmico de responsáveis por equipe, incluindo usuários vinculados."""
+    equipes = (
+        obter_equipes_por_gerencia(gerencia)
+        if gerencia
+        else sorted(RESPONSAVEIS_POR_EQUIPE.keys())
+    )
+    mapa: Dict[str, List[str]] = {}
+    for equipe in equipes:
+        mapa[equipe] = obter_responsaveis_por_equipe(equipe)
+    return mapa
+
+
+def _resolver_valor_canonico(opcoes: List[str], valor: Optional[str]) -> str:
+    """Retorna o valor exatamente como definido na lista de opcoes."""
+    valor_txt = limpar_texto(valor, "")
+    if not valor_txt:
+        return ""
+    chave = normalizar_chave(valor_txt)
+    return next((item for item in opcoes if normalizar_chave(item) == chave), "")
+
+
+def normalizar_contexto_usuario(
+    gerencia: Optional[str],
+    coordenadoria: Optional[str],
+    equipe: Optional[str],
+) -> Tuple[str, str]:
+    """Normaliza coordenadoria/equipe para os nomes exatos das listas validas."""
+    ger_norm = normalizar_gerencia(gerencia, permitir_entrada=True) or ""
+    coord_canonica = ""
+    equipe_canonica = ""
+
+    if ger_norm:
+        coord_opcoes = COORDENADORIAS_POR_GERENCIA.get(ger_norm, [])
+        coord_canonica = _resolver_valor_canonico(coord_opcoes, coordenadoria)
+    else:
+        todas_coords: List[str] = []
+        for itens in COORDENADORIAS_POR_GERENCIA.values():
+            todas_coords.extend(itens)
+        coord_canonica = _resolver_valor_canonico(_ordenar_nomes_unicos(todas_coords), coordenadoria)
+
+    equipes_validas: List[str] = []
+    if coord_canonica:
+        equipes_validas = EQUIPES_POR_COORDENADORIA.get(coord_canonica, [])
+    elif ger_norm:
+        for coord_item in COORDENADORIAS_POR_GERENCIA.get(ger_norm, []):
+            equipes_validas.extend(EQUIPES_POR_COORDENADORIA.get(coord_item, []))
+    equipe_canonica = _resolver_valor_canonico(_ordenar_nomes_unicos(equipes_validas), equipe)
+
+    return coord_canonica, equipe_canonica
+
+
+def obter_responsaveis_por_equipe_base(equipe: Optional[str]) -> List[str]:
+    """Lista apenas os nomes-base configurados em RESPONSAVEIS_POR_EQUIPE."""
+    equipe_txt = limpar_texto(equipe, "")
+    if not equipe_txt:
+        return []
+    equipe_chave = next(
+        (
+            item
+            for item in RESPONSAVEIS_POR_EQUIPE
+            if normalizar_chave(item) == normalizar_chave(equipe_txt)
+        ),
+        equipe_txt,
+    )
+    nomes = list(RESPONSAVEIS_POR_EQUIPE.get(equipe_chave, []))
+    return _ordenar_nomes_unicos(nomes)
+
+
+def obter_responsaveis_por_gerencia_base(gerencia: Optional[str]) -> List[str]:
+    """Lista apenas os nomes-base das equipes da gerencia."""
+    equipes = obter_equipes_por_gerencia(gerencia)
+    resultado: List[str] = []
+    for equipe in equipes:
+        resultado.extend(obter_responsaveis_por_equipe_base(equipe))
+    return _ordenar_nomes_unicos(resultado)
 
 
 def listar_responsaveis_por_contexto_cadastro(
@@ -1563,26 +1634,31 @@ def listar_responsaveis_por_contexto_cadastro(
     coordenadoria: Optional[str],
     equipe: Optional[str],
 ) -> List[str]:
-    """Lista responsaveis considerando prioridade: equipe > coordenadoria > gerencia."""
+    """Lista responsaveis do cadastro com base apenas na lista fixa configurada."""
     equipe_txt = limpar_texto(equipe, "")
     if equipe_txt:
-        return obter_responsaveis_por_equipe(equipe_txt)
+        return obter_responsaveis_por_equipe_base(equipe_txt)
 
     coord_txt = limpar_texto(coordenadoria, "")
     if coord_txt:
         nomes: List[str] = []
         for eq in obter_equipes_por_coordenadoria(coord_txt):
-            nomes.extend(obter_responsaveis_por_equipe(eq))
+            nomes.extend(obter_responsaveis_por_equipe_base(eq))
         return _ordenar_nomes_unicos(nomes)
 
     ger_txt = normalizar_gerencia(gerencia, permitir_entrada=True)
     if ger_txt:
-        return obter_responsaveis_por_gerencia(ger_txt)
+        return obter_responsaveis_por_gerencia_base(ger_txt)
     return []
 
 
 def _nome_usuario_exibicao(usuario: "Usuario") -> str:
-    nome = limpar_texto(getattr(usuario, "nome", None) or getattr(usuario, "username", None) or "")
+    nome = limpar_texto(
+        getattr(usuario, "nome_vinculo_atribuido", None)
+        or getattr(usuario, "nome", None)
+        or getattr(usuario, "username", None)
+        or ""
+    )
     return nome
 
 
@@ -1607,13 +1683,16 @@ def listar_usuarios_por_gerencia(gerencia: Optional[str]) -> List["Usuario"]:
     """Retorna usuarios ativos da gerencia informada."""
     if not gerencia:
         return []
+    ger_norm = normalizar_gerencia(gerencia, permitir_entrada=True)
     usuarios = Usuario.query.order_by(Usuario.nome.asc()).all()
     return [
         usuario
         for usuario in usuarios
         if bool(getattr(usuario, "aparece_atribuido_sei", False))
-        and bool(normalizar_gerencia(getattr(usuario, "gerencia_padrao", None), permitir_entrada=True))
-        and usuario_tem_liberacao_gerencia(gerencia, usuario=usuario)
+        and normalizar_gerencia(
+            getattr(usuario, "gerencia_padrao", None), permitir_entrada=True
+        )
+        == ger_norm
     ]
 
 
@@ -1709,14 +1788,21 @@ def usuario_permitido_para_atribuicao(
     if not usuario or not processo:
         return False
     ger_proc = normalizar_gerencia(processo.gerencia, permitir_entrada=True)
-    if ger_proc and not usuario_tem_liberacao_gerencia(ger_proc, usuario=usuario):
+    ger_usuario = normalizar_gerencia(
+        getattr(usuario, "gerencia_padrao", None), permitir_entrada=True
+    )
+    if ger_proc and ger_usuario != ger_proc:
         return False
     coord_proc = limpar_texto(processo.coordenadoria, "")
     equipe_proc = limpar_texto(processo.equipe_area, "")
+    coord_usuario = limpar_texto(getattr(usuario, "coordenadoria", None), "")
+    equipe_usuario = limpar_texto(getattr(usuario, "equipe_area", None), "")
+    if not coord_usuario and not equipe_usuario:
+        return True
     if not coord_proc and not equipe_proc:
         return True
-    coord_ok = coord_proc and _normalizar_nome_usuario(getattr(usuario, "coordenadoria", None)) == _normalizar_nome_usuario(coord_proc)
-    equipe_ok = equipe_proc and _normalizar_nome_usuario(getattr(usuario, "equipe_area", None)) == _normalizar_nome_usuario(equipe_proc)
+    coord_ok = coord_proc and _normalizar_nome_usuario(coord_usuario) == _normalizar_nome_usuario(coord_proc)
+    equipe_ok = equipe_proc and _normalizar_nome_usuario(equipe_usuario) == _normalizar_nome_usuario(equipe_proc)
     return bool(coord_ok or equipe_ok)
 
 
@@ -1755,7 +1841,12 @@ def _usuario_deve_aparecer_atribuido_sei(usuario: "Usuario") -> bool:
     # Sem gerência vinculada, mantém comportamento de não aparecer na atribuição.
     if not gerencia:
         return False
-    nome_ref = limpar_texto(usuario.nome or usuario.username, "")
+    nome_ref = limpar_texto(
+        getattr(usuario, "nome_vinculo_atribuido", None)
+        or usuario.nome
+        or usuario.username,
+        "",
+    )
     if not nome_ref:
         return False
     responsaveis = listar_responsaveis_por_contexto_cadastro(
@@ -1917,6 +2008,7 @@ class Usuario(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(255), unique=True, nullable=False)
     nome = db.Column(db.String(120), nullable=False)
+    nome_vinculo_atribuido = db.Column(db.String(120), nullable=True)
     gerencia_padrao = db.Column(db.String(50), nullable=True)
     gerencias_liberadas = db.Column(db.Text, nullable=True)
     coordenadoria = db.Column(db.String(120), nullable=True)
@@ -2176,8 +2268,10 @@ def login():
         if acao == "register":
             if not current_user.is_authenticated or not usuario_pode_cadastrar_usuarios():
                 abort(403)
+            username = limpar_texto(request.form.get("username_cadastro"))
             nome = limpar_texto(request.form.get("nome"))
             email = limpar_texto(request.form.get("email"))
+            nome_vinculo_lista = limpar_texto(request.form.get("nome_vinculo_lista"))
             perfil = request.form.get("perfil") or "usuario"
             perfis_disponiveis = [p[0] for p in perfis_disponiveis_para_usuario(current_user)]
             if perfil not in perfis_disponiveis:
@@ -2200,24 +2294,56 @@ def login():
             perm_cadastrar = permissoes["cadastrar"]
             perm_exportar = permissoes["exportar"]
             perm_importar = permissoes["importar"]
+            coord_bruto = limpar_texto(request.form.get("coordenadoria"))
+            equipe_bruto = limpar_texto(request.form.get("equipe_area"))
+            coord, equipe = normalizar_contexto_usuario(
+                gerencia_padrao,
+                coord_bruto,
+                equipe_bruto,
+            )
+            responsaveis_contexto = listar_responsaveis_por_contexto_cadastro(
+                gerencia=gerencia_padrao,
+                coordenadoria=coord,
+                equipe=equipe,
+            )
+            nome_vinculado_contexto = next(
+                (
+                    item
+                    for item in responsaveis_contexto
+                    if normalizar_chave(item)
+                    == normalizar_chave(nome_vinculo_lista or nome)
+                ),
+                "",
+            )
+            nome_cadastro = nome_vinculado_contexto or nome
             erros = []
-            if not nome:
+            if not username:
+                erros.append("Usuario")
+            else:
+                username_existente = (
+                    Usuario.query.filter(func.lower(Usuario.username) == username.lower()).first()
+                )
+                if username_existente:
+                    erros.append("Usuario (ja utilizado)")
+            if not nome_cadastro:
                 erros.append("Nome")
             if not email:
                 erros.append("Email")
             elif buscar_usuario_por_login(email):
                 erros.append("Email (ja utilizado)")
             nome_existente = (
-                Usuario.query.filter(func.lower(Usuario.nome) == nome.lower()).first()
-                if nome
+                Usuario.query.filter(func.lower(Usuario.nome) == nome_cadastro.lower()).first()
+                if nome_cadastro
                 else None
             )
             if nome_existente:
                 erros.append("Nome (ja utilizado)")
             if not gerencias_liberadas:
                 erros.append("Gerencias liberadas")
-            coord = limpar_texto(request.form.get("coordenadoria"))
-            equipe = limpar_texto(request.form.get("equipe_area"))
+            if coord_bruto and not coord:
+                erros.append("Coordenadoria (invalida)")
+            if equipe_bruto and not equipe:
+                erros.append("Equipe/Setor (invalido)")
             pode_finalizar_gerencia = (
                 (request.form.get("pode_finalizar_gerencia") or "0").strip().lower()
                 in {"1", "true", "on", "yes"}
@@ -2230,33 +2356,32 @@ def login():
             if erros:
                 flash("Preencha corretamente: " + ", ".join(erros), "warning")
             else:
-                username = gerar_username_unico(nome, email)
-                senha_temporaria = _gerar_senha_temporaria(nome)
+                senha_temporaria = _gerar_senha_temporaria(nome_cadastro)
                 gerencia_padrao = gerencia_padrao or None
                 gerencias_serializadas = serializar_gerencias_liberadas(gerencias_liberadas)
                 coord_padrao = coord
                 equipe_padrao = equipe
-                responsaveis_contexto = listar_responsaveis_por_contexto_cadastro(
-                    gerencia=gerencia_padrao,
-                    coordenadoria=coord_padrao,
-                    equipe=equipe_padrao,
-                )
                 nome_ja_na_lista = any(
-                    normalizar_chave(item) == normalizar_chave(nome)
+                    normalizar_chave(item) == normalizar_chave(nome_cadastro)
                     for item in responsaveis_contexto
                 )
+                vinculo_confirmado_lista = bool(nome_vinculado_contexto)
                 novo = Usuario(
                     username=username,
                     email=email,
-                    nome=nome,
+                    nome=nome_cadastro,
+                    nome_vinculo_atribuido=nome_vinculado_contexto or None,
                     gerencia_padrao=gerencia_padrao,
                     gerencias_liberadas=gerencias_serializadas,
                     coordenadoria=coord_padrao,
                     equipe_area=equipe_padrao,
                     aparece_atribuido_sei=bool(
-                        (adicionar_atribuido_sei or nome_ja_na_lista)
-                        and coord_padrao
-                        and equipe_padrao
+                        vinculo_confirmado_lista
+                        or (
+                            (adicionar_atribuido_sei or nome_ja_na_lista)
+                            and coord_padrao
+                            and equipe_padrao
+                        )
                     ),
                     is_admin=(perfil == "admin"),
                     is_gerente=(perfil in {"admin", "gerente"}),
@@ -2316,8 +2441,13 @@ def login():
             )
             if not gerencias_liberadas:
                 gerencias_liberadas = _normalizar_lista_gerencias(request.form.getlist("gerencias"))
-            coord = limpar_texto(request.form.get("coordenadoria"))
-            equipe = limpar_texto(request.form.get("equipe_area"))
+            coord_bruto = limpar_texto(request.form.get("coordenadoria"))
+            equipe_bruto = limpar_texto(request.form.get("equipe_area"))
+            coord, equipe = normalizar_contexto_usuario(
+                gerencia_padrao,
+                coord_bruto,
+                equipe_bruto,
+            )
             pode_finalizar_gerencia = (
                 (request.form.get("pode_finalizar_gerencia") or "0").strip().lower()
                 in {"1", "true", "on", "yes"}
@@ -2347,6 +2477,10 @@ def login():
                 erros.append("Nome (ja utilizado)")
             if not gerencias_liberadas:
                 erros.append("Gerencias liberadas")
+            if coord_bruto and not coord:
+                erros.append("Coordenadoria (invalida)")
+            if equipe_bruto and not equipe:
+                erros.append("Equipe/Setor (invalido)")
             if erros:
                 flash("Preencha corretamente: " + ", ".join(erros), "warning")
                 return redirect(url_for("login", form_action="register"))
@@ -2370,6 +2504,39 @@ def login():
             db.session.commit()
             flash(f"Usuario {usuario.username} atualizado com sucesso.", "success")
             return redirect(url_for("login", form_action="register"))
+        elif acao == "reset_user_password":
+            if not current_user.is_authenticated or not usuario_pode_excluir_usuarios():
+                abort(403)
+
+            usuario_id_raw = limpar_texto(request.form.get("usuario_id"), "")
+            try:
+                usuario_id = int(usuario_id_raw)
+            except Exception:
+                usuario_id = 0
+            usuario = db.session.get(Usuario, usuario_id) if usuario_id else None
+            if not usuario:
+                flash("Usuario nao encontrado para redefinicao de senha.", "warning")
+                return redirect(url_for("login", form_action="register"))
+            if (
+                normalizar_chave(usuario.username or "") == normalizar_chave(DEFAULT_ADMIN_USER or "")
+                and not usuario_tem_acesso_total(current_user)
+            ):
+                flash("Não é permitido redefinir a senha do administrador principal por esta tela.", "warning")
+                return redirect(url_for("login", form_action="register"))
+
+            senha_temporaria = _gerar_senha_temporaria(usuario.nome or usuario.username)
+            usuario.set_password(senha_temporaria)
+            usuario.must_reset_password = True
+            db.session.commit()
+            criacao = {
+                "username": usuario.username,
+                "senha": senha_temporaria,
+                "email": usuario.email,
+            }
+            flash(
+                f"Senha de {usuario.username} redefinida com sucesso. Entregue a nova senha temporaria ao colaborador.",
+                "success",
+            )
         else:
             identificador = limpar_texto(request.form.get("username"))
             senha = request.form.get("password") or ""
@@ -2418,6 +2585,7 @@ def login():
                 {
                     "id": usuario.id,
                     "nome": usuario.nome or "",
+                    "nome_vinculo_atribuido": usuario.nome_vinculo_atribuido or "",
                     "username": usuario.username or "",
                     "email": usuario.email or "",
                     "gerencia_padrao": normalizar_gerencia(
@@ -2559,8 +2727,13 @@ def perfil():
             if gerencia_raw
             else None
         )
-        coordenadoria = limpar_texto(request.form.get("coordenadoria"))
-        equipe = limpar_texto(request.form.get("equipe_area"))
+        coordenadoria_bruta = limpar_texto(request.form.get("coordenadoria"))
+        equipe_bruta = limpar_texto(request.form.get("equipe_area"))
+        coordenadoria, equipe = normalizar_contexto_usuario(
+            gerencia,
+            coordenadoria_bruta,
+            equipe_bruta,
+        )
         senha_nova = request.form.get("senha_nova") or ""
         senha_confirma = request.form.get("senha_confirma") or ""
         erros = []
@@ -2590,6 +2763,10 @@ def perfil():
 
         if gerencia_raw and not gerencia:
             erros.append("Gerência (inválida)")
+        if coordenadoria_bruta and not coordenadoria:
+            erros.append("Coordenadoria (inválida)")
+        if equipe_bruta and not equipe:
+            erros.append("Equipe/Setor (inválido)")
 
         if not usuario_tem_acesso_total(usuario):
             if not gerencia:
@@ -4089,6 +4266,10 @@ def garantir_colunas_extra():
         alteracoes_usuarios.append("ALTER TABLE usuarios ADD COLUMN email VARCHAR(255)")
     if "nome" not in colunas_usuarios:
         alteracoes_usuarios.append("ALTER TABLE usuarios ADD COLUMN nome VARCHAR(120)")
+    if "nome_vinculo_atribuido" not in colunas_usuarios:
+        alteracoes_usuarios.append(
+            "ALTER TABLE usuarios ADD COLUMN nome_vinculo_atribuido VARCHAR(120)"
+        )
     if "gerencia_padrao" not in colunas_usuarios:
         alteracoes_usuarios.append("ALTER TABLE usuarios ADD COLUMN gerencia_padrao VARCHAR(50)")
     if "gerencias_liberadas" not in colunas_usuarios:
@@ -5604,7 +5785,7 @@ def gerencia(nome_gerencia):
         opcoes_equipes=obter_equipes_por_gerencia(gerencia_alvo),
         opcoes_equipes_por_coordenadoria=EQUIPES_POR_COORDENADORIA,
         opcoes_responsaveis=obter_responsaveis_por_gerencia(gerencia_alvo),
-        opcoes_responsaveis_por_equipe=RESPONSAVEIS_POR_EQUIPE,
+        opcoes_responsaveis_por_equipe=montar_mapa_responsaveis_por_equipe(processo.gerencia),
         snapshots_finalizados=snapshots_finalizados,
         aba_ativa=aba_ativa,
         pode_ver_devolvidos=pode_ver_devolvidos,
@@ -5801,8 +5982,13 @@ def novo_processo():
         [g for g in gerencias_usuario if g in GERENCIAS] or ([gerencia_usuario] if gerencia_usuario else GERENCIAS)
     )
 
+    hoje_brasilia = datetime.now(ZoneInfo("America/Sao_Paulo")).date()
     form_data = {
-        "data_entrada": request.form.get("data_entrada", "") if request.method == "POST" else "",
+        "data_entrada": (
+            request.form.get("data_entrada", "")
+            if request.method == "POST"
+            else hoje_brasilia.strftime("%Y-%m-%d")
+        ),
         "sei": request.form.get("sei", "") if request.method == "POST" else "",
         "prazo": request.form.get("prazo", "") if request.method == "POST" else "",
         "assunto": request.form.get("assunto", "") if request.method == "POST" else "",
@@ -6111,6 +6297,40 @@ def verificar_dados():
         except Exception:
             return None
 
+    def _data_somente(valor: object) -> Optional[date]:
+        if isinstance(valor, datetime):
+            return valor.date()
+        if isinstance(valor, date):
+            return valor
+        if isinstance(valor, str):
+            dt_val = _parse_iso_datetime(valor)
+            if dt_val:
+                return dt_val.date()
+            data_val = parse_date(valor)
+            if data_val:
+                return data_val
+        return None
+
+    def _atende_filtro_datas(
+        data_entrada_ref: object,
+        data_saida_ref: object,
+    ) -> bool:
+        entrada_ref = _data_somente(data_entrada_ref)
+        saida_ref = _data_somente(data_saida_ref)
+
+        if data_inicio and not data_fim:
+            return bool(entrada_ref and entrada_ref == data_inicio)
+        if data_fim and not data_inicio:
+            return bool(saida_ref and saida_ref == data_fim)
+        if data_inicio and data_fim:
+            return bool(
+                entrada_ref
+                and saida_ref
+                and data_inicio <= entrada_ref <= data_fim
+                and data_inicio <= saida_ref <= data_fim
+            )
+        return True
+
     processos = []
     processos_data = []
     paginacao_processos = None
@@ -6153,12 +6373,19 @@ def verificar_dados():
             consulta = consulta.filter(func.lower(Processo.interessado) == interessado.lower())
         if numero_sei:
             consulta = consulta.filter(Processo.numero_sei.ilike(f"%{numero_sei}%"))
-        if data_inicio:
-            inicio = datetime.combine(data_inicio, datetime.min.time())
-            consulta = consulta.filter(Processo.finalizado_em >= inicio)
-        if data_fim:
-            fim = datetime.combine(data_fim, datetime.max.time())
-            consulta = consulta.filter(Processo.finalizado_em <= fim)
+        if data_inicio and not data_fim:
+            consulta = consulta.filter(Processo.data_entrada == data_inicio)
+        elif data_fim and not data_inicio:
+            consulta = consulta.filter(Processo.data_saida == data_fim)
+        elif data_inicio and data_fim:
+            consulta = consulta.filter(
+                Processo.data_entrada.isnot(None),
+                Processo.data_saida.isnot(None),
+                Processo.data_entrada >= data_inicio,
+                Processo.data_entrada <= data_fim,
+                Processo.data_saida >= data_inicio,
+                Processo.data_saida <= data_fim,
+            )
 
         consulta_ordenada = consulta.order_by(
             Processo.finalizado_em.desc(), Processo.atualizado_em.desc()
@@ -6270,19 +6497,22 @@ def verificar_dados():
         ) -> Optional[Dict[str, object]]:
             """Retorna um unico registro consolidado por processo (1 linha na tabela de processos)."""
             movs = proc.get("movimentacoes") or []
+            finalizacoes_gerencia = [
+                mov
+                for mov in movs
+                if mov.get("tipo") in {"finalizacao_gerencia", "finalizado_geral"}
+                and _normalizar_str(mov.get("de")) != "saida"
+            ]
+            finalizacoes_gerencia = sorted(finalizacoes_gerencia, key=lambda m: m.get("data") or "")
             fim_iso = proc.get("finalizado_em")
             fim_dt = _parse_iso_datetime(fim_iso) if isinstance(fim_iso, str) else fim_iso
             if fim_dt:
-                snapshot = {}
+                ultima_gerencia = finalizacoes_gerencia[-1] if finalizacoes_gerencia else None
+                snapshot = (ultima_gerencia or {}).get("dados") or {}
                 data_final = fim_dt
-                gerencia_final = proc.get("gerencia")
+                gerencia_final = (ultima_gerencia or {}).get("de") or proc.get("gerencia")
             else:
-                finalizacoes = [
-                    mov
-                    for mov in movs
-                    if mov.get("tipo") in {"finalizacao_gerencia", "finalizado_geral"}
-                    and _normalizar_str(mov.get("de")) != "saida"
-                ]
+                finalizacoes = finalizacoes_gerencia
                 if not finalizacoes:
                     return None
                 finalizacoes = sorted(finalizacoes, key=lambda m: m.get("data") or "")
@@ -6291,7 +6521,8 @@ def verificar_dados():
                 data_final = _parse_iso_datetime(ultima.get("data"))
                 gerencia_final = ultima.get("de") or proc.get("gerencia")
             gerencias_concat = " -> ".join(proc.get("gerencias_involvidas") or [gerencia_final] if gerencia_final else [])
-            status_val = snapshot.get("status") or proc.get("status") or "Finalizado"
+            status_val = "Finalizado" if data_final else (proc.get("status") or "Finalizado")
+            status_equipe = snapshot.get("status") or status_val
             prazo_equipe = parse_date(snapshot.get("prazo_equipe")) if snapshot else None
             if not prazo_equipe and proc_ref:
                 prazo_equipe = proc_ref.prazo_equipe
@@ -6329,7 +6560,7 @@ def verificar_dados():
                 "equipe_area": snapshot.get("equipe_area") or proc.get("equipe_area"),
                 "responsavel_equipe": snapshot.get("responsavel_equipe") or proc.get("responsavel_equipe"),
                 "status": status_val,
-                "status_equipe": status_val,
+                "status_equipe": status_equipe,
                 "classificacao_institucional": (
                     proc_ref.classificacao_institucional if proc_ref else None
                 ),
@@ -6343,6 +6574,7 @@ def verificar_dados():
                 "observacoes_complementares": observacoes_complementares,
                 "data_entrada_gerencia": data_entrada_gerencia,
                 "dados_extra": dados_extra,
+                "data_saida": proc_ref.data_saida if proc_ref else None,
             }
 
         def _normalizar_str(valor: Optional[str]) -> str:
@@ -6372,10 +6604,10 @@ def verificar_dados():
                 continue
             if numero_sei and numero_sei.lower() not in (registro.get("numero_sei") or "").lower():
                 continue
-            data_final = registro.get("finalizado_em")
-            if data_inicio and (not data_final or data_final.date() < data_inicio):
-                continue
-            if data_fim and (not data_final or data_final.date() > data_fim):
+            if not _atende_filtro_datas(
+                registro.get("data_entrada"),
+                registro.get("data_saida") or registro.get("finalizado_em"),
+            ):
                 continue
 
             gerencias_lista = _ordenar_gerencias(gerencias_lista)
@@ -6437,15 +6669,6 @@ def verificar_dados():
                 ciclo_info.get("ciclos_total") or total_ciclos_por_grupo.get(chave_grupo_ciclo) or 1
             )
 
-        # Processos finalizados: exibe todos os retornos juntos (lado a lado por numero base).
-        processos_por_base: Dict[str, List[Dict[str, object]]] = defaultdict(list)
-        for registro in registros_finalizados_todos:
-            chave_base = (
-                (registro.get("numero_sei_base") or registro.get("numero_sei") or "").strip().lower()
-                or f"id:{registro.get('id')}"
-            )
-            processos_por_base[chave_base].append(registro)
-
         def _data_final_registro(reg: Dict[str, object]) -> datetime:
             val = reg.get("finalizado_em")
             if isinstance(val, datetime):
@@ -6454,58 +6677,47 @@ def verificar_dados():
                 return _parse_iso_datetime(val) or datetime.min
             return datetime.min
 
-        bases_ordenadas = sorted(
-            processos_por_base.keys(),
-            key=lambda base: max((_data_final_registro(r) for r in processos_por_base[base]), default=datetime.min),
-            reverse=True,
-        )
         processos: List[Dict[str, object]] = []
-        for base in bases_ordenadas:
-            grupo = sorted(processos_por_base[base], key=_data_final_registro, reverse=True)
-            grupo_total = len(grupo)
-            principal = dict(grupo[0]) if grupo else {}
-            principal["grupo_retorno"] = grupo_total > 1
-            principal["grupo_retorno_total"] = grupo_total
+        filtros_consolidado_ativos = any(
+            [
+                coordenadoria,
+                equipe,
+                interessado,
+                data_inicio,
+                data_fim,
+            ]
+        )
 
-            # Consolidado: uma linha por processo base, com pares entrada/finalizacao por demanda.
-            pares_datas: List[Dict[str, object]] = []
-            vistos_pares: Set[str] = set()
-            cores_pares = (
-                "pareado-1",
-                "pareado-2",
-                "pareado-3",
-                "pareado-4",
-                "pareado-5",
-                "pareado-6",
-            )
-            grupo_por_entrada = sorted(
-                grupo,
-                key=lambda r: (
-                    r.get("data_entrada")
-                    if isinstance(r.get("data_entrada"), date)
-                    else datetime.min.date()
-                ),
+        if filtros_consolidado_ativos:
+            for registro in sorted(
+                registros_finalizados_todos,
+                key=_data_final_registro,
                 reverse=True,
-            )
-            for idx_par, item in enumerate(grupo_por_entrada):
-                data_entrada_item = item.get("data_entrada")
+            ):
+                principal = dict(registro)
+                data_entrada_item = principal.get("data_entrada_gerencia") or principal.get("data_entrada")
                 if isinstance(data_entrada_item, datetime):
                     data_entrada_item = data_entrada_item.date()
-                data_final_item = item.get("finalizado_em")
+                data_final_item = principal.get("finalizado_em")
                 if isinstance(data_final_item, str):
                     data_final_item = _parse_iso_datetime(data_final_item)
-                if isinstance(data_final_item, date) and not isinstance(data_final_item, datetime):
-                    data_final_item = datetime.combine(data_final_item, datetime.min.time())
-                chave_par = (
-                    f"{data_entrada_item.isoformat() if isinstance(data_entrada_item, date) else '-'}::"
-                    f"{data_final_item.isoformat() if isinstance(data_final_item, datetime) else '-'}::"
-                    f"{(item.get('gerencia_origem') or item.get('gerencia') or '').strip().lower()}"
+                if isinstance(data_final_item, date) and not isinstance(
+                    data_final_item, datetime
+                ):
+                    data_final_item = datetime.combine(
+                        data_final_item, datetime.min.time()
+                    )
+                principal["grupo_retorno"] = False
+                principal["grupo_retorno_total"] = 1
+                principal["datas_entrada"] = (
+                    [data_entrada_item] if isinstance(data_entrada_item, date) else []
                 )
-                if chave_par in vistos_pares:
-                    continue
-                vistos_pares.add(chave_par)
-                cor = cores_pares[idx_par % len(cores_pares)]
-                pares_datas.append(
+                principal["data_entrada_display"] = (
+                    data_entrada_item.strftime("%d/%m/%Y")
+                    if isinstance(data_entrada_item, date)
+                    else "-"
+                )
+                principal["pares_datas"] = [
                     {
                         "entrada": data_entrada_item,
                         "entrada_str": (
@@ -6519,52 +6731,133 @@ def verificar_dados():
                             if isinstance(data_final_item, datetime)
                             else "-"
                         ),
-                        "cor": cor,
+                        "cor": "pareado-1",
                     }
+                ]
+                processos.append(principal)
+        else:
+            # Processos finalizados: exibe todos os retornos juntos (lado a lado por numero base).
+            processos_por_base: Dict[str, List[Dict[str, object]]] = defaultdict(list)
+            for registro in registros_finalizados_todos:
+                chave_base = (
+                    (registro.get("numero_sei_base") or registro.get("numero_sei") or "").strip().lower()
+                    or f"id:{registro.get('id')}"
                 )
+                processos_por_base[chave_base].append(registro)
 
-            datas_entrada_unicas: List[date] = []
-            vistos_datas_entrada: Set[str] = set()
-            for item in grupo:
-                data_item = item.get("data_entrada")
-                if isinstance(data_item, datetime):
-                    data_item = data_item.date()
-                if not isinstance(data_item, date):
-                    continue
-                chave_data = data_item.isoformat()
-                if chave_data in vistos_datas_entrada:
-                    continue
-                vistos_datas_entrada.add(chave_data)
-                datas_entrada_unicas.append(data_item)
-            datas_entrada_unicas.sort(reverse=True)
-            principal["datas_entrada"] = datas_entrada_unicas
-            principal["data_entrada_display"] = (
-                " | ".join(d.strftime("%d/%m/%Y") for d in datas_entrada_unicas)
-                if datas_entrada_unicas
-                else "-"
+            bases_ordenadas = sorted(
+                processos_por_base.keys(),
+                key=lambda base: max(
+                    (_data_final_registro(r) for r in processos_por_base[base]),
+                    default=datetime.min,
+                ),
+                reverse=True,
             )
-            principal["pares_datas"] = pares_datas
+            for base in bases_ordenadas:
+                grupo = sorted(processos_por_base[base], key=_data_final_registro, reverse=True)
+                grupo_total = len(grupo)
+                principal = dict(grupo[0]) if grupo else {}
+                principal["grupo_retorno"] = grupo_total > 1
+                principal["grupo_retorno_total"] = grupo_total
 
-            # Gerencias envolvidas consolidadas do grupo inteiro.
-            gerencias_group: List[str] = []
-            for item in grupo:
-                valor = (item.get("gerencia") or item.get("gerencia_origem") or "").strip()
-                if not valor:
-                    continue
-                partes = [p.strip() for p in valor.split("->") if p.strip()]
-                if not partes:
-                    partes = [valor]
-                for parte in partes:
-                    if _normalizar_str(parte) in {"saida", "finalizado", "entrada", "cadastro"}:
+                # Consolidado: uma linha por processo base, com pares entrada/finalizacao por demanda.
+                pares_datas: List[Dict[str, object]] = []
+                vistos_pares: Set[str] = set()
+                cores_pares = (
+                    "pareado-1",
+                    "pareado-2",
+                    "pareado-3",
+                    "pareado-4",
+                    "pareado-5",
+                    "pareado-6",
+                )
+                grupo_por_entrada = sorted(
+                    grupo,
+                    key=lambda r: (
+                        (r.get("data_entrada_gerencia") or r.get("data_entrada"))
+                        if isinstance((r.get("data_entrada_gerencia") or r.get("data_entrada")), date)
+                        else datetime.min.date()
+                    ),
+                    reverse=True,
+                )
+                for idx_par, item in enumerate(grupo_por_entrada):
+                    data_entrada_item = item.get("data_entrada_gerencia") or item.get("data_entrada")
+                    if isinstance(data_entrada_item, datetime):
+                        data_entrada_item = data_entrada_item.date()
+                    data_final_item = item.get("finalizado_em")
+                    if isinstance(data_final_item, str):
+                        data_final_item = _parse_iso_datetime(data_final_item)
+                    if isinstance(data_final_item, date) and not isinstance(data_final_item, datetime):
+                        data_final_item = datetime.combine(data_final_item, datetime.min.time())
+                    chave_par = (
+                        f"{data_entrada_item.isoformat() if isinstance(data_entrada_item, date) else '-'}::"
+                        f"{data_final_item.isoformat() if isinstance(data_final_item, datetime) else '-'}::"
+                        f"{(item.get('gerencia_origem') or item.get('gerencia') or '').strip().lower()}"
+                    )
+                    if chave_par in vistos_pares:
                         continue
-                    gerencias_group.append(parte)
-            gerencias_group = _ordenar_gerencias(gerencias_group)
-            if gerencias_group:
-                principal["gerencia"] = " -> ".join(gerencias_group)
+                    vistos_pares.add(chave_par)
+                    cor = cores_pares[idx_par % len(cores_pares)]
+                    pares_datas.append(
+                        {
+                            "entrada": data_entrada_item,
+                            "entrada_str": (
+                                data_entrada_item.strftime("%d/%m/%Y")
+                                if isinstance(data_entrada_item, date)
+                                else "-"
+                            ),
+                            "finalizacao": data_final_item,
+                            "finalizacao_str": (
+                                data_final_item.strftime("%d/%m/%Y")
+                                if isinstance(data_final_item, datetime)
+                                else "-"
+                            ),
+                            "cor": cor,
+                        }
+                    )
 
-            processos.append(principal)
+                datas_entrada_unicas: List[date] = []
+                vistos_datas_entrada: Set[str] = set()
+                for item in grupo:
+                    data_item = item.get("data_entrada_gerencia") or item.get("data_entrada")
+                    if isinstance(data_item, datetime):
+                        data_item = data_item.date()
+                    if not isinstance(data_item, date):
+                        continue
+                    chave_data = data_item.isoformat()
+                    if chave_data in vistos_datas_entrada:
+                        continue
+                    vistos_datas_entrada.add(chave_data)
+                    datas_entrada_unicas.append(data_item)
+                datas_entrada_unicas.sort(reverse=True)
+                principal["datas_entrada"] = datas_entrada_unicas
+                principal["data_entrada_display"] = (
+                    " | ".join(d.strftime("%d/%m/%Y") for d in datas_entrada_unicas)
+                    if datas_entrada_unicas
+                    else "-"
+                )
+                principal["pares_datas"] = pares_datas
 
-        total_finalizados_indicador = len(bases_ordenadas)
+                # Gerencias envolvidas consolidadas do grupo inteiro.
+                gerencias_group: List[str] = []
+                for item in grupo:
+                    valor = (item.get("gerencia") or item.get("gerencia_origem") or "").strip()
+                    if not valor:
+                        continue
+                    partes = [p.strip() for p in valor.split("->") if p.strip()]
+                    if not partes:
+                        partes = [valor]
+                    for parte in partes:
+                        if _normalizar_str(parte) in {"saida", "finalizado", "entrada", "cadastro"}:
+                            continue
+                        gerencias_group.append(parte)
+                gerencias_group = _ordenar_gerencias(gerencias_group)
+                if gerencias_group:
+                    principal["gerencia"] = " -> ".join(gerencias_group)
+
+                processos.append(principal)
+
+        total_finalizados_indicador = len(processos)
         ids_finalizados_gerencia = {
             reg.get("id")
             for reg in registros_finalizados_todos
@@ -6670,9 +6963,7 @@ def verificar_dados():
                 continue
             if numero_sei and numero_sei.lower() not in (proc.numero_sei or "").lower():
                 continue
-            if data_inicio and (not mov.criado_em or mov.criado_em.date() < data_inicio):
-                continue
-            if data_fim and (not mov.criado_em or mov.criado_em.date() > data_fim):
+            if not _atende_filtro_datas(proc.data_entrada, proc.data_saida):
                 continue
 
             chave_rel = gerar_chave_relacionamento_numero(
@@ -7411,11 +7702,11 @@ def _render_tela_edicao_processo(
         opcoes_responsavel_adm=opcoes_responsavel_adm,
         opcoes_status=obter_status_por_gerencia(processo.gerencia),
         opcoes_classificacao=CLASSIFICACOES_INSTITUCIONAIS,
-        opcoes_coordenadorias=obter_coordenadorias_por_gerencia(processo.gerencia),
-        opcoes_equipes=obter_equipes_por_coordenadoria(processo.coordenadoria),
-        opcoes_equipes_por_coordenadoria=EQUIPES_POR_COORDENADORIA,
+        opcoes_coordenadorias=obter_coordenadorias_por_gerencia_base(processo.gerencia),
+        opcoes_equipes=obter_equipes_por_coordenadoria_base(processo.coordenadoria),
+        opcoes_equipes_por_coordenadoria=montar_mapa_equipes_por_coordenadoria_base(processo.gerencia),
         opcoes_responsaveis=listar_responsaveis_por_contexto(processo),
-        opcoes_responsaveis_por_equipe=RESPONSAVEIS_POR_EQUIPE,
+        opcoes_responsaveis_por_equipe=montar_mapa_responsaveis_por_equipe(processo.gerencia),
         opcoes_destinos_saida=DESTINOS_SAIDA,
         scroll_y=scroll_y,
         pode_finalizar_gerencia=usuario_pode_finalizar_gerencia(),
@@ -7978,7 +8269,7 @@ def finalizar_processo(processo_id: int):
             responsavel_item = item.assigned_to
             item.finalizado_em = data_finalizacao
             item.finalizado_por = current_user.username
-            item.status = item.status or "Finalizado"
+            item.status = "Finalizado"
             item.data_saida = data_saida_ref
             if destino_saida_final:
                 item.tramitado_para = destino_saida_final
@@ -9753,3 +10044,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

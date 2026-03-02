@@ -1,4 +1,4 @@
-<!-- Arquivo: templates/login.html | Objetivo: autenticação e gestão básica de usuários -->
+﻿<!-- Arquivo: templates/login.html | Objetivo: autenticação e gestão básica de usuários -->
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -74,9 +74,10 @@
  <h2 class="h5 mb-1">Cadastrar novo usuário</h2>
  <p class="text-muted small mb-0">Disponível para assessoria, gerentes e o administrador principal.</p>
  <p class="text-muted small">Informe os dados abaixo e compartilhe a senha temporária gerada automaticamente.</p>
- <form method="post" class="mt-2" id="form-cadastro-usuario">
- <input type="hidden" name="form_action" value="register">
- <input type="hidden" name="adicionar_atribuido_sei" id="adicionar-atribuido-sei" value="0">
+<form method="post" class="mt-2" id="form-cadastro-usuario" autocomplete="off">
+<input type="hidden" name="form_action" value="register">
+<input type="hidden" name="adicionar_atribuido_sei" id="adicionar-atribuido-sei" value="0">
+<input type="hidden" name="nome_vinculo_lista" id="nome-vinculo-lista" value="">
  <div class="mb-3">
  <label class="form-label">Gerência vinculada (atribuída) (opcional)</label>
  {% if gerencia_forcada %}
@@ -110,15 +111,28 @@
  </select>
  </div>
  <div id="status-usuario-existente" class="alert alert-warning py-2 px-3 small d-none mb-3" role="alert"></div>
- <div class="mb-3">
- <label class="form-label">Nome completo</label>
- <input class="form-control" type="text" name="nome" id="cadastro-nome" list="nomes-por-gerencia" required>
- <datalist id="nomes-por-gerencia"></datalist>
- <div class="form-text">Sugestões exibem apenas pessoas sem usuário ativo no contexto selecionado.</div>
- </div>
+<div class="mb-3">
+<label class="form-label">Nome de usuário</label>
+<input class="form-control" type="text" name="username_cadastro" id="cadastro-username" required autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+<div class="form-text">Esse será o usuário utilizado para entrar no sistema.</div>
+</div>
+<div class="mb-3">
+<label class="form-label">Nome completo</label>
+<input class="form-control" type="text" name="nome" id="cadastro-nome" list="nomes-por-gerencia" required autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+<datalist id="nomes-por-gerencia"></datalist>
+<div class="alert alert-info py-2 px-3 small mb-2" id="aviso-sugestoes-cadastro" role="alert">
+Selecione uma sugestão quando o nome já existir na lista. As sugestões exibidas aqui são pessoas do contexto selecionado que ainda não têm usuário vinculado.
+</div>
+<div class="form-text">Se digitar um nome fora da lista, o sistema tratará como uma nova pessoa.</div>
+<div class="border rounded p-2 bg-light-subtle mt-2">
+<div class="small fw-semibold mb-1">Pessoas sem usuário no contexto</div>
+<div class="small text-muted mb-2" id="resumo-sugestoes-cadastro">Selecione a gerência, coordenadoria ou equipe para carregar as sugestões.</div>
+<div class="d-flex flex-wrap gap-2" id="lista-sugestoes-cadastro"></div>
+</div>
+</div>
  <div class="mb-3">
  <label class="form-label">E-mail</label>
- <input class="form-control" type="email" name="email" id="cadastro-email" required>
+<input class="form-control" type="email" name="email" id="cadastro-email" required autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
  </div>
  <div class="mb-3">
  <label class="form-label">Gerências liberadas</label>
@@ -193,12 +207,17 @@
  <div class="small">
  <div class="fw-semibold">{{ usuario.nome or usuario.username }}</div>
  </div>
- <div class="d-flex gap-2">
- <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#editarUsuario{{ usuario.id }}" aria-expanded="false">Editar</button>
- {% if usuario.id != current_user.id %}
- <form method="post" action="{{ url_for('excluir_usuario', usuario_id=usuario.id) }}" onsubmit="return confirm('Excluir este usuário?');">
- <button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
- </form>
+<div class="d-flex gap-2">
+<button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#editarUsuario{{ usuario.id }}" aria-expanded="false">Editar</button>
+<form method="post" onsubmit="return confirm('Redefinir a senha deste usuário e gerar uma nova senha temporária?');">
+<input type="hidden" name="form_action" value="reset_user_password">
+<input type="hidden" name="usuario_id" value="{{ usuario.id }}">
+<button class="btn btn-sm btn-outline-warning" type="submit">Redefinir senha</button>
+</form>
+{% if usuario.id != current_user.id %}
+<form method="post" action="{{ url_for('excluir_usuario', usuario_id=usuario.id) }}" onsubmit="return confirm('Excluir este usuário?');">
+<button class="btn btn-sm btn-outline-danger" type="submit">Excluir</button>
+</form>
  {% endif %}
  </div>
  </div>
@@ -338,7 +357,7 @@
 
  const normalizar = (valor) => (valor || "").trim().toLowerCase();
 
- const popularOpcoesSelect = (selectEl, lista, placeholder) => {
+ const popularOpcoesSelect = (selectEl, lista, placeholder, manterAtualInvalido = true) => {
  if (!selectEl) return;
  const atual = selectEl.value || "";
  selectEl.innerHTML = "";
@@ -353,7 +372,7 @@
  if (item === atual) opt.selected = true;
  selectEl.appendChild(opt);
  });
- if (atual && !(lista || []).includes(atual)) {
+ if (manterAtualInvalido && atual && !(lista || []).includes(atual)) {
  const optAtual = document.createElement("option");
  optAtual.value = atual;
  optAtual.textContent = `${atual} (atual)`;
@@ -366,7 +385,7 @@
  if (!coordSelect || !equipeSelect) return;
  const coord = coordSelect.value || "";
  const lista = (coord && equipesPorCoord[coord]) ? equipesPorCoord[coord] : [];
- popularOpcoesSelect(equipeSelect, lista, "Selecione (opcional)");
+ popularOpcoesSelect(equipeSelect, lista, "Selecione (opcional)", false);
  };
 
  document.querySelectorAll(".js-coord-select").forEach((coordSelect) => {
@@ -383,10 +402,13 @@
  const coordCadastro = document.getElementById("cadastro-coord");
  const equipeCadastro = document.getElementById("cadastro-equipe");
  const datalistNomes = document.getElementById("nomes-por-gerencia");
- const nomeInput = document.getElementById("cadastro-nome");
- const emailInput = document.getElementById("cadastro-email");
- const adicionarAtribuidoInput = document.getElementById("adicionar-atribuido-sei");
- const statusExistente = document.getElementById("status-usuario-existente");
+const nomeInput = document.getElementById("cadastro-nome");
+const emailInput = document.getElementById("cadastro-email");
+const adicionarAtribuidoInput = document.getElementById("adicionar-atribuido-sei");
+const nomeVinculoListaInput = document.getElementById("nome-vinculo-lista");
+const statusExistente = document.getElementById("status-usuario-existente");
+const listaSugestoesCadastro = document.getElementById("lista-sugestoes-cadastro");
+const resumoSugestoesCadastro = document.getElementById("resumo-sugestoes-cadastro");
 
  const deduplicar = (lista) => {
  const vistos = new Set();
@@ -424,7 +446,7 @@
  const gerSelecionada = normalizar(gerenciaInput ? gerenciaInput.value : "");
  const coordSelecionada = normalizar(coordCadastro ? coordCadastro.value : "");
  return usuariosExistentes.some((item) => {
- if (normalizar(item.nome) !== nomeNormalizado) return false;
+ if (normalizar(item.nome_vinculo_atribuido || item.nome) !== nomeNormalizado) return false;
  const gerPadraoItem = normalizar(item.gerencia_padrao);
  const gerenciasItem = (item.gerencias || []).map((valor) => normalizar(valor));
  const coordItem = normalizar(item.coordenadoria);
@@ -440,22 +462,80 @@
  return nomes.filter((nomePessoa) => !nomeTemUsuarioAtivoNoContexto(nomePessoa));
  };
 
- const popularNomesPorGerencia = () => {
+const popularNomesPorGerencia = () => {
  if (!gerenciaInput || !datalistNomes) return;
  const nomes = nomesAtribuidosDoContexto(true);
  datalistNomes.innerHTML = "";
  nomes.forEach((nome) => {
  const opt = document.createElement("option");
  opt.value = nome;
- datalistNomes.appendChild(opt);
+  datalistNomes.appendChild(opt);
+  });
+ };
+
+ const renderizarSugestoesVisuais = () => {
+ if (!listaSugestoesCadastro || !resumoSugestoesCadastro) return;
+ const ger = (gerenciaInput?.value || "").trim();
+ const coord = (coordCadastro?.value || "").trim();
+ const equipe = (equipeCadastro?.value || "").trim();
+ const nomes = nomesAtribuidosDoContexto(true);
+ listaSugestoesCadastro.innerHTML = "";
+
+ if (!ger && !coord && !equipe) {
+ resumoSugestoesCadastro.textContent = "Selecione a gerência, coordenadoria ou equipe para carregar as sugestões.";
+ return;
+ }
+
+ if (!nomes.length) {
+ resumoSugestoesCadastro.textContent = "Não há pessoas sem usuário neste contexto.";
+ const vazio = document.createElement("span");
+ vazio.className = "badge text-bg-light border text-muted";
+ vazio.textContent = "Nenhuma sugestão disponível";
+ listaSugestoesCadastro.appendChild(vazio);
+ return;
+ }
+
+ resumoSugestoesCadastro.textContent =
+ nomes.length === 1
+ ? "1 pessoa sem usuário encontrada. Clique para vincular."
+ : `${nomes.length} pessoas sem usuário encontradas. Clique em uma sugestão para vincular.`;
+
+ const nomeAtual = normalizar(nomeInput ? nomeInput.value : "");
+ nomes.forEach((nome) => {
+ const botao = document.createElement("button");
+ botao.type = "button";
+ const selecionado = nomeAtual && normalizar(nome) === nomeAtual;
+ botao.className = selecionado ? "btn btn-sm btn-primary" : "btn btn-sm btn-outline-primary";
+ botao.textContent = nome;
+ botao.addEventListener("click", () => {
+ if (nomeInput) {
+ nomeInput.value = nome;
+ nomeInput.dispatchEvent(new Event("input", { bubbles: true }));
+ nomeInput.focus();
+ }
+ if (nomeVinculoListaInput) {
+ nomeVinculoListaInput.value = nome;
+ }
+ renderizarSugestoesVisuais();
  });
+ listaSugestoesCadastro.appendChild(botao);
+ });
+ };
+
+ const atualizarNomeVinculoSelecionado = () => {
+ if (!nomeInput || !nomeVinculoListaInput) return;
+ const nomeInformado = (nomeInput.value || "").trim();
+ const match = nomesAtribuidosBaseDoContexto().find(
+ (item) => normalizar(item) === normalizar(nomeInformado),
+ );
+ nomeVinculoListaInput.value = match || "";
  };
 
  const popularCoordenadoriasPorGerencia = () => {
  if (!gerenciaInput || !coordCadastro) return;
  const ger = gerenciaInput.value || "";
  const coords = (ger && coordenadoriasPorGerencia[ger]) ? coordenadoriasPorGerencia[ger] : [];
- popularOpcoesSelect(coordCadastro, coords, "Selecione (opcional)");
+ popularOpcoesSelect(coordCadastro, coords, "Selecione (opcional)", false);
  preencherEquipes(coordCadastro, equipeCadastro);
  };
 
@@ -464,7 +544,7 @@
  const nome = normalizar(nomeInput.value);
  const email = normalizar(emailInput.value);
  const iguais = usuariosExistentes.filter((item) => {
- const itemNome = normalizar(item.nome);
+const itemNome = normalizar(item.nome_vinculo_atribuido || item.nome);
  const itemEmail = normalizar(item.email);
  return (nome && itemNome === nome) || (email && itemEmail === email);
  });
@@ -500,6 +580,8 @@
  gerenciaInput.addEventListener("change", () => {
  datalistNomes.innerHTML = "";
  popularCoordenadoriasPorGerencia();
+ atualizarNomeVinculoSelecionado();
+ renderizarSugestoesVisuais();
  atualizarStatusUsuario();
  });
  }
@@ -508,16 +590,26 @@
  coordCadastro.addEventListener("change", () => {
  preencherEquipes(coordCadastro, equipeCadastro);
  popularNomesPorGerencia();
+ atualizarNomeVinculoSelecionado();
+ renderizarSugestoesVisuais();
  });
- equipeCadastro.addEventListener("change", popularNomesPorGerencia);
+ equipeCadastro.addEventListener("change", () => {
+ popularNomesPorGerencia();
+ atualizarNomeVinculoSelecionado();
+ renderizarSugestoesVisuais();
+ });
  }
 
  if (nomeInput && emailInput) {
  nomeInput.addEventListener("focus", popularNomesPorGerencia);
  nomeInput.addEventListener("click", popularNomesPorGerencia);
  nomeInput.addEventListener("input", popularNomesPorGerencia);
+ nomeInput.addEventListener("input", atualizarNomeVinculoSelecionado);
+ nomeInput.addEventListener("input", renderizarSugestoesVisuais);
  nomeInput.addEventListener("input", atualizarStatusUsuario);
  emailInput.addEventListener("input", atualizarStatusUsuario);
+ atualizarNomeVinculoSelecionado();
+ renderizarSugestoesVisuais();
  atualizarStatusUsuario();
  }
 
@@ -530,6 +622,11 @@
  formCadastro.addEventListener("submit", (event) => {
  if (!nomeInput || !adicionarAtribuidoInput) return;
  adicionarAtribuidoInput.value = "0";
+ atualizarNomeVinculoSelecionado();
+ if (nomeVinculoListaInput && nomeVinculoListaInput.value) {
+ adicionarAtribuidoInput.value = "1";
+ return;
+ }
  const nomeInformado = (nomeInput.value || "").trim();
  if (!nomeInformado) return;
  const nomesLista = nomesAtribuidosDoContexto();

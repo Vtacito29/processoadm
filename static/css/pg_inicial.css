@@ -398,11 +398,97 @@ main {
 }
 
 .process-table .col-acoes {
-    width: 140px;
+    width: 92px;
 }
 
 .process-row:hover {
     background: #f8fafc;
+}
+
+.process-list-wrapper .process-table {
+    table-layout: fixed;
+    width: max-content;
+    min-width: 100%;
+}
+
+.process-list-wrapper .process-table th,
+.process-list-wrapper .process-table td {
+    border-right: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.process-list-wrapper .process-table th:last-child,
+.process-list-wrapper .process-table td:last-child {
+    border-right: 0;
+}
+
+.process-list-wrapper .process-table th:nth-child(1),
+.process-list-wrapper .process-table td:nth-child(1) {
+    width: 92px;
+    min-width: 92px;
+    text-align: center;
+}
+
+.process-list-wrapper .process-table th:nth-child(2),
+.process-list-wrapper .process-table td:nth-child(2) {
+    width: 150px;
+    min-width: 150px;
+    text-align: center;
+}
+
+.process-list-wrapper .process-table th:nth-child(3),
+.process-list-wrapper .process-table td:nth-child(3) {
+    width: 150px;
+    min-width: 150px;
+    text-align: center;
+}
+
+.process-list-wrapper .process-table th:nth-child(4),
+.process-list-wrapper .process-table td:nth-child(4) {
+    width: 210px;
+    min-width: 210px;
+}
+
+.process-list-wrapper .process-table th:nth-child(5),
+.process-list-wrapper .process-table td:nth-child(5) {
+    width: 220px;
+    min-width: 220px;
+}
+
+.process-list-wrapper .process-table th:nth-child(6),
+.process-list-wrapper .process-table td:nth-child(6) {
+    width: 150px;
+    min-width: 150px;
+    text-align: center;
+}
+
+.process-list-wrapper .process-table th:nth-child(7),
+.process-list-wrapper .process-table td:nth-child(7) {
+    width: 300px;
+    min-width: 300px;
+}
+
+.process-list-wrapper .process-table th:nth-child(8),
+.process-list-wrapper .process-table td:nth-child(8) {
+    width: 140px;
+    min-width: 140px;
+    text-align: center;
+}
+
+.process-list-wrapper .process-table th:nth-child(9),
+.process-list-wrapper .process-table td:nth-child(9) {
+    width: 190px;
+    min-width: 190px;
+    text-align: center;
+}
+
+.process-list-wrapper .process-table td:nth-child(1) .d-flex,
+.process-list-wrapper .process-table td:nth-child(3) .pill,
+.process-list-wrapper .process-table td:nth-child(6) .pill,
+.process-list-wrapper .process-table td:nth-child(8) .process-chip,
+.process-list-wrapper .process-table td:nth-child(9) .process-chip {
+    justify-content: center;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .form-check-input[type="checkbox"] {

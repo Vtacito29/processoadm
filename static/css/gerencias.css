@@ -82,6 +82,8 @@ body {
 .process-table td {
     padding: 0.7rem 0.6rem;
     vertical-align: middle;
+    border-right: 1px solid rgba(148, 163, 184, 0.22);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.22);
 }
 .process-table th {
     text-align: center;
@@ -89,20 +91,65 @@ body {
     word-break: keep-all;
     hyphens: auto;
     min-width: 130px;
-    font-size: 0.8rem;
+    font-size: 0.9rem;
 }
 .process-table td {
     white-space: normal;
-    font-size: 0.8rem;
+    font-size: 0.92rem;
+}
+
+.process-table th:first-child,
+.process-table td:first-child {
+    border-left: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.process-table thead th {
+    border-top: 1px solid rgba(148, 163, 184, 0.22);
+    background-clip: padding-box;
+}
+
+.process-table tbody tr:nth-child(even):not(.ficha-tecnica-row):not(.history-row) td {
+    background-color: rgba(248, 250, 252, 0.65);
 }
 
 .resizable {
-    display: inline-block;
-    resize: horizontal;
-    overflow: auto;
+    display: block;
+    resize: none;
+    overflow: visible;
     min-width: 120px;
     padding: 2px 4px;
     text-align: center;
+}
+
+.process-table th {
+    position: relative;
+}
+
+.col-resize-handle {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    width: 10px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 4;
+}
+
+.col-resize-handle::after {
+    content: "";
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2px;
+    height: 14px;
+    border-radius: 1px;
+    background: rgba(100, 116, 139, 0.45);
+}
+
+body.col-resizing {
+    user-select: none;
+    cursor: col-resize !important;
 }
 
 .history-row td {
@@ -457,6 +504,147 @@ body {
     color: #0f172a;
 }
 
+/* Arquivos recentes: prioriza leitura do assunto sem abrir ficha */
+#conteudo-arquivos .process-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+#conteudo-arquivos .process-table th:nth-child(1),
+#conteudo-arquivos .process-table td:nth-child(1) {
+    width: 5%;
+    min-width: 70px;
+}
+
+#conteudo-arquivos .process-table th:nth-child(2),
+#conteudo-arquivos .process-table td:nth-child(2) {
+    width: 18%;
+}
+
+#conteudo-arquivos .process-table th:nth-child(3),
+#conteudo-arquivos .process-table td:nth-child(3) {
+    width: 14%;
+}
+
+#conteudo-arquivos .process-table th:nth-child(4),
+#conteudo-arquivos .process-table td:nth-child(4) {
+    width: 20%;
+}
+
+#conteudo-arquivos .process-table th:nth-child(5),
+#conteudo-arquivos .process-table td:nth-child(5) {
+    width: 28%;
+}
+
+#conteudo-arquivos .process-table th:nth-child(6),
+#conteudo-arquivos .process-table td:nth-child(6) {
+    width: 15%;
+}
+
+#conteudo-arquivos .process-table th:nth-child(1),
+#conteudo-arquivos .process-table td:nth-child(1),
+#conteudo-arquivos .process-table th:nth-child(2),
+#conteudo-arquivos .process-table td:nth-child(2),
+#conteudo-arquivos .process-table th:nth-child(3),
+#conteudo-arquivos .process-table td:nth-child(3),
+#conteudo-arquivos .process-table th:nth-child(6),
+#conteudo-arquivos .process-table td:nth-child(6) {
+    text-align: center;
+}
+
+#conteudo-arquivos .process-table td:nth-child(1) .d-flex {
+    justify-content: center;
+}
+
+#conteudo-arquivos .process-table td:nth-child(2) {
+    font-weight: 700;
+}
+
+#conteudo-arquivos .process-assunto {
+    max-width: none;
+}
+
+/* Interações: segue o mesmo padrão de leitura da aba de arquivos */
+#conteudo-interacoes .process-table {
+    table-layout: fixed;
+    width: max-content;
+    min-width: 100%;
+}
+
+#conteudo-interacoes .process-table th:nth-child(1),
+#conteudo-interacoes .process-table td:nth-child(1) {
+    width: 90px;
+    min-width: 90px;
+}
+
+#conteudo-interacoes .process-table th:nth-child(2),
+#conteudo-interacoes .process-table td:nth-child(2) {
+    width: 150px;
+    min-width: 150px;
+}
+
+#conteudo-interacoes .process-table th:nth-child(3),
+#conteudo-interacoes .process-table td:nth-child(3) {
+    width: 145px;
+    min-width: 145px;
+}
+
+#conteudo-interacoes .process-table th:nth-child(4),
+#conteudo-interacoes .process-table td:nth-child(4) {
+    width: 190px;
+    min-width: 190px;
+}
+
+#conteudo-interacoes .process-table th:nth-child(5),
+#conteudo-interacoes .process-table td:nth-child(5) {
+    width: 190px;
+    min-width: 190px;
+}
+
+#conteudo-interacoes .process-table th:nth-child(6),
+#conteudo-interacoes .process-table td:nth-child(6) {
+    width: 135px;
+    min-width: 135px;
+}
+
+#conteudo-interacoes .process-table th:nth-child(7),
+#conteudo-interacoes .process-table td:nth-child(7) {
+    width: 250px;
+    min-width: 250px;
+}
+
+#conteudo-interacoes .process-table th:nth-child(8),
+#conteudo-interacoes .process-table td:nth-child(8),
+#conteudo-interacoes .process-table th:nth-child(9),
+#conteudo-interacoes .process-table td:nth-child(9) {
+    width: 130px;
+    min-width: 130px;
+}
+
+#conteudo-interacoes .process-table th:nth-child(1),
+#conteudo-interacoes .process-table td:nth-child(1),
+#conteudo-interacoes .process-table th:nth-child(2),
+#conteudo-interacoes .process-table td:nth-child(2),
+#conteudo-interacoes .process-table th:nth-child(3),
+#conteudo-interacoes .process-table td:nth-child(3),
+#conteudo-interacoes .process-table th:nth-child(6),
+#conteudo-interacoes .process-table td:nth-child(6),
+#conteudo-interacoes .process-table th:nth-child(8),
+#conteudo-interacoes .process-table td:nth-child(8),
+#conteudo-interacoes .process-table th:nth-child(9),
+#conteudo-interacoes .process-table td:nth-child(9) {
+    text-align: center;
+}
+
+#conteudo-interacoes .process-table td:nth-child(1) .action-quick,
+#conteudo-interacoes .process-table td:nth-child(6) .pill,
+#conteudo-interacoes .process-table td:nth-child(8) .pill,
+#conteudo-interacoes .process-table td:nth-child(9) .pill,
+#conteudo-interacoes .process-table td:nth-child(10) .process-chip {
+    margin-left: auto;
+    margin-right: auto;
+}
+
 .numero-sei {
     white-space: nowrap !important;
 }
@@ -540,6 +728,41 @@ body {
     color: #0f172a;
 }
 
+.ficha-grid-finalizados {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+.ficha-grid-finalizados > [class*="col-"] {
+    padding: 0;
+    max-width: none;
+    width: auto;
+}
+
+.ficha-grid-finalizados .col-12 {
+    grid-column: 1 / -1;
+}
+
+.resumo-box.resumo-critico {
+    border-color: rgba(220, 38, 38, 0.25);
+    background: linear-gradient(135deg, #fff5f5 0%, #fff 100%);
+}
+
+.resumo-box.resumo-box-wide {
+    min-height: 100%;
+}
+
+.resumo-box.resumo-critico .resumo-label {
+    color: #991b1b;
+}
+
+@media (max-width: 992px) {
+    .ficha-grid-finalizados {
+        grid-template-columns: 1fr;
+    }
+}
+
 .select-search {
     position: relative;
 }
@@ -601,4 +824,220 @@ body {
 
 .select-search datalist {
     display: none;
+}
+
+/* Padronizacao final: interacoes no padrao da home */
+#conteudo-interacoes .process-table th,
+#conteudo-interacoes .process-table td {
+    border-right: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+#conteudo-interacoes .process-table th:last-child,
+#conteudo-interacoes .process-table td:last-child {
+    border-right: 0;
+}
+
+#conteudo-interacoes .process-table {
+    table-layout: fixed;
+    width: max-content;
+    min-width: 100%;
+}
+
+#conteudo-interacoes .process-table th:nth-child(1),
+#conteudo-interacoes .process-table td:nth-child(1) { width: 92px; min-width: 92px; }
+#conteudo-interacoes .process-table th:nth-child(2),
+#conteudo-interacoes .process-table td:nth-child(2) { width: 150px; min-width: 150px; }
+#conteudo-interacoes .process-table th:nth-child(3),
+#conteudo-interacoes .process-table td:nth-child(3) { width: 150px; min-width: 150px; }
+#conteudo-interacoes .process-table th:nth-child(4),
+#conteudo-interacoes .process-table td:nth-child(4) { width: 210px; min-width: 210px; }
+#conteudo-interacoes .process-table th:nth-child(5),
+#conteudo-interacoes .process-table td:nth-child(5) { width: 220px; min-width: 220px; }
+#conteudo-interacoes .process-table th:nth-child(6),
+#conteudo-interacoes .process-table td:nth-child(6) { width: 150px; min-width: 150px; }
+#conteudo-interacoes .process-table th:nth-child(7),
+#conteudo-interacoes .process-table td:nth-child(7) { width: 300px; min-width: 300px; }
+#conteudo-interacoes .process-table th:nth-child(8),
+#conteudo-interacoes .process-table td:nth-child(8),
+#conteudo-interacoes .process-table th:nth-child(9),
+#conteudo-interacoes .process-table td:nth-child(9) { width: 140px; min-width: 140px; }
+#conteudo-interacoes .process-table th:nth-child(10),
+#conteudo-interacoes .process-table td:nth-child(10) { width: 190px; min-width: 190px; }
+#conteudo-interacoes .process-table th:nth-child(11),
+#conteudo-interacoes .process-table td:nth-child(11) { width: 220px; min-width: 220px; }
+#conteudo-interacoes .process-table th:nth-child(12),
+#conteudo-interacoes .process-table td:nth-child(12) { width: 180px; min-width: 180px; }
+#conteudo-interacoes .process-table th:nth-child(13),
+#conteudo-interacoes .process-table td:nth-child(13) { width: 280px; min-width: 280px; }
+#conteudo-interacoes .process-table th:nth-child(14),
+#conteudo-interacoes .process-table td:nth-child(14),
+#conteudo-interacoes .process-table th:nth-child(15),
+#conteudo-interacoes .process-table td:nth-child(15),
+#conteudo-interacoes .process-table th:nth-child(16),
+#conteudo-interacoes .process-table td:nth-child(16),
+#conteudo-interacoes .process-table th:nth-child(17),
+#conteudo-interacoes .process-table td:nth-child(17),
+#conteudo-interacoes .process-table th:nth-child(18),
+#conteudo-interacoes .process-table td:nth-child(18),
+#conteudo-interacoes .process-table th:nth-child(19),
+#conteudo-interacoes .process-table td:nth-child(19) { width: 200px; min-width: 200px; }
+#conteudo-interacoes .process-table th:nth-child(20),
+#conteudo-interacoes .process-table td:nth-child(20),
+#conteudo-interacoes .process-table th:nth-child(21),
+#conteudo-interacoes .process-table td:nth-child(21) { width: 140px; min-width: 140px; }
+#conteudo-interacoes .process-table th:nth-child(22),
+#conteudo-interacoes .process-table td:nth-child(22) { width: 280px; min-width: 280px; }
+
+#conteudo-interacoes .process-table th:nth-child(1),
+#conteudo-interacoes .process-table td:nth-child(1),
+#conteudo-interacoes .process-table th:nth-child(2),
+#conteudo-interacoes .process-table td:nth-child(2),
+#conteudo-interacoes .process-table th:nth-child(3),
+#conteudo-interacoes .process-table td:nth-child(3),
+#conteudo-interacoes .process-table th:nth-child(6),
+#conteudo-interacoes .process-table td:nth-child(6),
+#conteudo-interacoes .process-table th:nth-child(8),
+#conteudo-interacoes .process-table td:nth-child(8),
+#conteudo-interacoes .process-table th:nth-child(9),
+#conteudo-interacoes .process-table td:nth-child(9),
+#conteudo-interacoes .process-table th:nth-child(10),
+#conteudo-interacoes .process-table td:nth-child(10),
+#conteudo-interacoes .process-table th:nth-child(20),
+#conteudo-interacoes .process-table td:nth-child(20),
+#conteudo-interacoes .process-table th:nth-child(21),
+#conteudo-interacoes .process-table td:nth-child(21) {
+    text-align: center;
+}
+
+#conteudo-interacoes .process-table td:nth-child(1) .action-quick,
+#conteudo-interacoes .process-table td:nth-child(6) .pill,
+#conteudo-interacoes .process-table td:nth-child(8) .pill,
+#conteudo-interacoes .process-table td:nth-child(9) .pill,
+#conteudo-interacoes .process-table td:nth-child(10) .process-chip,
+#conteudo-interacoes .process-table td:nth-child(20) .pill,
+#conteudo-interacoes .process-table td:nth-child(21) .pill {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Padronizacao final: arquivos e interacoes com a mesma regua */
+#conteudo-arquivos .process-table,
+#conteudo-interacoes .process-table {
+    table-layout: fixed;
+    width: max-content;
+    min-width: 100%;
+}
+
+#conteudo-arquivos .process-table th,
+#conteudo-arquivos .process-table td,
+#conteudo-interacoes .process-table th,
+#conteudo-interacoes .process-table td {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+}
+
+#conteudo-arquivos .process-table th:nth-child(1),
+#conteudo-arquivos .process-table td:nth-child(1) { width: 92px; min-width: 92px; }
+#conteudo-arquivos .process-table th:nth-child(2),
+#conteudo-arquivos .process-table td:nth-child(2) { width: 150px; min-width: 150px; }
+#conteudo-arquivos .process-table th:nth-child(3),
+#conteudo-arquivos .process-table td:nth-child(3) { width: 150px; min-width: 150px; }
+#conteudo-arquivos .process-table th:nth-child(4),
+#conteudo-arquivos .process-table td:nth-child(4) { width: 210px; min-width: 210px; }
+#conteudo-arquivos .process-table th:nth-child(5),
+#conteudo-arquivos .process-table td:nth-child(5) { width: 300px; min-width: 300px; }
+#conteudo-arquivos .process-table th:nth-child(6),
+#conteudo-arquivos .process-table td:nth-child(6) { width: 140px; min-width: 140px; }
+
+#conteudo-arquivos .process-table th:nth-child(1),
+#conteudo-arquivos .process-table td:nth-child(1),
+#conteudo-arquivos .process-table th:nth-child(2),
+#conteudo-arquivos .process-table td:nth-child(2),
+#conteudo-arquivos .process-table th:nth-child(3),
+#conteudo-arquivos .process-table td:nth-child(3),
+#conteudo-arquivos .process-table th:nth-child(6),
+#conteudo-arquivos .process-table td:nth-child(6) {
+    text-align: center;
+}
+
+#conteudo-arquivos .process-table td:nth-child(1) .d-flex,
+#conteudo-arquivos .process-table td:nth-child(3) .pill,
+#conteudo-arquivos .process-table td:nth-child(6) .pill {
+    justify-content: center;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+#conteudo-arquivos .process-assunto {
+    max-width: none;
+}
+
+/* Correcao final: arquivos cabem na tela e devolvidos padronizado */
+#conteudo-arquivos .process-table.table-arquivos-fixa {
+    table-layout: fixed;
+    width: 100%;
+    min-width: 100%;
+}
+
+#conteudo-arquivos .process-table.table-arquivos-fixa th:nth-child(1),
+#conteudo-arquivos .process-table.table-arquivos-fixa td:nth-child(1) {
+    width: 70px;
+    min-width: 70px;
+}
+
+#conteudo-arquivos .process-table.table-arquivos-fixa th:nth-child(2),
+#conteudo-arquivos .process-table.table-arquivos-fixa td:nth-child(2) { width: 18%; }
+#conteudo-arquivos .process-table.table-arquivos-fixa th:nth-child(3),
+#conteudo-arquivos .process-table.table-arquivos-fixa td:nth-child(3) { width: 14%; }
+#conteudo-arquivos .process-table.table-arquivos-fixa th:nth-child(4),
+#conteudo-arquivos .process-table.table-arquivos-fixa td:nth-child(4) { width: 20%; }
+#conteudo-arquivos .process-table.table-arquivos-fixa th:nth-child(5),
+#conteudo-arquivos .process-table.table-arquivos-fixa td:nth-child(5) { width: 28%; }
+#conteudo-arquivos .process-table.table-arquivos-fixa th:nth-child(6),
+#conteudo-arquivos .process-table.table-arquivos-fixa td:nth-child(6) { width: 15%; }
+
+#conteudo-arquivos .process-table.table-arquivos-fixa td:nth-child(1) .d-flex {
+    justify-content: center;
+}
+
+#conteudo-devolvidos .process-table {
+    table-layout: fixed;
+    width: 100%;
+    min-width: 100%;
+}
+
+#conteudo-devolvidos .process-table th,
+#conteudo-devolvidos .process-table td {
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+}
+
+#conteudo-devolvidos .process-table th:nth-child(1),
+#conteudo-devolvidos .process-table td:nth-child(1) { width: 16%; }
+#conteudo-devolvidos .process-table th:nth-child(2),
+#conteudo-devolvidos .process-table td:nth-child(2) { width: 14%; }
+#conteudo-devolvidos .process-table th:nth-child(3),
+#conteudo-devolvidos .process-table td:nth-child(3) { width: 18%; }
+#conteudo-devolvidos .process-table th:nth-child(4),
+#conteudo-devolvidos .process-table td:nth-child(4) { width: 16%; }
+#conteudo-devolvidos .process-table th:nth-child(5),
+#conteudo-devolvidos .process-table td:nth-child(5) { width: 14%; }
+#conteudo-devolvidos .process-table th:nth-child(6),
+#conteudo-devolvidos .process-table td:nth-child(6) { width: 14%; }
+#conteudo-devolvidos .process-table th:nth-child(7),
+#conteudo-devolvidos .process-table td:nth-child(7) { width: 18%; text-align: center; }
+
+#conteudo-devolvidos .process-table th:nth-child(1),
+#conteudo-devolvidos .process-table td:nth-child(1),
+#conteudo-devolvidos .process-table th:nth-child(2),
+#conteudo-devolvidos .process-table td:nth-child(2) {
+    text-align: center;
+}
+
+#conteudo-devolvidos .process-table td:nth-child(2) {
+    font-weight: 700;
+}
+
+#conteudo-devolvidos .process-table td:nth-child(7) .d-flex {
+    justify-content: center;
 }

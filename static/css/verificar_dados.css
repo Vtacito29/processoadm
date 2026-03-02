@@ -1,4 +1,4 @@
-/* Arquivo: static/css/verificar_dados.css | Objetivo: estilos da tela de verificacao de dados */
+﻿/* Arquivo: static/css/verificar_dados.css | Objetivo: estilos da tela de verificacao de dados */
 @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Space+Grotesk:wght@400;500;600;700&display=swap");
 
 :root {
@@ -399,6 +399,20 @@ body {
     white-space: nowrap;
 }
 
+.date-filter-col .form-control {
+    min-width: 160px;
+}
+
+.numero-sei-filter-col .form-control {
+    min-width: 220px;
+}
+
+.date-filter-col .form-control::-webkit-calendar-picker-indicator {
+    filter: invert(1) brightness(2);
+    opacity: 1;
+    cursor: pointer;
+}
+
 @media (max-width: 767.98px) {
     .filters-actions {
         flex-direction: column;
@@ -746,6 +760,10 @@ body {
     font-size: 0.8rem;
 }
 
+.historico-compactando {
+    visibility: hidden;
+}
+
 .column-filter-hidden {
     display: none !important;
 }
@@ -797,6 +815,10 @@ body {
     grid-template-columns: 1fr;
     gap: 0.35rem;
     margin-bottom: 0.45rem;
+}
+
+.excel-filter-actions .btn {
+    text-align: left;
 }
 
 .excel-filter-search {
@@ -1155,3 +1177,261 @@ body {
         width: fit-content;
     }
 }
+
+/* Padronizacao final: tabelas no padrao da home */
+#tabelaProcessos,
+#tabelaDemandas {
+    table-layout: fixed;
+    width: max-content;
+    min-width: 100%;
+}
+
+#tabelaProcessos .process-table,
+#tabelaDemandas .process-table {
+    margin-bottom: 0;
+}
+
+#tabelaProcessos,
+#tabelaDemandas,
+#tabelaProcessos thead,
+#tabelaDemandas thead {
+    font-size: 0.9rem;
+}
+
+#tabelaProcessos th,
+#tabelaDemandas th {
+    font-size: 0.9rem;
+}
+
+#tabelaProcessos td,
+#tabelaDemandas td {
+    font-size: 0.92rem;
+}
+
+#tabelaProcessos th,
+#tabelaProcessos td,
+#tabelaDemandas th,
+#tabelaDemandas td {
+    border-right: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+#tabelaProcessos th:last-child,
+#tabelaProcessos td:last-child,
+#tabelaDemandas th:last-child,
+#tabelaDemandas td:last-child {
+    border-right: 0;
+}
+
+#tabelaProcessos th:nth-child(1), #tabelaProcessos td:nth-child(1), #tabelaDemandas th:nth-child(1), #tabelaDemandas td:nth-child(1) { width: 150px; min-width: 150px; text-align: center; }
+#tabelaProcessos th:nth-child(2), #tabelaProcessos td:nth-child(2), #tabelaDemandas th:nth-child(2), #tabelaDemandas td:nth-child(2),
+#tabelaProcessos th:nth-child(3), #tabelaProcessos td:nth-child(3), #tabelaDemandas th:nth-child(3), #tabelaDemandas td:nth-child(3) { width: 150px; min-width: 150px; text-align: center; }
+#tabelaProcessos th:nth-child(4), #tabelaProcessos td:nth-child(4), #tabelaDemandas th:nth-child(4), #tabelaDemandas td:nth-child(4) { width: 210px; min-width: 210px; }
+#tabelaProcessos th:nth-child(5), #tabelaProcessos td:nth-child(5), #tabelaDemandas th:nth-child(5), #tabelaDemandas td:nth-child(5) { width: 220px; min-width: 220px; }
+#tabelaProcessos th:nth-child(6), #tabelaProcessos td:nth-child(6), #tabelaDemandas th:nth-child(6), #tabelaDemandas td:nth-child(6),
+#tabelaProcessos th:nth-child(7), #tabelaProcessos td:nth-child(7), #tabelaDemandas th:nth-child(7), #tabelaDemandas td:nth-child(7) { width: 190px; min-width: 190px; text-align: center; }
+#tabelaProcessos th:nth-child(8), #tabelaProcessos td:nth-child(8), #tabelaDemandas th:nth-child(8), #tabelaDemandas td:nth-child(8) { width: 300px; min-width: 300px; }
+#tabelaProcessos th:nth-child(9), #tabelaProcessos td:nth-child(9), #tabelaDemandas th:nth-child(9), #tabelaDemandas td:nth-child(9),
+#tabelaProcessos th:nth-child(10), #tabelaProcessos td:nth-child(10), #tabelaDemandas th:nth-child(10), #tabelaDemandas td:nth-child(10) { width: 140px; min-width: 140px; text-align: center; }
+#tabelaProcessos th:nth-child(11), #tabelaProcessos td:nth-child(11), #tabelaDemandas th:nth-child(11), #tabelaDemandas td:nth-child(11) { width: 190px; min-width: 190px; text-align: center; }
+#tabelaProcessos th:nth-child(12), #tabelaProcessos td:nth-child(12), #tabelaDemandas th:nth-child(12), #tabelaDemandas td:nth-child(12) { width: 220px; min-width: 220px; }
+#tabelaProcessos th:nth-child(13), #tabelaProcessos td:nth-child(13), #tabelaDemandas th:nth-child(13), #tabelaDemandas td:nth-child(13) { width: 180px; min-width: 180px; }
+#tabelaProcessos th:nth-child(14), #tabelaProcessos td:nth-child(14), #tabelaDemandas th:nth-child(14), #tabelaDemandas td:nth-child(14) { width: 280px; min-width: 280px; }
+#tabelaProcessos th:nth-child(15), #tabelaProcessos td:nth-child(15), #tabelaDemandas th:nth-child(15), #tabelaDemandas td:nth-child(15),
+#tabelaProcessos th:nth-child(16), #tabelaProcessos td:nth-child(16), #tabelaDemandas th:nth-child(16), #tabelaDemandas td:nth-child(16),
+#tabelaProcessos th:nth-child(17), #tabelaProcessos td:nth-child(17), #tabelaDemandas th:nth-child(17), #tabelaDemandas td:nth-child(17),
+#tabelaProcessos th:nth-child(18), #tabelaProcessos td:nth-child(18), #tabelaDemandas th:nth-child(18), #tabelaDemandas td:nth-child(18),
+#tabelaProcessos th:nth-child(19), #tabelaProcessos td:nth-child(19), #tabelaDemandas th:nth-child(19), #tabelaDemandas td:nth-child(19) { width: 200px; min-width: 200px; }
+#tabelaProcessos th:nth-child(20), #tabelaProcessos td:nth-child(20), #tabelaDemandas th:nth-child(20), #tabelaDemandas td:nth-child(20),
+#tabelaProcessos th:nth-child(21), #tabelaProcessos td:nth-child(21), #tabelaDemandas th:nth-child(21), #tabelaDemandas td:nth-child(21) { width: 140px; min-width: 140px; text-align: center; }
+#tabelaProcessos th:nth-child(22), #tabelaProcessos td:nth-child(22), #tabelaDemandas th:nth-child(22), #tabelaDemandas td:nth-child(22) { width: 280px; min-width: 280px; }
+
+#tabelaProcessos td:nth-child(2) .pill,
+#tabelaProcessos td:nth-child(3) .pill,
+#tabelaProcessos td:nth-child(6) .pill,
+#tabelaProcessos td:nth-child(9) .pill,
+#tabelaProcessos td:nth-child(10) .pill,
+#tabelaProcessos td:nth-child(11) .process-chip,
+#tabelaProcessos td:nth-child(20) .pill,
+#tabelaProcessos td:nth-child(21) .pill,
+#tabelaDemandas td:nth-child(2) .pill,
+#tabelaDemandas td:nth-child(3) .pill,
+#tabelaDemandas td:nth-child(6) .pill,
+#tabelaDemandas td:nth-child(9) .pill,
+#tabelaDemandas td:nth-child(10) .pill,
+#tabelaDemandas td:nth-child(11) .process-chip,
+#tabelaDemandas td:nth-child(20) .pill,
+#tabelaDemandas td:nth-child(21) .pill {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+#tabelaProcessos .pill,
+#tabelaDemandas .pill {
+    font-size: 0.88rem;
+}
+
+#tabelaProcessos .chip-title,
+#tabelaDemandas .chip-title,
+#tabelaProcessos .chip-sub,
+#tabelaDemandas .chip-sub {
+    font-size: 0.9rem;
+}
+
+/* Historico compacto: mesma leitura de Arquivos recentes */
+#tabelaProcessos,
+#tabelaDemandas {
+    width: 100%;
+    min-width: 100%;
+    table-layout: fixed;
+}
+
+#tabelaProcessos th:nth-child(1),
+#tabelaProcessos td:nth-child(1),
+#tabelaDemandas th:nth-child(1),
+#tabelaDemandas td:nth-child(1) {
+    width: 5%;
+    text-align: center;
+}
+
+#tabelaProcessos th:nth-child(2),
+#tabelaProcessos td:nth-child(2),
+#tabelaDemandas th:nth-child(2),
+#tabelaDemandas td:nth-child(2) {
+    width: 16%;
+    text-align: center;
+}
+
+#tabelaProcessos th:nth-child(3),
+#tabelaProcessos td:nth-child(3),
+#tabelaDemandas th:nth-child(3),
+#tabelaDemandas td:nth-child(3) {
+    width: 14%;
+    text-align: center;
+}
+
+#tabelaProcessos th:nth-child(4),
+#tabelaProcessos td:nth-child(4),
+#tabelaDemandas th:nth-child(4),
+#tabelaDemandas td:nth-child(4) {
+    width: 14%;
+    text-align: center;
+}
+
+#tabelaProcessos th:nth-child(5),
+#tabelaProcessos td:nth-child(5),
+#tabelaDemandas th:nth-child(5),
+#tabelaDemandas td:nth-child(5) {
+    width: 19%;
+}
+
+#tabelaProcessos th:nth-child(6),
+#tabelaProcessos td:nth-child(6),
+#tabelaDemandas th:nth-child(6),
+#tabelaDemandas td:nth-child(6) {
+    width: 22%;
+}
+
+#tabelaProcessos th:nth-child(7),
+#tabelaProcessos td:nth-child(7),
+#tabelaDemandas th:nth-child(7),
+#tabelaDemandas td:nth-child(7) {
+    width: 10%;
+    text-align: center;
+}
+
+#tabelaProcessos td:nth-child(1) .d-flex,
+#tabelaProcessos td:nth-child(3) .pill,
+#tabelaProcessos td:nth-child(4) .pill,
+#tabelaProcessos td:nth-child(7) .pill,
+#tabelaDemandas td:nth-child(1) .d-flex,
+#tabelaDemandas td:nth-child(3) .pill,
+#tabelaDemandas td:nth-child(4) .pill,
+#tabelaDemandas td:nth-child(7) .pill {
+    margin-left: auto;
+    margin-right: auto;
+    justify-content: center;
+}
+
+#tabelaProcessos td:nth-child(5) .process-assunto,
+#tabelaProcessos td:nth-child(6) .process-assunto,
+#tabelaDemandas td:nth-child(5) .process-assunto,
+#tabelaDemandas td:nth-child(6) .process-assunto,
+#tabelaDemandas td:nth-child(4) .pill {
+    max-width: none;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: initial;
+    display: block;
+}
+#tabelaProcessos td:nth-child(3) .data-entry-stack,
+#tabelaProcessos td:nth-child(7) .data-entry-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    width: 100%;
+    max-width: none;
+}
+
+#tabelaProcessos td:nth-child(3) .data-entry-chip,
+#tabelaProcessos td:nth-child(7) .data-entry-chip {
+    min-width: 96px;
+    justify-content: center;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.55) inset;
+}
+
+#tabelaProcessos td:nth-child(4) .gerencia-trilha {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.35rem;
+    width: 100%;
+    max-width: none;
+}
+
+#tabelaProcessos td:nth-child(4) .gerencia-node {
+    min-width: 96px;
+    justify-content: center;
+    text-align: center;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.55) inset;
+}
+
+#tabelaProcessos td:nth-child(4) .gerencia-node:nth-of-type(1) {
+    background: #f0fdf4;
+    border-color: #86efac;
+    color: #15803d;
+}
+
+#tabelaProcessos td:nth-child(4) .gerencia-node:nth-of-type(2) {
+    background: #fdf2f8;
+    border-color: #f9a8d4;
+    color: #be185d;
+}
+
+#tabelaProcessos td:nth-child(4) .gerencia-node:nth-of-type(3) {
+    background: #eff6ff;
+    border-color: #93c5fd;
+    color: #1d4ed8;
+}
+
+#tabelaProcessos td:nth-child(4) .gerencia-node:nth-of-type(4) {
+    background: #ecfeff;
+    border-color: #67e8f9;
+    color: #0e7490;
+}
+
+#tabelaProcessos td:nth-child(4) .gerencia-node:nth-of-type(5) {
+    background: #fff7ed;
+    border-color: #fdba74;
+    color: #c2410c;
+}
+
+#tabelaProcessos td:nth-child(4) .gerencia-node:nth-of-type(6) {
+    background: #f5f3ff;
+    border-color: #c4b5fd;
+    color: #6d28d9;
+}
+
+
