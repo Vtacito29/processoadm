@@ -21,7 +21,7 @@ import unicodedata
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from io import BytesIO
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
