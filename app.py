@@ -5614,7 +5614,7 @@ def gerencia(nome_gerencia):
                 origens_saida[proc.id] = obter_origem_saida(proc)
         if finalizados:
             finalizados = sorted(finalizados, key=ordenar_finalizados, reverse=True)
-        usuarios_disponiveis = listar_usuarios_por_gerencia(gerencia_alvo)
+        usuarios_disponiveis = listar_usuarios_com_liberacao_gerencia(gerencia_alvo)
         if current_user.is_authenticated:
             meus_processos_total_usuario = (
                 db.session.query(func.count(Processo.id))
@@ -5803,7 +5803,29 @@ def gerencia(nome_gerencia):
         coordenadoria=coordenadoria_filtro_canonica,
         equipe=equipe_filtro_canonica,
     )
-    opcoes_responsaveis = obter_nomes_usuarios(usuarios_contexto)
+    consulta_responsaveis_processo = Processo.query.filter(Processo.gerencia == gerencia_alvo)
+    if gerencia_alvo == "GABINETE":
+        consulta_responsaveis_processo = aplicar_filtro_devolvidos_gabinete(
+            consulta_responsaveis_processo
+        )
+    if coordenadoria_filtro_canonica:
+        consulta_responsaveis_processo = consulta_responsaveis_processo.filter(
+            func.lower(Processo.coordenadoria) == coordenadoria_filtro_canonica.lower()
+        )
+    if equipe_filtro_canonica:
+        consulta_responsaveis_processo = consulta_responsaveis_processo.filter(
+            func.lower(Processo.equipe_area) == equipe_filtro_canonica.lower()
+        )
+    responsaveis_processos = [
+        limpar_texto(nome, "")
+        for (nome,) in consulta_responsaveis_processo.with_entities(Processo.responsavel_equipe)
+        .filter(Processo.responsavel_equipe.isnot(None))
+        .all()
+        if limpar_texto(nome, "")
+    ]
+    opcoes_responsaveis = _ordenar_nomes_unicos(
+        responsaveis_processos + obter_nomes_usuarios(usuarios_contexto)
+    )
 
     opcoes_equipes_por_coordenadoria = dict(mapa_equipes_base)
     mapa_usuarios_por_equipe = mapear_nomes_usuarios_por_campo(
@@ -6406,6 +6428,7 @@ def verificar_dados():
         "finalizados": 0,
         "tempo_medio_legenda": "--",
     }
+    total_demandas_indicador = 0
     opcoes = {
         "gerencias": GERENCIAS,
         "coordenadorias": [],
@@ -6450,6 +6473,56 @@ def verificar_dados():
             )
 
         total_finalizados_consulta = consulta.count()
+        processos_metricas = (
+            consulta.enable_eagerloads(False)
+            .with_entities(Processo.numero_sei, Processo.dados_extra)
+            .all()
+        )
+        bases_finalizadas_metricas: Set[str] = set()
+        for numero_sei_item, dados_extra_item in processos_metricas:
+            numero_base_item = ""
+            if isinstance(dados_extra_item, dict):
+                numero_base_item = limpar_texto(
+                    dados_extra_item.get("numero_sei_original"),
+                    "",
+                )
+            if not numero_base_item:
+                numero_base_item = extrair_numero_base_sei(numero_sei_item or "")
+            chave_base = (numero_base_item or numero_sei_item or "").strip().lower()
+            if chave_base:
+                bases_finalizadas_metricas.add(chave_base)
+        total_finalizados_consolidados = len(bases_finalizadas_metricas)
+        consulta_ids = consulta.enable_eagerloads(False).with_entities(Processo.id).subquery()
+        filtros_mov_demandas = [
+            Movimentacao.processo_id.in_(db.session.query(consulta_ids.c.id)),
+            Movimentacao.tipo.in_(["finalizacao_gerencia", "finalizado_geral"]),
+            func.lower(Movimentacao.de_gerencia) != "saida",
+        ]
+        if filtro_gerencia:
+            filtros_mov_demandas.append(
+                func.lower(Movimentacao.de_gerencia) == filtro_gerencia.lower()
+            )
+        total_movimentos_demandas = (
+            db.session.query(func.count(Movimentacao.id))
+            .filter(*filtros_mov_demandas)
+            .scalar()
+            or 0
+        )
+        total_fallback_demandas = 0
+        if not filtro_gerencia:
+            total_fallback_demandas = (
+                db.session.query(func.count(Processo.id))
+                .filter(
+                    Processo.id.in_(db.session.query(consulta_ids.c.id)),
+                    ~Processo.movimentacoes.any(
+                        (Movimentacao.tipo.in_(["finalizacao_gerencia", "finalizado_geral"]))
+                        & (func.lower(Movimentacao.de_gerencia) != "saida")
+                    ),
+                )
+                .scalar()
+                or 0
+            )
+        total_demandas_indicador = int(total_movimentos_demandas) + int(total_fallback_demandas)
         consulta_ordenada = consulta.order_by(
             Processo.finalizado_em.desc(), Processo.atualizado_em.desc()
         )
@@ -6924,9 +6997,9 @@ def verificar_dados():
                 processos.append(principal)
 
         total_finalizados_indicador = (
-            int(paginacao_processos.total)
-            if paginacao_processos is not None
-            else int(total_finalizados_consulta)
+            int(total_finalizados_consulta)
+            if filtros_consolidado_ativos
+            else int(total_finalizados_consolidados or total_finalizados_consulta)
         )
         ids_finalizados_gerencia = {
             reg.get("id")
@@ -7374,11 +7447,7 @@ def verificar_dados():
             if duracoes_demandas
             else None
         )
-        total_demandas = (
-            int(paginacao_processos.total)
-            if paginacao_processos is not None
-            else int(total_finalizados_consulta)
-        )
+        total_demandas = int(total_demandas_indicador or len(demandas))
         metricas_demandas = {
             "total_processos": int(total_andamento) + total_demandas,
             "andamento": int(total_andamento),
