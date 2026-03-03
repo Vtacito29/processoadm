@@ -1839,6 +1839,12 @@
  ('observacoes_complementares', 'Observacoes complementares'),
 
 
+ ('data_saida', 'Data de saida'),
+
+
+ ('destino_saida', 'Destino saida'),
+
+
  ('finalizado_em', 'Finalizado em')
 
 
@@ -2232,6 +2238,98 @@ document.addEventListener("DOMContentLoaded", function () {
 
  document.querySelectorAll(".select-search").forEach((wrapper) => {
  configurarSelectSearch(wrapper);
+ });
+
+ const obterTodosTimes = () => {
+ const grupos = Object.values(mapaEquipesCoord || {});
+ return deduplicar(grupos.flat().filter(Boolean));
+ };
+
+ const setDatalistOptions = (listId, opcoes, valorAtual = "") => {
+ const datalist = listId ? document.getElementById(listId) : null;
+ if (!datalist) return;
+ const listaFinal = deduplicar((opcoes || []).filter(Boolean));
+ datalist.innerHTML = "";
+ if (valorAtual && !listaFinal.some((item) => normalizarTexto(item) === normalizarTexto(valorAtual))) {
+ const optAtual = document.createElement("option");
+ optAtual.value = valorAtual;
+ datalist.appendChild(optAtual);
+ }
+ listaFinal.forEach((item) => {
+ const opt = document.createElement("option");
+ opt.value = item;
+ datalist.appendChild(opt);
+ });
+ };
+
+ const obterResponsaveisParaFiltros = (coordenadoria, equipe) => {
+ const coordNorm = normalizarTexto(coordenadoria);
+ const equipeNorm = normalizarTexto(equipe);
+ if (equipeNorm) {
+ return (mapaResponsaveisEquipeNorm[equipeNorm] || []).slice();
+ }
+ if (coordNorm) {
+ const equipesCoord = mapaEquipesCoordNorm[coordNorm] || [];
+ let nomes = [];
+ equipesCoord.forEach((eq) => {
+ nomes = nomes.concat(mapaResponsaveisEquipeNorm[normalizarTexto(eq)] || []);
+ });
+ return deduplicar(nomes);
+ }
+ return (responsaveisGerencia || []).slice();
+ };
+
+ const vincularFiltrosDinamicos = (form) => {
+ if (!form) return;
+ const inputCoord = form.querySelector('input[name="coordenadoria"]');
+ const inputEquipe = form.querySelector('input[name="equipe_area"]');
+ const inputResp = form.querySelector('input[name="responsavel_equipe"]');
+ if (!inputCoord || !inputEquipe || !inputResp) return;
+
+ const listEquipeId = inputEquipe.dataset.optionsId;
+ const listRespId = inputResp.dataset.optionsId;
+
+ const atualizarFiltros = () => {
+ const coordAtual = (inputCoord.value || "").trim();
+ const equipeAtual = (inputEquipe.value || "").trim();
+ const coordNorm = normalizarTexto(coordAtual);
+
+ let equipesDisponiveis = [];
+ if (coordNorm) {
+ equipesDisponiveis = (mapaEquipesCoordNorm[coordNorm] || []).slice();
+ } else {
+ equipesDisponiveis = obterTodosTimes();
+ }
+ setDatalistOptions(listEquipeId, equipesDisponiveis, inputEquipe.value);
+
+ const equipeValida = !equipeAtual
+ || equipesDisponiveis.some((item) => normalizarTexto(item) === normalizarTexto(equipeAtual));
+ if (!equipeValida) {
+ inputEquipe.value = "";
+ }
+
+ const responsaveisDisponiveis = obterResponsaveisParaFiltros(
+ inputCoord.value,
+ inputEquipe.value,
+ );
+ setDatalistOptions(listRespId, responsaveisDisponiveis, inputResp.value);
+
+ const respValido = !inputResp.value
+ || responsaveisDisponiveis.some((item) => normalizarTexto(item) === normalizarTexto(inputResp.value));
+ if (!respValido) {
+ inputResp.value = "";
+ }
+ };
+
+ inputCoord.addEventListener("change", atualizarFiltros);
+ inputCoord.addEventListener("input", atualizarFiltros);
+ inputEquipe.addEventListener("change", atualizarFiltros);
+ inputEquipe.addEventListener("input", atualizarFiltros);
+ atualizarFiltros();
+ };
+
+ document.querySelectorAll('form[method="get"]').forEach((form) => {
+ vincularFiltrosDinamicos(form);
  });
 
  const alinharInicio = (elemento) => {

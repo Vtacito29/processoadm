@@ -1621,7 +1621,10 @@ def obter_responsaveis_por_equipe_base(equipe: Optional[str]) -> List[str]:
 
 def obter_responsaveis_por_gerencia_base(gerencia: Optional[str]) -> List[str]:
     """Lista apenas os nomes-base das equipes da gerencia."""
-    equipes = obter_equipes_por_gerencia(gerencia)
+    equipes: List[str] = []
+    for lista_equipes in montar_mapa_equipes_por_coordenadoria_base(gerencia).values():
+        equipes.extend(lista_equipes)
+    equipes = _ordenar_nomes_unicos(equipes)
     resultado: List[str] = []
     for equipe in equipes:
         resultado.extend(obter_responsaveis_por_equipe_base(equipe))
@@ -1642,7 +1645,7 @@ def listar_responsaveis_por_contexto_cadastro(
     coord_txt = limpar_texto(coordenadoria, "")
     if coord_txt:
         nomes: List[str] = []
-        for eq in obter_equipes_por_coordenadoria(coord_txt):
+        for eq in obter_equipes_por_coordenadoria_base(coord_txt):
             nomes.extend(obter_responsaveis_por_equipe_base(eq))
         return _ordenar_nomes_unicos(nomes)
 
@@ -5618,7 +5621,11 @@ def gerencia(nome_gerencia):
                 origens_saida[proc.id] = obter_origem_saida(proc)
         if finalizados:
             finalizados = sorted(finalizados, key=ordenar_finalizados, reverse=True)
-        usuarios_disponiveis = listar_usuarios_com_liberacao_gerencia(gerencia_alvo)
+        usuarios_disponiveis = [
+            usuario
+            for usuario in listar_usuarios_com_liberacao_gerencia(gerencia_alvo)
+            if bool(getattr(usuario, "aparece_atribuido_sei", False))
+        ]
         if current_user.is_authenticated:
             meus_processos_total_usuario = (
                 db.session.query(func.count(Processo.id))
