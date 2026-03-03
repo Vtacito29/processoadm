@@ -594,6 +594,20 @@
  </tbody>
  </table>
  </div>
+ {% if paginacao_processos and paginacao_processos.pages > 1 %}
+ <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+ <small class="text-muted">Página {{ paginacao_processos.page }} de {{ paginacao_processos.pages }}</small>
+ <ul class="pagination pagination-sm mb-0">
+ <li class="page-item {% if not paginacao_processos.has_prev %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('verificar_dados', page=paginacao_processos.prev_num, gerencia=filtros.gerencia or None, coordenadoria=filtros.coordenadoria or None, equipe=filtros.equipe or None, interessado=filtros.interessado or None, numero_sei=filtros.numero_sei or None, data_inicio=filtros.data_inicio or None, data_fim=filtros.data_fim or None) }}">Anterior</a>
+ </li>
+ <li class="page-item active"><span class="page-link">{{ paginacao_processos.page }}</span></li>
+ <li class="page-item {% if not paginacao_processos.has_next %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('verificar_dados', page=paginacao_processos.next_num, gerencia=filtros.gerencia or None, coordenadoria=filtros.coordenadoria or None, equipe=filtros.equipe or None, interessado=filtros.interessado or None, numero_sei=filtros.numero_sei or None, data_inicio=filtros.data_inicio or None, data_fim=filtros.data_fim or None) }}">Próxima</a>
+ </li>
+ </ul>
+ </div>
+ {% endif %}
  <div class="mt-4 d-none" id="historicoWrapper">
  <div class="d-flex align-items-center gap-2 mb-2">
  <h3 class="h6 mb-0 fw-semibold" id="historicoTitulo">Histórico do processo</h3>

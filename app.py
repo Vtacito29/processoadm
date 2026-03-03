@@ -4574,6 +4574,14 @@ def exportar_geral():
             "Observacoes complementares",
             lambda p: p.observacoes_complementares,
         ),
+        "data_saida": (
+            "Data de saída",
+            lambda p: p.data_saida.strftime("%d/%m/%Y") if p.data_saida else "",
+        ),
+        "destino_saida": (
+            "Destino saída",
+            lambda p: p.tramitado_para if p.finalizado_em else "",
+        ),
         "finalizado_em": (
             "Finalizado em",
             lambda p: p.finalizado_em.strftime("%d/%m/%Y %H:%M") if p.finalizado_em else "",
@@ -5761,6 +5769,48 @@ def gerencia(nome_gerencia):
                 snapshot["data_entrada_geplan"] = parse_date(snapshot.get("data_entrada_geplan"))
             snapshots_finalizados[mov.processo_id] = snapshot
 
+    opcoes_coordenadorias = obter_coordenadorias_por_gerencia(gerencia_alvo)
+    coordenadoria_filtro_canonica = (
+        _resolver_valor_canonico(opcoes_coordenadorias, filtro_coordenadoria)
+        or filtro_coordenadoria
+    )
+    if coordenadoria_filtro_canonica:
+        opcoes_equipes = obter_equipes_por_coordenadoria(coordenadoria_filtro_canonica)
+    else:
+        opcoes_equipes = obter_equipes_por_gerencia(gerencia_alvo)
+    equipe_filtro_canonica = (
+        _resolver_valor_canonico(opcoes_equipes, filtro_equipe_area)
+        or filtro_equipe_area
+    )
+
+    if equipe_filtro_canonica:
+        opcoes_responsaveis = obter_responsaveis_por_equipe(equipe_filtro_canonica)
+    elif coordenadoria_filtro_canonica:
+        nomes_responsaveis: List[str] = []
+        for equipe_item in opcoes_equipes:
+            nomes_responsaveis.extend(obter_responsaveis_por_equipe(equipe_item))
+        opcoes_responsaveis = _ordenar_nomes_unicos(nomes_responsaveis)
+    else:
+        opcoes_responsaveis = obter_responsaveis_por_gerencia(gerencia_alvo)
+
+    usuarios_contexto = filtrar_usuarios_por_coordenadoria_equipe(
+        usuarios_disponiveis,
+        coordenadoria_filtro_canonica,
+        equipe_filtro_canonica,
+    )
+    opcoes_responsaveis = _ordenar_nomes_unicos(
+        list(opcoes_responsaveis) + obter_nomes_usuarios(usuarios_contexto)
+    )
+
+    opcoes_equipes_por_coordenadoria = {
+        coordenadoria_item: obter_equipes_por_coordenadoria(coordenadoria_item)
+        for coordenadoria_item in opcoes_coordenadorias
+    }
+    opcoes_responsaveis_por_equipe = {
+        equipe_item: obter_responsaveis_por_equipe(equipe_item)
+        for equipe_item in obter_equipes_por_gerencia(gerencia_alvo)
+    }
+
     return render_template(
         "gerencias.html",
         gerencia=gerencia_alvo,
@@ -5781,11 +5831,11 @@ def gerencia(nome_gerencia):
         hoje=hoje,
         historico_finalizados=historico_finalizados,
         usuarios_disponiveis=usuarios_disponiveis,
-        opcoes_coordenadorias=obter_coordenadorias_por_gerencia(gerencia_alvo),
-        opcoes_equipes=obter_equipes_por_gerencia(gerencia_alvo),
-        opcoes_equipes_por_coordenadoria=EQUIPES_POR_COORDENADORIA,
-        opcoes_responsaveis=obter_responsaveis_por_gerencia(gerencia_alvo),
-        opcoes_responsaveis_por_equipe=montar_mapa_responsaveis_por_equipe(processo.gerencia),
+        opcoes_coordenadorias=opcoes_coordenadorias,
+        opcoes_equipes=opcoes_equipes,
+        opcoes_equipes_por_coordenadoria=opcoes_equipes_por_coordenadoria,
+        opcoes_responsaveis=opcoes_responsaveis,
+        opcoes_responsaveis_por_equipe=opcoes_responsaveis_por_equipe,
         snapshots_finalizados=snapshots_finalizados,
         aba_ativa=aba_ativa,
         pode_ver_devolvidos=pode_ver_devolvidos,
@@ -5833,6 +5883,14 @@ def exportar_gerencia(nome_gerencia: str):
         "observacoes_complementares": (
             "Observacoes complementares",
             lambda p: p.observacoes_complementares,
+        ),
+        "data_saida": (
+            "Data de saída",
+            lambda p: p.data_saida.strftime("%d/%m/%Y") if p.data_saida else "",
+        ),
+        "destino_saida": (
+            "Destino saída",
+            lambda p: p.tramitado_para if p.finalizado_em else "",
         ),
         "finalizado_em": (
             "Finalizado em",
@@ -6335,7 +6393,7 @@ def verificar_dados():
     processos_data = []
     paginacao_processos = None
     pagina = request.args.get("page", type=int, default=1)
-    por_pagina = 10
+    por_pagina = 50
     metricas_base = {"andamento": 0, "finalizados": 0, "tempo_medio_dias": None}
     total_andamento = 0
     metricas_demandas = {
@@ -6387,10 +6445,14 @@ def verificar_dados():
                 Processo.data_saida <= data_fim,
             )
 
+        total_finalizados_consulta = consulta.count()
         consulta_ordenada = consulta.order_by(
             Processo.finalizado_em.desc(), Processo.atualizado_em.desc()
         )
-        processos_raw = consulta_ordenada.all()
+        paginacao_processos = consulta_ordenada.paginate(
+            page=pagina, per_page=por_pagina, error_out=False
+        )
+        processos_raw = paginacao_processos.items
         def _chave_exata(proc: Processo) -> tuple:
             """Suprime apenas linhas 100% idênticas; mantém variações."""
             return (
@@ -6857,7 +6919,11 @@ def verificar_dados():
 
                 processos.append(principal)
 
-        total_finalizados_indicador = len(processos)
+        total_finalizados_indicador = (
+            int(paginacao_processos.total)
+            if paginacao_processos is not None
+            else int(total_finalizados_consulta)
+        )
         ids_finalizados_gerencia = {
             reg.get("id")
             for reg in registros_finalizados_todos
@@ -7304,7 +7370,11 @@ def verificar_dados():
             if duracoes_demandas
             else None
         )
-        total_demandas = int(len(demandas))
+        total_demandas = (
+            int(paginacao_processos.total)
+            if paginacao_processos is not None
+            else int(total_finalizados_consulta)
+        )
         metricas_demandas = {
             "total_processos": int(total_andamento) + total_demandas,
             "andamento": int(total_andamento),
