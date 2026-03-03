@@ -6487,7 +6487,11 @@ def verificar_dados():
                     "",
                 )
             if not numero_base_item:
-                numero_base_item = extrair_numero_base_sei(numero_sei_item or "")
+                numero_txt = limpar_texto(numero_sei_item, "")
+                if "-" in numero_txt:
+                    numero_base_item = numero_txt.split("-", 1)[1].strip()
+                else:
+                    numero_base_item = numero_txt
             chave_base = (numero_base_item or numero_sei_item or "").strip().lower()
             if chave_base:
                 bases_finalizadas_metricas.add(chave_base)
