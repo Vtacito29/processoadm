@@ -1743,6 +1743,10 @@ def filtrar_usuarios_por_coordenadoria_equipe(
     for usuario in usuarios:
         coord_user = _normalizar_nome_usuario(getattr(usuario, "coordenadoria", None))
         equipe_user = _normalizar_nome_usuario(getattr(usuario, "equipe_area", None))
+        if coord_norm and equipe_norm:
+            if coord_user == coord_norm and equipe_user == equipe_norm:
+                filtrados.append(usuario)
+            continue
         if coord_norm and coord_user == coord_norm:
             filtrados.append(usuario)
             continue
@@ -5803,29 +5807,15 @@ def gerencia(nome_gerencia):
         coordenadoria=coordenadoria_filtro_canonica,
         equipe=equipe_filtro_canonica,
     )
-    consulta_responsaveis_processo = Processo.query.filter(Processo.gerencia == gerencia_alvo)
-    if gerencia_alvo == "GABINETE":
-        consulta_responsaveis_processo = aplicar_filtro_devolvidos_gabinete(
-            consulta_responsaveis_processo
-        )
-    if coordenadoria_filtro_canonica:
-        consulta_responsaveis_processo = consulta_responsaveis_processo.filter(
-            func.lower(Processo.coordenadoria) == coordenadoria_filtro_canonica.lower()
-        )
-    if equipe_filtro_canonica:
-        consulta_responsaveis_processo = consulta_responsaveis_processo.filter(
-            func.lower(Processo.equipe_area) == equipe_filtro_canonica.lower()
-        )
-    responsaveis_processos = [
-        limpar_texto(nome, "")
-        for (nome,) in consulta_responsaveis_processo.with_entities(Processo.responsavel_equipe)
-        .filter(Processo.responsavel_equipe.isnot(None))
-        .all()
-        if limpar_texto(nome, "")
-    ]
-    opcoes_responsaveis = _ordenar_nomes_unicos(
-        responsaveis_processos + obter_nomes_usuarios(usuarios_contexto)
-    )
+    if coordenadoria_filtro_canonica or equipe_filtro_canonica:
+        usuarios_somente_gerencia = [
+            usuario
+            for usuario in usuarios_disponiveis
+            if not limpar_texto(getattr(usuario, "coordenadoria", None), "")
+            and not limpar_texto(getattr(usuario, "equipe_area", None), "")
+        ]
+        usuarios_contexto = list(usuarios_contexto) + usuarios_somente_gerencia
+    opcoes_responsaveis = obter_nomes_usuarios(usuarios_contexto)
 
     opcoes_equipes_por_coordenadoria = dict(mapa_equipes_base)
     mapa_usuarios_por_equipe = mapear_nomes_usuarios_por_campo(
@@ -5833,7 +5823,16 @@ def gerencia(nome_gerencia):
         "equipe_area",
     )
     opcoes_responsaveis_por_equipe = {
-        equipe_item: mapa_usuarios_por_equipe.get(equipe_item, [])
+        equipe_item: _ordenar_nomes_unicos(
+            list(mapa_usuarios_por_equipe.get(equipe_item, []))
+            + [
+                _nome_usuario_exibicao(usuario)
+                for usuario in usuarios_disponiveis
+                if not limpar_texto(getattr(usuario, "coordenadoria", None), "")
+                and not limpar_texto(getattr(usuario, "equipe_area", None), "")
+                and _nome_usuario_exibicao(usuario)
+            ]
+        )
         for equipe_item in opcoes_equipes_todas
     }
 
