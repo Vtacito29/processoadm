@@ -264,7 +264,7 @@
  {% set numero_display = processo.numero_sei_base ~ sufixo %}
  {% set planilhador = processo.planilhador or processo.responsavel_adm %}
  {% set status_val = processo.status or "Finalizado" %}
- <tr class="process-row {% if processo.grupo_retorno %}processo-retorno{% endif %}" data-processo="{{ processo.numero_sei }}" data-demanda-idx="{{ loop.index0 }}">
+ <tr class="process-row {% if processo.grupo_retorno %}processo-retorno{% endif %}" data-processo="{{ processo.numero_sei }}" data-demanda-idx="{{ loop.index0 }}" data-entrada-display="{{ processo.data_entrada_display or '' }}">
  <td class="fw-semibold text-nowrap numero-sei">{{ numero_display }}</td>
  <td>
  {% set pares_datas = processo.pares_datas or [] %}
@@ -922,8 +922,9 @@ let fichaAberta = false;
  th.classList.toggle("col-filter-active", filtroAtivo || sortAtivo);
  });
 
- atualizarLimites();
- };
+  atualizarLimites();
+  atualizarMetricasPainel(!refs.visaoTabelaDemanda || !refs.visaoTabelaDemanda.checked);
+  };
 
  const abrirPainelColuna = (idx, btn) => {
  fecharPainel();
@@ -1502,12 +1503,22 @@ const removerFichaTecnica = () => {
  if (modoDemanda) {
  return renderizarCampoColoridoPorDemanda("data_entrada_gerencia", formatarOuVazio, { fallbackProcesso: true });
  }
+ if (possuiValor(processo?.data_entrada_display)) {
+ const badges = String(processo.data_entrada_display)
+ .split(" | ")
+ .map((valor, idx) => {
+ const classe = `pareado-${(idx % 6) + 1}`;
+ return `<span class="data-entry-chip ${classe} me-1 mb-1">${htmlEscape(valor || "--")}</span>`;
+ })
+ .join(" ");
+ if (badges) return badges;
+ }
  const pares = Array.isArray(processo?.pares_datas) ? processo.pares_datas : [];
  if (pares.length) {
  const badges = pares.map((par) => {
  const valor = par?.entrada_str || formatarOuVazio(par?.entrada) || "--";
  const classe = htmlEscape(par?.cor || "pareado-1");
- return `<span class="badge rounded-pill ${classe} me-1 mb-1">${htmlEscape(valor)}</span>`;
+ return `<span class="data-entry-chip ${classe} me-1 mb-1">${htmlEscape(valor)}</span>`;
  });
  return badges.join(" ");
  }
@@ -1797,20 +1808,68 @@ const inserirFichaTecnicaNaTabela = (processo) => {
   return `<span class="badge ${classe} ms-2">${htmlEscape(label)}</span>`;
   };
  
+  const contarLinhasFiltradas = (tabela) => {
+  if (!tabela) {
+  return { total: 0, visiveis: 0 };
+  }
+  const linhas = Array.from(tabela.querySelectorAll("tbody tr")).filter(
+  (linha) => !linha.classList.contains("ficha-tecnica-row"),
+  );
+  const visiveis = linhas.filter(
+  (linha) =>
+  !linha.classList.contains("d-none") &&
+  !linha.classList.contains("column-filter-hidden"),
+  );
+  return {
+  total: linhas.length,
+  visiveis: visiveis.length,
+  };
+  };
+
   const atualizarMetricasPainel = (usandoResumo) => {
   const sufixo = usandoResumo ? "finalizados" : "demandas";
-  document.querySelectorAll("[data-label-finalizados]").forEach((el) => {
+  const labels = Array.from(document.querySelectorAll("[data-label-finalizados]"));
+  const valores = Array.from(document.querySelectorAll("[data-valor-finalizados]"));
+  const rodapes = Array.from(document.querySelectorAll("[data-foot-finalizados]"));
+
+  labels.forEach((el) => {
   const valor = el.getAttribute(`data-label-${sufixo}`);
   if (valor) el.textContent = valor;
   });
-  document.querySelectorAll("[data-valor-finalizados]").forEach((el) => {
+  valores.forEach((el) => {
   const valor = el.getAttribute(`data-valor-${sufixo}`);
   if (valor) el.textContent = valor;
   });
-  document.querySelectorAll("[data-foot-finalizados]").forEach((el) => {
+  rodapes.forEach((el) => {
   const valor = el.getAttribute(`data-foot-${sufixo}`);
   if (valor) el.textContent = valor;
   });
+
+  const tabelaAtual = usandoResumo ? refs.tabelaProcessos : refs.tabelaDemandas;
+  const contagem = contarLinhasFiltradas(tabelaAtual);
+  if (!contagem.total || contagem.visiveis === contagem.total) {
+  return;
+  }
+
+  if (labels[0]) {
+  labels[0].textContent = "Total visível";
+  }
+  if (valores[0]) {
+  valores[0].textContent = String(contagem.visiveis);
+  }
+  if (rodapes[0]) {
+  rodapes[0].textContent = "Resultado filtrado na tabela";
+  }
+
+  if (labels[2]) {
+  labels[2].textContent = usandoResumo ? "Finalizados visíveis" : "Demandas visíveis";
+  }
+  if (valores[2]) {
+  valores[2].textContent = String(contagem.visiveis);
+  }
+  if (rodapes[2]) {
+  rodapes[2].textContent = "Resultado filtrado na tabela";
+  }
   };
  
   const atualizarTituloTabela = (usandoResumo) => {
@@ -1858,10 +1917,10 @@ const inserirFichaTecnicaNaTabela = (processo) => {
   atualizarMetricasPainel(usandoResumo);
   };
 
- const aplicarFiltroSelecao = (numeroSei) => {
- const alvo = chaveSelecaoSei(numeroSei);
- const filtrar = (tabela) => {
- if (!tabela) return;
+  const aplicarFiltroSelecao = (numeroSei) => {
+  const alvo = chaveSelecaoSei(numeroSei);
+  const filtrar = (tabela) => {
+  if (!tabela) return;
  tabela.querySelectorAll("tbody tr").forEach((linha) => {
  if (linha.classList.contains("ficha-tecnica-row")) return;
  const linhaSei = chaveSelecaoSei(linha.getAttribute("data-processo"));
@@ -1869,11 +1928,12 @@ const inserirFichaTecnicaNaTabela = (processo) => {
  linha.classList.toggle("d-none", esconder);
  });
  };
- filtrar(refs.tabelaProcessos);
- filtrar(refs.tabelaDemandas);
- refs.btnLimparSelecao?.classList.toggle("d-none", !alvo);
- atualizarLimites();
- };
+  filtrar(refs.tabelaProcessos);
+  filtrar(refs.tabelaDemandas);
+  refs.btnLimparSelecao?.classList.toggle("d-none", !alvo);
+  atualizarLimites();
+  atualizarMetricasPainel(!refs.visaoTabelaDemanda || !refs.visaoTabelaDemanda.checked);
+  };
 
  const limparFiltroSelecao = () => aplicarFiltroSelecao("");
 
@@ -1997,13 +2057,47 @@ const limparResultados = () => {
  item?.id ?? "",
  normalizarSei(item?.numero_sei || ""),
  normalizarGerencia(item?.gerencia || item?.gerencia_origem || ""),
- (item?.finalizado_em || "").toString(),
+ (item?.data_entrada_gerencia || item?.data_entrada || "").toString(),
  ].join("|");
  if (vistos.has(chave)) return;
  vistos.add(chave);
  saida.push(item);
  });
  return saida;
+ };
+
+ const montarParesDatasConsolidados = (processo, demandasLista) => {
+ const origem = Array.isArray(demandasLista) && demandasLista.length
+ ? demandasLista
+ : [processo].filter(Boolean);
+ const vistos = new Set();
+ const pares = [];
+ const cores = ["pareado-1", "pareado-2", "pareado-3", "pareado-4", "pareado-5", "pareado-6"];
+ [...origem]
+ .sort((a, b) => {
+ const da = timestampEvento(a?.data_entrada_gerencia || a?.data_entrada);
+ const db = timestampEvento(b?.data_entrada_gerencia || b?.data_entrada);
+ return db - da;
+ })
+ .forEach((item, idx) => {
+ const entradaBruta = item?.data_entrada_gerencia || item?.data_entrada || "";
+ const finalBruta = item?.finalizado_em || item?.data_saida || processo?.finalizado_em || "";
+ const chave = [
+ (entradaBruta || "").toString(),
+ (finalBruta || "").toString(),
+ normalizarGerencia(item?.gerencia || item?.gerencia_origem || ""),
+ ].join("|");
+ if (vistos.has(chave)) return;
+ vistos.add(chave);
+ pares.push({
+ entrada: entradaBruta || null,
+ entrada_str: formatarDataCurta(entradaBruta) || "--",
+ finalizacao: finalBruta || null,
+ finalizacao_str: formatarDataCurta(finalBruta) || "--",
+ cor: cores[idx % cores.length],
+ });
+ });
+ return pares;
  };
 
  const deduplicarEventosHistorico = (lista) => {
@@ -2030,7 +2124,6 @@ const limparResultados = () => {
  const obterProcessoConsolidadoPorBase = (numeroSei) => {
  const relacionados = obterProcessosPorBase(numeroSei);
  if (!relacionados.length) return null;
- if (relacionados.length === 1) return relacionados[0];
  const ordenados = [...relacionados].sort((a, b) => {
  const da = timestampEvento(a.finalizado_em || a.atualizado_em || a.criado_em);
  const db = timestampEvento(b.finalizado_em || b.atualizado_em || b.criado_em);
@@ -2062,6 +2155,11 @@ const limparResultados = () => {
  principal.demandas_relacionadas = demandasRel;
  principal.movimentacoes_completas = movsCompleto;
  principal.gerencias_involvidas = gerencias;
+ const paresDatas = montarParesDatasConsolidados(principal, demandasRel);
+ if (paresDatas.length) {
+ principal.pares_datas = paresDatas;
+ principal.data_entrada_display = paresDatas.map((par) => par.entrada_str).join(" | ");
+ }
  principal.ciclos_total = Math.max(
  Number(principal.ciclos_total || 1),
  Number(relacionados.length || 1),
@@ -2551,6 +2649,17 @@ const eventosVisual = [...eventos].sort(
  processo || (demandaLocal ? obterProcessoPorBase(demandaLocal.numero_sei) : null);
  demandaSelecionada = demandaLocal || null;
  demandaSelecionadaIdx = demandaLocal ? demandaIdx : null;
+ if (processoSelecionado && refs.tabelaProcessos) {
+ const linhaSelecionada = Array.from(
+ refs.tabelaProcessos.querySelectorAll("tbody tr"),
+ ).find(
+ (linha) => (linha.getAttribute("data-processo") || "").trim() === String(referencia.numero_sei || "").trim(),
+ );
+ const dataEntradaLinha = linhaSelecionada?.getAttribute("data-entrada-display") || "";
+ if (dataEntradaLinha) {
+ processoSelecionado.data_entrada_display = dataEntradaLinha;
+ }
+ }
  if (refs.buscaSei) {
  refs.buscaSei.value = numeroSeiBase(referencia);
  }

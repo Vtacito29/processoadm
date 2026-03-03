@@ -6462,6 +6462,19 @@ def verificar_dados():
             )
             .filter(Processo.finalizado_em.isnot(None))
         )
+        if filtro_gerencia:
+            gerencia_lower = filtro_gerencia.lower()
+            consulta = consulta.filter(
+                or_(
+                    func.lower(Processo.gerencia) == gerencia_lower,
+                    Processo.movimentacoes.any(
+                        or_(
+                            func.lower(Movimentacao.de_gerencia) == gerencia_lower,
+                            func.lower(Movimentacao.para_gerencia) == gerencia_lower,
+                        )
+                    ),
+                )
+            )
         if coordenadoria:
             consulta = consulta.filter(func.lower(Processo.coordenadoria) == coordenadoria.lower())
         if equipe:
@@ -6524,20 +6537,29 @@ def verificar_dados():
             .scalar()
             or 0
         )
-        total_fallback_demandas = 0
-        if not filtro_gerencia:
-            total_fallback_demandas = (
-                db.session.query(func.count(Processo.id))
-                .filter(
-                    Processo.id.in_(db.session.query(consulta_ids.c.id)),
-                    ~Processo.movimentacoes.any(
-                        (Movimentacao.tipo.in_(["finalizacao_gerencia", "finalizado_geral"]))
-                        & (func.lower(Movimentacao.de_gerencia) != "saida")
-                    ),
-                )
-                .scalar()
-                or 0
+        total_fallback_demandas = (
+            db.session.query(func.count(Processo.id))
+            .filter(
+                Processo.id.in_(db.session.query(consulta_ids.c.id)),
+                (
+                    func.lower(Processo.gerencia) == filtro_gerencia.lower()
+                    if filtro_gerencia
+                    else text("1=1")
+                ),
+                ~Processo.movimentacoes.any(
+                    (
+                        Movimentacao.tipo.in_(["finalizacao_gerencia", "finalizado_geral"])
+                    )
+                    & (
+                        func.lower(Movimentacao.de_gerencia) == filtro_gerencia.lower()
+                        if filtro_gerencia
+                        else (func.lower(Movimentacao.de_gerencia) != "saida")
+                    )
+                ),
             )
+            .scalar()
+            or 0
+        )
         total_demandas_indicador = int(total_movimentos_demandas) + int(total_fallback_demandas)
         consulta_ordenada = consulta.order_by(
             Processo.finalizado_em.desc(), Processo.atualizado_em.desc()
