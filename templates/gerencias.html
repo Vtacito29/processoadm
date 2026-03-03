@@ -564,20 +564,10 @@
  {% set trilhas_saida = trilhas_saida_map.get(processo.id, []) if trilhas_saida_map else [] %}
  {% set tooltip_demanda_aberta = "Ainda existe uma demanda ativa nesta gerencia. O processo so pode ser finalizado apos finalizar essa demanda." %}
  {% if gerencia == 'SAIDA' %}
- {% if trilhas_saida %}
- {% for item in trilhas_saida %}
- <span class="gerencia-chip">
- {% if item.partes %}
- {% for parte in item.partes %}
- <span class="gerencia-part{% if parte.aberta %} aberta{% endif %}"{% if parte.aberta %} title="{{ tooltip_demanda_aberta }}"{% endif %}>{{ parte.nome }}</span>{% if not loop.last %}<span class="gerencia-sep"> -> </span>{% endif %}
+ {% if gerencias_env %}
+ {% for ger in gerencias_env %}
+ <span class="gerencia-chip{% if ger in gerencias_abertas %} aberta{% endif %}"{% if ger in gerencias_abertas %} title="{{ tooltip_demanda_aberta }}"{% endif %}>{{ ger }}</span>
  {% endfor %}
- {% else %}
- {{ item.texto }}
- {% endif %}
- </span>
- {% endfor %}
- {% elif gerencias_env %}
- <span class="gerencia-chip{% if gerencias_abertas %} aberta{% endif %}">{{ gerencias_env|trilha_gerencias }}</span>
  {% else %}
  <span class="gerencia-chip">{{ origens_saida.get(processo.id) or processo.gerencia }}</span>
  {% endif %}
