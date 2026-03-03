@@ -443,13 +443,14 @@ body.col-resizing {
 .gerencia-chip {
     display: inline-flex;
     align-items: center;
-    padding: 0.12rem 0.55rem;
-    border-radius: 999px;
+    padding: 0;
+    border-radius: 0;
     font-size: 0.72rem;
     font-weight: 700;
-    background: #f1f5f9;
+    background: transparent;
     color: #0f172a;
-    border: 1px solid rgba(148, 163, 184, 0.45);
+    border: 0;
+    line-height: 1.35;
 }
 .gerencia-chip .gerencia-part {
     color: inherit;
@@ -463,9 +464,8 @@ body.col-resizing {
     font-weight: 600;
 }
 .gerencia-chip.aberta {
-    background: #fee2e2;
+    background: transparent;
     color: #b91c1c;
-    border-color: rgba(239, 68, 68, 0.4);
     cursor: help;
 }
 
