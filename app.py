@@ -5769,110 +5769,51 @@ def gerencia(nome_gerencia):
                 snapshot["data_entrada_geplan"] = parse_date(snapshot.get("data_entrada_geplan"))
             snapshots_finalizados[mov.processo_id] = snapshot
 
-    consulta_filtros = Processo.query.filter(Processo.gerencia == gerencia_alvo)
-    if gerencia_alvo == "GABINETE":
-        consulta_filtros = aplicar_filtro_devolvidos_gabinete(consulta_filtros)
-
-    def _listar_distintos_processos(
-        coluna,
-        *,
-        coordenadoria: str = "",
-        equipe: str = "",
-    ) -> List[str]:
-        consulta_base = consulta_filtros
-        if coordenadoria:
-            consulta_base = consulta_base.filter(
-                func.lower(Processo.coordenadoria) == coordenadoria.lower()
-            )
-        if equipe:
-            consulta_base = consulta_base.filter(
-                func.lower(Processo.equipe_area) == equipe.lower()
-            )
-        valores = (
-            consulta_base.with_entities(coluna)
-            .filter(coluna.isnot(None))
-            .all()
-        )
-        return _ordenar_nomes_unicos(
-            [limpar_texto(valor, "") for (valor,) in valores if limpar_texto(valor, "")]
-        )
-
-    def _listar_distintos_usuarios(campo: str, *, coordenadoria: str = "", equipe: str = "") -> List[str]:
-        usuarios_base = filtrar_usuarios_por_coordenadoria_equipe(
-            usuarios_disponiveis,
-            coordenadoria,
-            equipe,
-        )
-        if campo == "nome":
-            return obter_nomes_usuarios(usuarios_base)
-        return _ordenar_nomes_unicos(
-            [
-                limpar_texto(getattr(usuario, campo, None), "")
-                for usuario in usuarios_base
-                if limpar_texto(getattr(usuario, campo, None), "")
-            ]
-        )
-
     opcoes_coordenadorias = _ordenar_nomes_unicos(
-        _listar_distintos_processos(Processo.coordenadoria)
-        + _listar_distintos_usuarios("coordenadoria")
+        obter_coordenadorias_por_gerencia_base(gerencia_alvo)
+        + [
+            coord
+            for coord in _ordenar_nomes_unicos(
+                [
+                    limpar_texto(getattr(usuario, "coordenadoria", None), "")
+                    for usuario in usuarios_disponiveis
+                    if limpar_texto(getattr(usuario, "coordenadoria", None), "")
+                ]
+            )
+            if coord in obter_coordenadorias_por_gerencia_base(gerencia_alvo)
+        ]
     )
     coordenadoria_filtro_canonica = _resolver_valor_canonico(
         opcoes_coordenadorias, filtro_coordenadoria
     )
 
-    opcoes_equipes_todas = _ordenar_nomes_unicos(
-        _listar_distintos_processos(Processo.equipe_area)
-        + _listar_distintos_usuarios("equipe_area")
-    )
+    mapa_equipes_base = montar_mapa_equipes_por_coordenadoria_base(gerencia_alvo)
+    opcoes_equipes_todas: List[str] = []
+    for equipes_item in mapa_equipes_base.values():
+        opcoes_equipes_todas.extend(equipes_item)
+    opcoes_equipes_todas = _ordenar_nomes_unicos(opcoes_equipes_todas)
     if coordenadoria_filtro_canonica:
-        opcoes_equipes = _ordenar_nomes_unicos(
-            _listar_distintos_processos(
-                Processo.equipe_area,
-                coordenadoria=coordenadoria_filtro_canonica,
-            )
-            + _listar_distintos_usuarios(
-                "equipe_area",
-                coordenadoria=coordenadoria_filtro_canonica,
-            )
-        )
+        opcoes_equipes = list(mapa_equipes_base.get(coordenadoria_filtro_canonica, []))
     else:
         opcoes_equipes = list(opcoes_equipes_todas)
     equipe_filtro_canonica = _resolver_valor_canonico(opcoes_equipes, filtro_equipe_area)
 
-    opcoes_responsaveis_processos = _listar_distintos_processos(
-        Processo.responsavel_equipe,
+    usuarios_contexto = filtrar_usuarios_por_coordenadoria_equipe(
+        usuarios_disponiveis,
         coordenadoria=coordenadoria_filtro_canonica,
         equipe=equipe_filtro_canonica,
     )
-    opcoes_responsaveis_usuarios = _listar_distintos_usuarios(
-        "nome",
-        coordenadoria=coordenadoria_filtro_canonica,
-        equipe=equipe_filtro_canonica,
-    )
-    opcoes_responsaveis = _ordenar_nomes_unicos(
-        opcoes_responsaveis_processos + opcoes_responsaveis_usuarios
-    )
+    opcoes_responsaveis = obter_nomes_usuarios(usuarios_contexto)
 
-    opcoes_equipes_por_coordenadoria = {}
-    for coordenadoria_item in opcoes_coordenadorias:
-        opcoes_equipes_por_coordenadoria[coordenadoria_item] = _ordenar_nomes_unicos(
-            _listar_distintos_processos(
-                Processo.equipe_area,
-                coordenadoria=coordenadoria_item,
-            )
-            + _listar_distintos_usuarios(
-                "equipe_area",
-                coordenadoria=coordenadoria_item,
-            )
-        )
-
-    opcoes_responsaveis_por_equipe = {}
-    for equipe_item in opcoes_equipes_todas:
-        opcoes_responsaveis_por_equipe[equipe_item] = _ordenar_nomes_unicos(
-            _listar_distintos_processos(Processo.responsavel_equipe, equipe=equipe_item)
-            + _listar_distintos_usuarios("nome", equipe=equipe_item)
-        )
+    opcoes_equipes_por_coordenadoria = dict(mapa_equipes_base)
+    mapa_usuarios_por_equipe = mapear_nomes_usuarios_por_campo(
+        usuarios_disponiveis,
+        "equipe_area",
+    )
+    opcoes_responsaveis_por_equipe = {
+        equipe_item: mapa_usuarios_por_equipe.get(equipe_item, [])
+        for equipe_item in opcoes_equipes_todas
+    }
 
     return render_template(
         "gerencias.html",
