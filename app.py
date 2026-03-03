@@ -5807,15 +5807,22 @@ def gerencia(nome_gerencia):
         coordenadoria=coordenadoria_filtro_canonica,
         equipe=equipe_filtro_canonica,
     )
+    nomes_base_contexto = listar_responsaveis_por_contexto_cadastro(
+        gerencia=gerencia_alvo,
+        coordenadoria=coordenadoria_filtro_canonica,
+        equipe=equipe_filtro_canonica,
+    )
+    usuarios_somente_gerencia = [
+        usuario
+        for usuario in usuarios_disponiveis
+        if not limpar_texto(getattr(usuario, "coordenadoria", None), "")
+        and not limpar_texto(getattr(usuario, "equipe_area", None), "")
+    ]
     if coordenadoria_filtro_canonica or equipe_filtro_canonica:
-        usuarios_somente_gerencia = [
-            usuario
-            for usuario in usuarios_disponiveis
-            if not limpar_texto(getattr(usuario, "coordenadoria", None), "")
-            and not limpar_texto(getattr(usuario, "equipe_area", None), "")
-        ]
         usuarios_contexto = list(usuarios_contexto) + usuarios_somente_gerencia
-    opcoes_responsaveis = obter_nomes_usuarios(usuarios_contexto)
+    opcoes_responsaveis = _ordenar_nomes_unicos(
+        list(nomes_base_contexto) + obter_nomes_usuarios(usuarios_contexto)
+    )
 
     opcoes_equipes_por_coordenadoria = dict(mapa_equipes_base)
     mapa_usuarios_por_equipe = mapear_nomes_usuarios_por_campo(
@@ -5824,13 +5831,12 @@ def gerencia(nome_gerencia):
     )
     opcoes_responsaveis_por_equipe = {
         equipe_item: _ordenar_nomes_unicos(
-            list(mapa_usuarios_por_equipe.get(equipe_item, []))
+            list(obter_responsaveis_por_equipe_base(equipe_item))
+            + list(mapa_usuarios_por_equipe.get(equipe_item, []))
             + [
                 _nome_usuario_exibicao(usuario)
-                for usuario in usuarios_disponiveis
-                if not limpar_texto(getattr(usuario, "coordenadoria", None), "")
-                and not limpar_texto(getattr(usuario, "equipe_area", None), "")
-                and _nome_usuario_exibicao(usuario)
+                for usuario in usuarios_somente_gerencia
+                if _nome_usuario_exibicao(usuario)
             ]
         )
         for equipe_item in opcoes_equipes_todas
