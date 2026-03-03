@@ -2411,18 +2411,18 @@ quando: (baseDestino || Date.now()) + 1,
 texto: `Destino SAIDA (${gerenciaDemanda}): ${destinoDemanda}.`,
 });
 }
-} else if (processo.criado_em && !possuiCadastroMov) {
-const gerenciaCriacao = obterGerenciaCriacao();
-const autor = processo.usuario_cadastro || "usuario";
-const gerenciaNorm = (gerenciaCriacao || "").toString().trim().toUpperCase();
-const termoCad = gerenciaNorm === "SAIDA" ? "Processo" : "Demanda";
-const acaoCad = termoCad === "Processo" ? "cadastrado" : "cadastrada";
-const envioCad = termoCad === "Processo" ? "enviado" : "enviada";
-eventos.push({
-quando: processo.criado_em,
-texto: `${termoCad} ${acaoCad} por ${autor} e ${envioCad} para ${gerenciaCriacao}.`,
-});
-}
+ } else if ((processo.data_entrada_gerencia || processo.data_entrada || processo.criado_em) && !possuiCadastroMov) {
+ const gerenciaCriacao = obterGerenciaCriacao();
+ const autor = processo.usuario_cadastro || "usuario";
+ const gerenciaNorm = (gerenciaCriacao || "").toString().trim().toUpperCase();
+ const termoCad = gerenciaNorm === "SAIDA" ? "Processo" : "Demanda";
+ const acaoCad = termoCad === "Processo" ? "cadastrado" : "cadastrada";
+ const envioCad = termoCad === "Processo" ? "enviado" : "enviada";
+ eventos.push({
+ quando: processo.data_entrada_gerencia || processo.data_entrada || processo.criado_em,
+ texto: `${termoCad} ${acaoCad} por ${autor} e ${envioCad} para ${gerenciaCriacao}.`,
+ });
+ }
 
  ordenados.forEach((mov) => {
  const tipoMov = (mov.tipo || "").toString().toLowerCase();

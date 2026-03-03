@@ -270,6 +270,9 @@
  
  <form class="row g-3 align-items-end mb-3" method="get" autocomplete="off">
  <input type="hidden" name="aba" value="interacoes">
+ {% if filtro_responsavel_id %}
+ <input type="hidden" name="responsavel_id" value="{{ filtro_responsavel_id }}">
+ {% endif %}
 
 
  <div class="col-12 col-md-6 col-lg-3">
@@ -815,7 +818,7 @@
  <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
 
 
- <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=paginacao.prev_num, sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, aba='interacoes') }}">Anterior</a>
+ <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=paginacao.prev_num, sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, responsavel_id=filtro_responsavel_id or None, aba='interacoes') }}">Anterior</a>
 
 
  </li>
@@ -1264,10 +1267,10 @@
  <div class="timeline-dot"></div>
 
 
- <div>
+ <div class="timeline-date">{{ formatar_data_hora_brasilia(evento.quando) }}</div>
 
 
- <div class="fw-semibold text-muted small">{{ evento.quando.strftime('%d/%m/%Y %H:%M') if evento.quando else '-' }}</div>
+ <div class="timeline-content">
 
 
  <div>{{ evento.texto }}</div>
@@ -2005,10 +2008,12 @@ document.addEventListener("DOMContentLoaded", function () {
  mapaEquipesCoordNorm[normalizarTexto(chave)] = mapaEquipesCoord[chave] || [];
  });
 
- document.querySelectorAll(".btn-devolver-gabinete").forEach((btn) => {
- btn.addEventListener("click", (event) => {
- event.preventDefault();
- formDevolverAtual = btn.closest("form");
+  const vincularBotoesDevolver = (root = document) => {
+  root.querySelectorAll(".btn-devolver-gabinete").forEach((btn) => {
+  if (btn.dataset.boundClick === "1") return;
+  btn.addEventListener("click", (event) => {
+  event.preventDefault();
+  formDevolverAtual = btn.closest("form");
  if (motivoDevolucaoInput) {
  motivoDevolucaoInput.value = "";
  motivoDevolucaoInput.classList.remove("is-invalid");
@@ -2021,10 +2026,12 @@ document.addEventListener("DOMContentLoaded", function () {
  }
  if (modalDevolver) {
  const instancia = bootstrap.Modal.getOrCreateInstance(modalDevolver);
- instancia.show();
- }
- });
- });
+  instancia.show();
+  }
+  });
+  btn.dataset.boundClick = "1";
+  });
+  };
 
  if (btnConfirmarDevolucao) {
  btnConfirmarDevolucao.addEventListener("click", () => {
@@ -2043,10 +2050,12 @@ document.addEventListener("DOMContentLoaded", function () {
  });
  }
 
- document.querySelectorAll(".btn-excluir-devolvido").forEach((btn) => {
- btn.addEventListener("click", (event) => {
- event.preventDefault();
- formExcluirAtual = btn.closest("form");
+  const vincularBotoesExcluirDevolvido = (root = document) => {
+  root.querySelectorAll(".btn-excluir-devolvido").forEach((btn) => {
+  if (btn.dataset.boundClick === "1") return;
+  btn.addEventListener("click", (event) => {
+  event.preventDefault();
+  formExcluirAtual = btn.closest("form");
  if (textoExcluirSelecionado) {
  const numero = btn.dataset.numero || "";
  textoExcluirSelecionado.textContent = numero
@@ -2055,10 +2064,12 @@ document.addEventListener("DOMContentLoaded", function () {
  }
  if (modalExcluirDevolvido) {
  const instancia = bootstrap.Modal.getOrCreateInstance(modalExcluirDevolvido);
- instancia.show();
- }
- });
- });
+  instancia.show();
+  }
+  });
+  btn.dataset.boundClick = "1";
+  });
+  };
 
  if (btnConfirmarExclusao) {
  btnConfirmarExclusao.addEventListener("click", () => {
@@ -2170,10 +2181,11 @@ document.addEventListener("DOMContentLoaded", function () {
  });
  };
 
- const configurarSelectSearch = (wrapper) => {
- const input = wrapper.querySelector("input[data-options-id]");
- const dropdown = wrapper.querySelector(".select-dropdown");
- if (!input || !dropdown) return;
+  const configurarSelectSearch = (wrapper) => {
+  if (!wrapper || wrapper.dataset.selectSearchBound === "1") return;
+  const input = wrapper.querySelector("input[data-options-id]");
+  const dropdown = wrapper.querySelector(".select-dropdown");
+  if (!input || !dropdown) return;
 
  const listId = input.dataset.optionsId || dropdown.dataset.optionsId;
  if (!listId) return;
@@ -2229,16 +2241,13 @@ document.addEventListener("DOMContentLoaded", function () {
  fecharDropdown();
  });
 
- document.addEventListener("click", (event) => {
- if (!wrapper.contains(event.target)) {
- fecharDropdown();
- }
- });
- };
-
- document.querySelectorAll(".select-search").forEach((wrapper) => {
- configurarSelectSearch(wrapper);
- });
+  document.addEventListener("click", (event) => {
+  if (!wrapper.contains(event.target)) {
+  fecharDropdown();
+  }
+  });
+  wrapper.dataset.selectSearchBound = "1";
+  };
 
  const obterTodosTimes = () => {
  const grupos = Object.values(mapaEquipesCoord || {});
@@ -2279,12 +2288,12 @@ document.addEventListener("DOMContentLoaded", function () {
  return (responsaveisGerencia || []).slice();
  };
 
- const vincularFiltrosDinamicos = (form) => {
- if (!form) return;
- const inputCoord = form.querySelector('input[name="coordenadoria"]');
- const inputEquipe = form.querySelector('input[name="equipe_area"]');
- const inputResp = form.querySelector('input[name="responsavel_equipe"]');
- if (!inputCoord || !inputEquipe || !inputResp) return;
+  const vincularFiltrosDinamicos = (form) => {
+  if (!form || form.dataset.filtrosDinamicosBound === "1") return;
+  const inputCoord = form.querySelector('input[name="coordenadoria"]');
+  const inputEquipe = form.querySelector('input[name="equipe_area"]');
+  const inputResp = form.querySelector('input[name="responsavel_equipe"]');
+  if (!inputCoord || !inputEquipe || !inputResp) return;
 
  const listEquipeId = inputEquipe.dataset.optionsId;
  const listRespId = inputResp.dataset.optionsId;
@@ -2321,16 +2330,19 @@ document.addEventListener("DOMContentLoaded", function () {
  }
  };
 
- inputCoord.addEventListener("change", atualizarFiltros);
- inputCoord.addEventListener("input", atualizarFiltros);
- inputEquipe.addEventListener("change", atualizarFiltros);
- inputEquipe.addEventListener("input", atualizarFiltros);
- atualizarFiltros();
- };
-
- document.querySelectorAll('form[method="get"]').forEach((form) => {
- vincularFiltrosDinamicos(form);
- });
+  inputCoord.addEventListener("change", atualizarFiltros);
+  inputCoord.addEventListener("input", atualizarFiltros);
+  inputEquipe.addEventListener("change", atualizarFiltros);
+  inputEquipe.addEventListener("input", atualizarFiltros);
+  form.dataset.liveDirty = "0";
+  form.querySelectorAll("input, select, textarea").forEach((campo) => {
+  campo.addEventListener("input", () => { form.dataset.liveDirty = "1"; });
+  campo.addEventListener("change", () => { form.dataset.liveDirty = "1"; });
+  });
+  form.addEventListener("submit", () => { form.dataset.liveDirty = "0"; });
+  atualizarFiltros();
+  form.dataset.filtrosDinamicosBound = "1";
+  };
 
  const alinharInicio = (elemento) => {
  const wrapper = elemento ? elemento.closest(".process-list-wrapper") : null;
@@ -2426,13 +2438,17 @@ document.addEventListener("DOMContentLoaded", function () {
  alinharInicio(linha);
  };
 
- document.querySelectorAll(".btn-toggle-ficha").forEach((botaoFicha) => {
- botaoFicha.addEventListener("click", (event) => {
- event.preventDefault();
- event.stopPropagation();
- alternarFicha(botaoFicha.dataset.fichaTarget, botaoFicha.dataset.procId);
- });
- });
+  const vincularBotoesFicha = (root = document) => {
+  root.querySelectorAll(".btn-toggle-ficha").forEach((botaoFicha) => {
+  if (botaoFicha.dataset.boundClick === "1") return;
+  botaoFicha.addEventListener("click", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  alternarFicha(botaoFicha.dataset.fichaTarget, botaoFicha.dataset.procId);
+  });
+  botaoFicha.dataset.boundClick = "1";
+  });
+  };
 
  const alternarHistorico = (alvoId, procId) => {
  if (!alvoId) return;
@@ -2456,13 +2472,17 @@ document.addEventListener("DOMContentLoaded", function () {
  alinharInicio(linha);
  };
 
- document.querySelectorAll(".btn-toggle-hist").forEach((botaoHist) => {
- botaoHist.addEventListener("click", (event) => {
- event.preventDefault();
- event.stopPropagation();
- alternarHistorico(botaoHist.dataset.histTarget, botaoHist.dataset.procId);
- });
- });
+  const vincularBotoesHistorico = (root = document) => {
+  root.querySelectorAll(".btn-toggle-hist").forEach((botaoHist) => {
+  if (botaoHist.dataset.boundClick === "1") return;
+  botaoHist.addEventListener("click", (event) => {
+  event.preventDefault();
+  event.stopPropagation();
+  alternarHistorico(botaoHist.dataset.histTarget, botaoHist.dataset.procId);
+  });
+  botaoHist.dataset.boundClick = "1";
+  });
+  };
 
  const habilitarResizeColunas = (table) => {
  if (table.classList.contains("table-arquivos-fixa")) return;
@@ -2537,15 +2557,21 @@ document.addEventListener("DOMContentLoaded", function () {
  });
  };
 
- document.querySelectorAll(".process-table").forEach((table) => {
- habilitarResizeColunas(table);
- });
+  const vincularResizeTabelas = (root = document) => {
+  root.querySelectorAll(".process-table").forEach((table) => {
+  if (table.dataset.resizeBound === "1") return;
+  habilitarResizeColunas(table);
+  table.dataset.resizeBound = "1";
+  });
+  };
 
- document.querySelectorAll(".btn-atribuir").forEach(function (btn) {
- btn.addEventListener("click", function () {
- const procId = btn.dataset.proc;
- const numero = btn.dataset.numero || "";
- const assignedName = (btn.dataset.assignedName || "").trim();
+  const vincularBotoesAtribuir = (root = document) => {
+  root.querySelectorAll(".btn-atribuir").forEach(function (btn) {
+  if (btn.dataset.boundClick === "1") return;
+  btn.addEventListener("click", function () {
+  const procId = btn.dataset.proc;
+  const numero = btn.dataset.numero || "";
+  const assignedName = (btn.dataset.assignedName || "").trim();
  const gerProc = btn.dataset.gerencia || "";
  const coordProc = btn.dataset.coordenadoria || "";
  const equipeProc = btn.dataset.equipe || "";
@@ -2582,8 +2608,10 @@ document.addEventListener("DOMContentLoaded", function () {
   const modalInstance = bootstrap.Modal.getOrCreateInstance(modalAtribuir);
   modalInstance.show();
   }
- });
- });
+  });
+  btn.dataset.boundClick = "1";
+  });
+  };
 
 if (btnDesatribuirModal && formAtribuir) {
  btnDesatribuirModal.addEventListener("click", function () {
@@ -2615,12 +2643,101 @@ if (btnDesatribuirModal && formAtribuir) {
  }
 
  const toastEl = document.getElementById("toastNotificacao");
- if (toastEl && toastEl.dataset.mensagem && toastEl.dataset.mensagem.trim() !== "") {
- const toast = bootstrap.Toast.getOrCreateInstance(toastEl);
- toast.show();
- }
+  if (toastEl && toastEl.dataset.mensagem && toastEl.dataset.mensagem.trim() !== "") {
+  const toast = bootstrap.Toast.getOrCreateInstance(toastEl);
+  toast.show();
+  }
 
-});
+  const inicializarComponentesDinamicos = (root = document) => {
+  root.querySelectorAll(".select-search").forEach((wrapper) => {
+  configurarSelectSearch(wrapper);
+  });
+  root.querySelectorAll('form[method="get"]').forEach((form) => {
+  vincularFiltrosDinamicos(form);
+  });
+  vincularBotoesDevolver(root);
+  vincularBotoesExcluirDevolvido(root);
+  vincularBotoesFicha(root);
+  vincularBotoesHistorico(root);
+  vincularResizeTabelas(root);
+  vincularBotoesAtribuir(root);
+  };
+
+  inicializarComponentesDinamicos(document);
+
+  const obterBadgeDevolvidos = () => {
+  const tab = document.getElementById("tab-devolvidos");
+  return tab ? tab.querySelector(".badge") : null;
+  };
+
+  const haInteracaoEmCurso = () => {
+  if (document.querySelector(".modal.show, .offcanvas.show, .select-dropdown.show")) {
+  return true;
+  }
+  if (document.querySelector(".ficha-tecnica-row:not(.d-none), .history-row.show")) {
+  return true;
+  }
+  if (document.querySelector('form[method="get"][data-live-dirty="1"]')) {
+  return true;
+  }
+  const ativo = document.activeElement;
+  if (
+  ativo &&
+  (
+  ativo.matches?.("input, textarea, select") ||
+  ativo.isContentEditable
+  )
+  ) {
+  return true;
+  }
+  return false;
+  };
+
+  const atualizarPainelGerenciaAoVivo = async () => {
+  if (haInteracaoEmCurso()) {
+  return;
+  }
+  try {
+  const resp = await fetch(window.location.href, {
+  headers: {
+  "X-Requested-With": "XMLHttpRequest",
+  "Cache-Control": "no-cache",
+  },
+  cache: "no-store",
+  credentials: "same-origin",
+  });
+  if (!resp.ok) return;
+  const html = await resp.text();
+  const parser = new DOMParser();
+  const docNovo = parser.parseFromString(html, "text/html");
+
+  const alvoInteracoes = document.getElementById("conteudo-interacoes");
+  const novoInteracoes = docNovo.getElementById("conteudo-interacoes");
+  if (alvoInteracoes && novoInteracoes) {
+  alvoInteracoes.innerHTML = novoInteracoes.innerHTML;
+  inicializarComponentesDinamicos(alvoInteracoes);
+  }
+
+  const alvoDevolvidos = document.getElementById("conteudo-devolvidos");
+  const novoDevolvidos = docNovo.getElementById("conteudo-devolvidos");
+  if (alvoDevolvidos && novoDevolvidos) {
+  alvoDevolvidos.innerHTML = novoDevolvidos.innerHTML;
+  inicializarComponentesDinamicos(alvoDevolvidos);
+  }
+
+  const badgeAtual = obterBadgeDevolvidos();
+  const badgeNovo = docNovo.querySelector("#tab-devolvidos .badge");
+  if (badgeAtual && badgeNovo) {
+  badgeAtual.textContent = badgeNovo.textContent;
+  }
+  } catch (erro) {
+  console.error("Nao foi possivel atualizar a gerencia automaticamente.", erro);
+  }
+  };
+
+  window.setInterval(atualizarPainelGerenciaAoVivo, 8000);
+
+ });
 </script>
 
 

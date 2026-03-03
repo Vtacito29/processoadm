@@ -2240,6 +2240,21 @@ def contexto_global():
         )
         notificacoes_nao_lidas = sum(1 for n in notificacoes_recentes if not n.lida)
         notificacao_unread = next((n for n in notificacoes_recentes if not n.lida), None)
+
+    def formatar_data_hora_brasilia(valor: Optional[object]) -> str:
+        """Converte datetimes UTC/naive para horario de Brasilia antes de exibir."""
+        if not valor:
+            return "-"
+        if isinstance(valor, datetime):
+            dt_ref = valor
+            if dt_ref.tzinfo is None:
+                dt_ref = dt_ref.replace(tzinfo=ZoneInfo("UTC"))
+            dt_brasilia = dt_ref.astimezone(ZoneInfo("America/Sao_Paulo"))
+            return dt_brasilia.strftime("%d/%m/%Y %H:%M")
+        if isinstance(valor, date):
+            return valor.strftime("%d/%m/%Y")
+        return str(valor)
+
     return {
         "current_user": current_user,
         "current_year": datetime.utcnow().year,
@@ -2254,6 +2269,7 @@ def contexto_global():
         "notificacao_unread": notificacao_unread,
         # Helper para uso em templates: data de entrada na gerencia
         "calcular_data_entrada_na_gerencia": data_entrada_na_gerencia,
+        "formatar_data_hora_brasilia": formatar_data_hora_brasilia,
     }
 
 
@@ -4546,6 +4562,72 @@ def index():
     )
 
 
+@app.route("/api/atualizacoes-painel")
+def api_atualizacoes_painel():
+    """Retorna contadores leves para atualizar o dashboard sem reload completo."""
+    resposta = {
+        "ok": True,
+        "site_em_configuracao": bool(SITE_EM_CONFIGURACAO),
+        "contagens": {ger: 0 for ger in GERENCIAS},
+        "contagem_saida": 0,
+        "metricas": {
+            "andamento": 0,
+            "finalizados": 0,
+            "tempo_medio_dias": None,
+        },
+        "meus_processos_total": 0,
+        "meus_processos_novos": 0,
+        "gerencia_padrao_usuario": None,
+        "atualizado_em": datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%d/%m/%Y %H:%M:%S"),
+    }
+
+    if SITE_EM_CONFIGURACAO:
+        return jsonify(resposta)
+
+    resposta["contagens"] = obter_contagens_por_gerencia()
+    resposta["metricas"] = obter_metricas_processos()
+    resposta["contagem_saida"] = (
+        db.session.query(func.count(Processo.id))
+        .filter(Processo.finalizado_em.is_(None), Processo.gerencia == "SAIDA")
+        .scalar()
+        or 0
+    )
+
+    if current_user.is_authenticated:
+        gerencias_usuario = [
+            g for g in obter_gerencias_liberadas_usuario(current_user) if g in GERENCIAS
+        ]
+        gerencia_padrao_usuario = (
+            gerencias_usuario[0]
+            if gerencias_usuario
+            else (
+                normalizar_gerencia(current_user.gerencia_padrao or "", permitir_entrada=True)
+                or "GABINETE"
+            )
+        )
+        filtro_meus_processos = [
+            Processo.finalizado_em.is_(None),
+            Processo.assigned_to_id == current_user.id,
+        ]
+        if gerencias_usuario:
+            filtro_meus_processos.append(Processo.gerencia.in_(gerencias_usuario))
+        else:
+            filtro_meus_processos.append(Processo.gerencia == gerencia_padrao_usuario)
+
+        meus_processos_total = (
+            aplicar_filtro_devolvidos_gabinete(
+                db.session.query(func.count(Processo.id)).filter(*filtro_meus_processos)
+            ).scalar()
+            or 0
+        )
+        vistos = session.get("meus_processos_visto", 0)
+        resposta["meus_processos_total"] = int(meus_processos_total)
+        resposta["meus_processos_novos"] = int(max(meus_processos_total - vistos, 0))
+        resposta["gerencia_padrao_usuario"] = gerencia_padrao_usuario
+
+    return jsonify(resposta)
+
+
 @app.route("/exportar-geral", methods=["POST"])
 @login_required
 def exportar_geral():
@@ -5174,6 +5256,7 @@ def gerencia(nome_gerencia):
     filtro_coordenadoria = request.args.get("coordenadoria", "").strip()
     filtro_equipe_area = request.args.get("equipe_area", "").strip()
     filtro_responsavel_equipe = request.args.get("responsavel_equipe", "").strip()
+    filtro_responsavel_id = request.args.get("responsavel_id", type=int)
     pagina = request.args.get("page", type=int, default=1)
     aba_ativa = (request.args.get("aba") or "interacoes").strip().lower()
     pode_ver_devolvidos = (
@@ -5217,6 +5300,8 @@ def gerencia(nome_gerencia):
             consulta = consulta.filter(
                 Processo.responsavel_equipe.ilike(f"%{filtro_responsavel_equipe}%")
             )
+        if filtro_responsavel_id:
+            consulta = consulta.filter(Processo.assigned_to_id == filtro_responsavel_id)
         return consulta
 
     def ordenar_finalizados(proc: Processo) -> datetime:
@@ -5858,6 +5943,7 @@ def gerencia(nome_gerencia):
         filtro_coordenadoria=filtro_coordenadoria,
         filtro_equipe_area=filtro_equipe_area,
         filtro_responsavel_equipe=filtro_responsavel_equipe,
+        filtro_responsavel_id=filtro_responsavel_id,
         campos_extra=campos_extra,
         pode_configurar_campos=pode_configurar,
         pode_exportar_gerencia=pode_exportar_gerencia,

@@ -37,10 +37,10 @@
  </li>
  {% if current_user.is_authenticated %}
  <li class="nav-item">
- <a class="btn btn-outline-light btn-sm position-relative" href="{{ url_for('gerencia', nome_gerencia=gerencia_padrao_usuario or 'GABINETE', responsavel_id=current_user.id, ack_meus_processos=1) }}">
+ <a class="btn btn-outline-light btn-sm position-relative" id="btnMeusProcessos" href="{{ url_for('gerencia', nome_gerencia=gerencia_padrao_usuario or 'GABINETE', responsavel_id=current_user.id, ack_meus_processos=1) }}">
  Meus Processos
  {% if meus_processos_novos %}
- <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+ <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="badgeMeusProcessos">
  {{ meus_processos_novos }}
  </span>
  {% endif %}
@@ -118,16 +118,16 @@
  {% elif metricas %}
  <div class="hero-metrics mt-4">
  <div class="hero-metric hero-metric-btn" role="button" tabindex="0" data-anchor="#tabelaProcessos" data-filtro="ativos">
- <span class="metric-label">Em andamento</span>
- <span class="metric-value">{{ metricas.andamento }}</span>
- </div>
- <div class="hero-metric hero-metric-btn" role="button" tabindex="0" data-anchor="#tabelaProcessos" data-filtro="finalizados">
- <span class="metric-label">Finalizados</span>
- <span class="metric-value">{{ metricas.finalizados }}</span>
- </div>
- <div class="hero-metric">
- <span class="metric-label">Tempo m&eacute;dio</span>
- <span class="metric-value">
+  <span class="metric-label">Em andamento</span>
+  <span class="metric-value" id="metricAndamentoHome">{{ metricas.andamento }}</span>
+  </div>
+  <div class="hero-metric hero-metric-btn" role="button" tabindex="0" data-anchor="#tabelaProcessos" data-filtro="finalizados">
+  <span class="metric-label">Finalizados</span>
+  <span class="metric-value" id="metricFinalizadosHome">{{ metricas.finalizados }}</span>
+  </div>
+  <div class="hero-metric">
+  <span class="metric-label">Tempo m&eacute;dio</span>
+  <span class="metric-value" id="metricTempoMedioHome">
  {% if metricas.tempo_medio_dias is not none %}
  {{ metricas.tempo_medio_dias | round(1) }} dias
  {% else %}
@@ -164,7 +164,7 @@
  <div class="card-body">
  <div class="d-flex justify-content-between align-items-center mb-2">
  <h5 class="card-title mb-0">{{ nome }}</h5>
- <span class="badge bg-primary rounded-pill fs-6">{{ total }}</span>
+ <span class="badge bg-primary rounded-pill fs-6" id="badgeGerencia{{ nome }}">{{ total }}</span>
  </div>
  <p class="text-muted mb-3">Processos ativos nesta gerência.</p>
  <!-- Botao para abrir a listagem detalhada da gerência selecionada -->
@@ -182,7 +182,7 @@
  <div class="card-body">
  <div class="d-flex justify-content-between align-items-center mb-2">
  <h5 class="card-title mb-0">Revisão / SAÍDA</h5>
- <span class="badge bg-success rounded-pill fs-6">{{ contagem_saida }}</span>
+ <span class="badge bg-success rounded-pill fs-6" id="badgeGerenciaSAIDA">{{ contagem_saida }}</span>
  </div>
  <p class="text-muted mb-3">Checkpoint final para validar e encerrar processos.</p>
  <a class="btn btn-sm btn-success stretched-link" href="{{ url_for('gerencia', nome_gerencia='SAIDA') }}">Conferir e finalizar</a>
@@ -526,6 +526,8 @@
  ('tipo_processo', 'Tipo de processo'),
  ('palavras_chave', 'Palavras-chave'),
  ('observacoes_complementares', 'Observacoes complementares'),
+ ('data_saida', 'Data de saida'),
+ ('destino_saida', 'Destino saida'),
  ('finalizado_em', 'Finalizado em')
  ] %}
  {% for valor, label in colunas_base %}
@@ -655,7 +657,80 @@ document.addEventListener("DOMContentLoaded", function () {
  });
  });
 
-});
+ {% if not SITE_EM_CONFIGURACAO %}
+ const atualizarPainelAutomatico = () => {
+ const url = "{{ url_for('api_atualizacoes_painel') }}";
+ fetch(url, {
+ headers: { "X-Requested-With": "XMLHttpRequest" },
+ cache: "no-store",
+ credentials: "same-origin",
+ })
+ .then((resp) => {
+ if (!resp.ok) throw new Error("Falha ao consultar painel");
+ return resp.json();
+ })
+ .then((dados) => {
+ if (!dados || dados.site_em_configuracao) return;
+
+ const metricAndamento = document.getElementById("metricAndamentoHome");
+ const metricFinalizados = document.getElementById("metricFinalizadosHome");
+ const metricTempo = document.getElementById("metricTempoMedioHome");
+ if (metricAndamento && dados.metricas) {
+ metricAndamento.textContent = String(dados.metricas.andamento ?? 0);
+ }
+ if (metricFinalizados && dados.metricas) {
+ metricFinalizados.textContent = String(dados.metricas.finalizados ?? 0);
+ }
+ if (metricTempo && dados.metricas) {
+ const tempo = dados.metricas.tempo_medio_dias;
+ metricTempo.textContent = (tempo === null || tempo === undefined) ? "--" : `${Number(tempo).toFixed(1)} dias`;
+ }
+
+ const contagens = dados.contagens || {};
+ Object.entries(contagens).forEach(([gerencia, total]) => {
+ const badge = document.getElementById(`badgeGerencia${gerencia}`);
+ if (badge) {
+ badge.textContent = String(total ?? 0);
+ }
+ });
+ const badgeSaida = document.getElementById("badgeGerenciaSAIDA");
+ if (badgeSaida) {
+ badgeSaida.textContent = String(dados.contagem_saida ?? 0);
+ }
+
+ const btnMeus = document.getElementById("btnMeusProcessos");
+ let badgeMeus = document.getElementById("badgeMeusProcessos");
+ const novos = Number(dados.meus_processos_novos || 0);
+ if (btnMeus) {
+ if (!badgeMeus && novos > 0) {
+ badgeMeus = document.createElement("span");
+ badgeMeus.id = "badgeMeusProcessos";
+ badgeMeus.className = "position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger";
+ btnMeus.appendChild(badgeMeus);
+ }
+ if (badgeMeus) {
+ if (novos > 0) {
+ badgeMeus.textContent = String(novos);
+ badgeMeus.classList.remove("d-none");
+ } else {
+ badgeMeus.classList.add("d-none");
+ }
+ }
+ if (dados.gerencia_padrao_usuario) {
+ btnMeus.href = `/gerencia/${encodeURIComponent(dados.gerencia_padrao_usuario)}?responsavel_id={{ current_user.id if current_user.is_authenticated else 0 }}&ack_meus_processos=1`;
+ }
+ }
+ })
+ .catch(() => {
+ // Falha silenciosa: o polling nao deve quebrar a tela.
+ });
+ };
+
+ atualizarPainelAutomatico();
+ window.setInterval(atualizarPainelAutomatico, 8000);
+ {% endif %}
+ 
+ });
 </script>
 </body>
 </html>
