@@ -803,36 +803,59 @@ body {
     z-index: 1085;
     width: 280px;
     max-width: calc(100vw - 16px);
-    background: #fff;
-    border: 1px solid #cbd5e1;
+    background: #f1f5f9;
+    border: 1px solid #93c5fd;
     border-radius: 0.6rem;
-    box-shadow: 0 14px 30px -18px rgba(15, 23, 42, 0.55);
+    box-shadow: 0 12px 26px -16px rgba(30, 64, 175, 0.45);
     padding: 0.55rem;
 }
 
 .excel-filter-actions {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 0.35rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.45rem;
     margin-bottom: 0.45rem;
 }
 
-.excel-filter-actions .btn {
-    text-align: left;
+.excel-filter-action-btn {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    font-size: 0.78rem;
+    line-height: 1.2;
+    color: #334155;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.excel-filter-action-btn:hover {
+    color: #1d4ed8;
+    text-decoration: none;
 }
 
 .excel-filter-search {
     margin-bottom: 0.45rem;
     font-size: 0.78rem;
+    border: 1px solid #93c5fd;
+    border-radius: 0.5rem;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.excel-filter-search:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.22);
 }
 
 .excel-filter-list {
     max-height: 240px;
     overflow: auto;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #cbd5e1;
     border-radius: 0.45rem;
     padding: 0.35rem;
-    background: #f8fafc;
+    background: #e2e8f0;
 }
 
 .excel-filter-item {

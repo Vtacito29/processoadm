@@ -112,11 +112,6 @@
  </div>
  <div id="status-usuario-existente" class="alert alert-warning py-2 px-3 small d-none mb-3" role="alert"></div>
 <div class="mb-3">
-<label class="form-label">Nome de usuário</label>
-<input class="form-control" type="text" name="username_cadastro" id="cadastro-username" required autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-<div class="form-text">Esse será o usuário utilizado para entrar no sistema.</div>
-</div>
-<div class="mb-3">
 <label class="form-label">Nome completo</label>
 <input class="form-control" type="text" name="nome" id="cadastro-nome" list="nomes-por-gerencia" required autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
 <datalist id="nomes-por-gerencia"></datalist>
@@ -129,6 +124,11 @@ Selecione uma sugestão quando o nome já existir na lista. As sugestões exibid
 <div class="small text-muted mb-2" id="resumo-sugestoes-cadastro">Selecione a gerência, coordenadoria ou equipe para carregar as sugestões.</div>
 <div class="d-flex flex-wrap gap-2" id="lista-sugestoes-cadastro"></div>
 </div>
+</div>
+<div class="mb-3">
+<label class="form-label">Nome de usuário</label>
+<input class="form-control" type="text" name="username_cadastro" id="cadastro-username" required autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+<div class="form-text">Sugestão automática: primeiro nome + "." + último nome. Você pode editar se precisar.</div>
 </div>
  <div class="mb-3">
  <label class="form-label">E-mail</label>
@@ -401,16 +401,19 @@ Selecione uma sugestão quando o nome já existir na lista. As sugestões exibid
  const gerenciaInput = document.getElementById("cadastro-gerencia");
  const coordCadastro = document.getElementById("cadastro-coord");
  const equipeCadastro = document.getElementById("cadastro-equipe");
- const datalistNomes = document.getElementById("nomes-por-gerencia");
+const datalistNomes = document.getElementById("nomes-por-gerencia");
 const nomeInput = document.getElementById("cadastro-nome");
+const usernameInput = document.getElementById("cadastro-username");
 const emailInput = document.getElementById("cadastro-email");
 const adicionarAtribuidoInput = document.getElementById("adicionar-atribuido-sei");
 const nomeVinculoListaInput = document.getElementById("nome-vinculo-lista");
 const statusExistente = document.getElementById("status-usuario-existente");
 const listaSugestoesCadastro = document.getElementById("lista-sugestoes-cadastro");
 const resumoSugestoesCadastro = document.getElementById("resumo-sugestoes-cadastro");
+let usernameEditadoManualmente = false;
+let nomeVinculoSelecionadoManual = "";
 
- const deduplicar = (lista) => {
+const deduplicar = (lista) => {
  const vistos = new Set();
  const saida = [];
  (lista || []).forEach((item) => {
@@ -421,7 +424,28 @@ const resumoSugestoesCadastro = document.getElementById("resumo-sugestoes-cadast
  saida.push(txt);
  });
  return saida;
- };
+};
+
+const removerAcentos = (valor) =>
+ (valor || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+const sugerirUsernamePorNome = (nomeCompleto) => {
+ const partes = removerAcentos(nomeCompleto)
+ .toLowerCase()
+ .trim()
+ .split(/\s+/)
+ .map((parte) => parte.replace(/[^a-z0-9]/g, ""))
+ .filter(Boolean);
+ if (!partes.length) return "";
+ if (partes.length === 1) return partes[0];
+ return `${partes[0]}.${partes[partes.length - 1]}`;
+};
+
+const atualizarUsernameSugerido = () => {
+ if (!nomeInput || !usernameInput) return;
+ if (usernameEditadoManualmente && (usernameInput.value || "").trim()) return;
+ usernameInput.value = sugerirUsernamePorNome(nomeInput.value || "");
+};
 
  const nomesAtribuidosBaseDoContexto = () => {
  const equipe = coordCadastro && equipeCadastro ? (equipeCadastro.value || "") : "";
@@ -473,7 +497,7 @@ const popularNomesPorGerencia = () => {
   });
  };
 
- const renderizarSugestoesVisuais = () => {
+const renderizarSugestoesVisuais = () => {
  if (!listaSugestoesCadastro || !resumoSugestoesCadastro) return;
  const ger = (gerenciaInput?.value || "").trim();
  const coord = (coordCadastro?.value || "").trim();
@@ -501,35 +525,47 @@ const popularNomesPorGerencia = () => {
  : `${nomes.length} pessoas sem usuário encontradas. Clique em uma sugestão para vincular.`;
 
  const nomeAtual = normalizar(nomeInput ? nomeInput.value : "");
+ const nomeVinculoAtual = normalizar(nomeVinculoListaInput ? nomeVinculoListaInput.value : "");
  nomes.forEach((nome) => {
  const botao = document.createElement("button");
  botao.type = "button";
- const selecionado = nomeAtual && normalizar(nome) === nomeAtual;
+ const chaveNome = normalizar(nome);
+ const selecionado = (nomeAtual && chaveNome === nomeAtual) || (nomeVinculoAtual && chaveNome === nomeVinculoAtual);
  botao.className = selecionado ? "btn btn-sm btn-primary" : "btn btn-sm btn-outline-primary";
  botao.textContent = nome;
  botao.addEventListener("click", () => {
- if (nomeInput) {
- nomeInput.value = nome;
- nomeInput.dispatchEvent(new Event("input", { bubbles: true }));
- nomeInput.focus();
- }
  if (nomeVinculoListaInput) {
  nomeVinculoListaInput.value = nome;
+ nomeVinculoSelecionadoManual = nome;
  }
  renderizarSugestoesVisuais();
+ if (nomeInput) {
+ nomeInput.focus();
+ }
  });
  listaSugestoesCadastro.appendChild(botao);
  });
- };
+};
 
- const atualizarNomeVinculoSelecionado = () => {
+const atualizarNomeVinculoSelecionado = () => {
  if (!nomeInput || !nomeVinculoListaInput) return;
  const nomeInformado = (nomeInput.value || "").trim();
  const match = nomesAtribuidosBaseDoContexto().find(
  (item) => normalizar(item) === normalizar(nomeInformado),
  );
- nomeVinculoListaInput.value = match || "";
- };
+ if (match) {
+ nomeVinculoListaInput.value = match;
+ nomeVinculoSelecionadoManual = "";
+ return;
+ }
+ const vinculoManualAindaValido = nomesAtribuidosBaseDoContexto().find(
+ (item) => normalizar(item) === normalizar(nomeVinculoSelecionadoManual),
+ );
+ nomeVinculoListaInput.value = vinculoManualAindaValido || "";
+ if (!vinculoManualAindaValido) {
+ nomeVinculoSelecionadoManual = "";
+ }
+};
 
  const popularCoordenadoriasPorGerencia = () => {
  if (!gerenciaInput || !coordCadastro) return;
@@ -600,17 +636,30 @@ const itemNome = normalizar(item.nome_vinculo_atribuido || item.nome);
  });
  }
 
- if (nomeInput && emailInput) {
+if (nomeInput && emailInput) {
  nomeInput.addEventListener("focus", popularNomesPorGerencia);
  nomeInput.addEventListener("click", popularNomesPorGerencia);
  nomeInput.addEventListener("input", popularNomesPorGerencia);
  nomeInput.addEventListener("input", atualizarNomeVinculoSelecionado);
  nomeInput.addEventListener("input", renderizarSugestoesVisuais);
  nomeInput.addEventListener("input", atualizarStatusUsuario);
+ nomeInput.addEventListener("input", atualizarUsernameSugerido);
  emailInput.addEventListener("input", atualizarStatusUsuario);
  atualizarNomeVinculoSelecionado();
  renderizarSugestoesVisuais();
  atualizarStatusUsuario();
+ atualizarUsernameSugerido();
+ }
+
+ if (usernameInput) {
+ usernameInput.addEventListener("input", () => {
+ const usernameAtual = (usernameInput.value || "").trim();
+ usernameEditadoManualmente = Boolean(usernameAtual);
+ if (!usernameAtual) {
+ usernameEditadoManualmente = false;
+ atualizarUsernameSugerido();
+ }
+ });
  }
 
  document.querySelectorAll(".js-perfil-select").forEach((selectPerfil) => {

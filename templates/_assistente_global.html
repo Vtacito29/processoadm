@@ -78,18 +78,18 @@
 
 
     <div class="chat-message bot">
- <div class="chat-text">Ol! Escreva sua pergunta. Se for sobre um processo espec?fico, informe o n?mero SEI.</div>
+ <div class="chat-text">Olá! Escreva sua pergunta. Se for sobre um processo específico, informe o número SEI.</div>
  </div>
  </div>
  <form id="formAssistenteGlobal" class="chat-form">
  <div class="mb-2">
- <label class="form-label" id="labelNumeroSei">N?mero SEI</label>
- <input class="form-control" name="numero" id="assistenteNumeroSei" placeholder="Informe o n?mero SEI se a pergunta for sobre um processo espec?fico">
+ <label class="form-label" id="labelNumeroSei">Número SEI</label>
+ <input class="form-control" name="numero" id="assistenteNumeroSei" placeholder="Informe o número SEI se a pergunta for sobre um processo específico">
  <div class="form-text" id="hintNumeroSei">Opcional para perguntas gerais.</div>
  </div>
  <div class="mb-2">
  <label class="form-label">Pergunta</label>
- <textarea class="form-control" name="pergunta" id="assistentePergunta" rows="2" placeholder="Ex: Qual o prazo e quem est responsvel?"></textarea>
+ <textarea class="form-control" name="pergunta" id="assistentePergunta" rows="2" placeholder="Ex: Qual o prazo e quem está responsável?"></textarea>
  </div>
  <button class="btn btn-primary w-100" type="submit">
  <i class="bi bi-send"></i> Perguntar
@@ -111,7 +111,7 @@ document.addEventListener("DOMContentLoaded", function () {
  (chat &&
  chat.querySelector(".chat-message.bot .chat-text") &&
  chat.querySelector(".chat-message.bot .chat-text").textContent.trim()) ||
- "Ola! Escreva sua pergunta. Se for sobre um processo especifico, informe o numero SEI.";
+ "Olá! Escreva sua pergunta. Se for sobre um processo específico, informe o número SEI.";
 
  const INACTIVITY_MS = 5 * 60 * 1000;
  let inatividadeTimer = null;
@@ -221,11 +221,11 @@ document.addEventListener("DOMContentLoaded", function () {
  const exigeNumero = perguntaExigeNumero(inputPergunta.value);
  inputNumero.required = exigeNumero;
  if (labelNumero) {
- labelNumero.textContent = exigeNumero ? "Nmero SEI (obrigatrio)" : "Nmero SEI";
+ labelNumero.textContent = exigeNumero ? "Número SEI (obrigatório)" : "Número SEI";
  }
  if (hintNumero) {
  hintNumero.textContent = exigeNumero
- ? "Obrigatrio para perguntas sobre um processo especfico."
+ ? "Obrigatório para perguntas sobre um processo específico."
  : "Opcional para perguntas gerais.";
  }
  if (!exigeNumero) {
@@ -272,7 +272,7 @@ document.addEventListener("DOMContentLoaded", function () {
  bubble.className = "chat-text chat-text-actions";
  const texto = document.createElement("div");
  texto.textContent =
- "Voc ficou alguns minutos sem conversar. Encerrar chat ou continuar?";
+ "Você ficou alguns minutos sem conversar. Encerrar chat ou continuar?";
  const actions = document.createElement("div");
  actions.className = "chat-actions";
  const btnContinuar = document.createElement("button");
@@ -336,7 +336,7 @@ document.addEventListener("DOMContentLoaded", function () {
  inputNumero.classList.add("is-invalid");
  inputNumero.focus();
  }
- appendMessage("bot", "Para perguntas sobre um processo especfico, informe o nmero SEI.");
+ appendMessage("bot", "Para perguntas sobre um processo específico, informe o número SEI.");
  return;
  }
  registrarAtividade();
@@ -353,7 +353,7 @@ document.addEventListener("DOMContentLoaded", function () {
  body: JSON.stringify({ pergunta, numero }),
  });
  const data = await resp.json();
- const referencia = data.referencia ? ` (referencia: ${data.referencia})` : "";
+ const referencia = data.referencia ? ` (referência: ${data.referencia})` : "";
  appendMessage("bot", (data.resposta || "Sem resposta") + referencia);
  registrarAtividade();
  } catch (err) {

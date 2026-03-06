@@ -4,10 +4,10 @@
  Template: verificar_dados.html
  Proposito: Painel de processos finalizados com filtros analiticos e metricas.
  Variaveis esperadas:
- - opcoes: valores distintos para selects (gerÃªncias, coordenadorias, equipes, interessados)
- - filtros: dicionario com filtros aplicados (gerÃªncia, coordenadoria, equipe, interessado, nÃºmero_sei, datas)
+ - opcoes: valores distintos para selects (gerências, coordenadorias, equipes, interessados)
+ - filtros: dicionario com filtros aplicados (gerência, coordenadoria, equipe, interessado, número_sei, datas)
  - processos: lista de Processos finalizados (para tabela)
- - processos_data: versÃ£o serializada com movimentaÃ§Ãµes (para export/grÃ¡ficos)
+ - processos_data: versão serializada com movimentações (para export/gráficos)
  - metricas: totais e tempo medio (processos)
  - metricas_demandas: totais e tempo medio (demandas)
  - SITE_EM_CONFIGURACAO, current_user: controle de exibicao e perfil
@@ -156,13 +156,14 @@
  <input class="form-control" type="date" name="data_fim" value="{{ filtros.data_fim }}">
  </div>
  <div class="col-12 col-md-6 col-xl-3 ms-xl-auto filters-actions">
- <button class="btn quick-gerencia active" type="submit">
- <i class="bi bi-filter"></i> Aplicar
- </button>
- <button class="btn quick-gerencia" type="button" id="btnLimparFiltros">
- Limpar
- </button>
- </div>
+  <button class="btn quick-gerencia active" type="submit">
+  <i class="bi bi-filter"></i> Aplicar
+  </button>
+  <button class="btn quick-gerencia" type="button" id="btnLimparFiltros">
+  Limpar
+  </button>
+  <input type="hidden" name="cf" id="colFiltersInputVD" value="{{ filtros_colunas_cf or '' }}">
+  </div>
  </div>
  </form>
  <aside class="hero-summary">
@@ -594,20 +595,26 @@
  </tbody>
  </table>
  </div>
- {% if paginacao_processos and paginacao_processos.pages > 1 %}
+{% if paginacao_processos %}
  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
- <small class="text-muted">Página {{ paginacao_processos.page }} de {{ paginacao_processos.pages }}</small>
+ <small class="text-muted">Exibindo {{ processos|length }} de {{ paginacao_processos.total }} processos<br>Página {{ paginacao_processos.page }} de {{ paginacao_processos.pages }}</small>
  <ul class="pagination pagination-sm mb-0">
+ <li class="page-item {% if paginacao_processos.page <= 1 %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('verificar_dados', page=1, gerencia=filtros.gerencia or None, coordenadoria=filtros.coordenadoria or None, equipe=filtros.equipe or None, interessado=filtros.interessado or None, numero_sei=filtros.numero_sei or None, data_inicio=filtros.data_inicio or None, data_fim=filtros.data_fim or None, cf=filtros_colunas_cf or None) }}">Primeira</a>
+ </li>
  <li class="page-item {% if not paginacao_processos.has_prev %}disabled{% endif %}">
- <a class="page-link" href="{{ url_for('verificar_dados', page=paginacao_processos.prev_num, gerencia=filtros.gerencia or None, coordenadoria=filtros.coordenadoria or None, equipe=filtros.equipe or None, interessado=filtros.interessado or None, numero_sei=filtros.numero_sei or None, data_inicio=filtros.data_inicio or None, data_fim=filtros.data_fim or None) }}">Anterior</a>
+ <a class="page-link" href="{{ url_for('verificar_dados', page=paginacao_processos.prev_num, gerencia=filtros.gerencia or None, coordenadoria=filtros.coordenadoria or None, equipe=filtros.equipe or None, interessado=filtros.interessado or None, numero_sei=filtros.numero_sei or None, data_inicio=filtros.data_inicio or None, data_fim=filtros.data_fim or None, cf=filtros_colunas_cf or None) }}">Anterior</a>
  </li>
  <li class="page-item active"><span class="page-link">{{ paginacao_processos.page }}</span></li>
  <li class="page-item {% if not paginacao_processos.has_next %}disabled{% endif %}">
- <a class="page-link" href="{{ url_for('verificar_dados', page=paginacao_processos.next_num, gerencia=filtros.gerencia or None, coordenadoria=filtros.coordenadoria or None, equipe=filtros.equipe or None, interessado=filtros.interessado or None, numero_sei=filtros.numero_sei or None, data_inicio=filtros.data_inicio or None, data_fim=filtros.data_fim or None) }}">Próxima</a>
+ <a class="page-link" href="{{ url_for('verificar_dados', page=paginacao_processos.next_num, gerencia=filtros.gerencia or None, coordenadoria=filtros.coordenadoria or None, equipe=filtros.equipe or None, interessado=filtros.interessado or None, numero_sei=filtros.numero_sei or None, data_inicio=filtros.data_inicio or None, data_fim=filtros.data_fim or None, cf=filtros_colunas_cf or None) }}">Próxima</a>
+ </li>
+ <li class="page-item {% if (paginacao_processos.pages or 1) <= paginacao_processos.page %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('verificar_dados', page=(paginacao_processos.pages or 1), gerencia=filtros.gerencia or None, coordenadoria=filtros.coordenadoria or None, equipe=filtros.equipe or None, interessado=filtros.interessado or None, numero_sei=filtros.numero_sei or None, data_inicio=filtros.data_inicio or None, data_fim=filtros.data_fim or None, cf=filtros_colunas_cf or None) }}">Última</a>
  </li>
  </ul>
  </div>
- {% endif %}
+{% endif %}
  <div class="mt-4 d-none" id="historicoWrapper">
  <div class="d-flex align-items-center gap-2 mb-2">
  <h3 class="h6 mb-0 fw-semibold" id="historicoTitulo">Histórico do processo</h3>
@@ -846,46 +853,114 @@ let fichaAberta = false;
  .replace(/[\u0300-\u036f]/g, "")
  .trim();
 
- const configurarFiltrosTabela = (tabela, botaoLimpar = null) => {
- if (!tabela) return;
- const titulos = Array.from(tabela.querySelectorAll("thead tr:first-child th"));
- if (!titulos.length) return;
+const configurarFiltrosTabela = (tabela, botaoLimpar = null) => {
+if (!tabela) return;
+const titulos = Array.from(tabela.querySelectorAll("thead tr:first-child th"));
+if (!titulos.length) return;
+const sincronizaComBackend = tabela.id === "tabelaProcessos" || tabela.id === "tabelaDemandas";
 
- const estado = {
- filtros: {},
- sort: { col: null, dir: null },
- };
- let painelAtivo = null;
+const estado = {
+filtros: {},
+sort: { col: null, dir: null },
+};
+let painelAtivo = null;
+let limparListenersPainel = null;
 
- const obterLinhasBase = () =>
- Array.from(tabela.querySelectorAll("tbody tr")).filter(
- (linha) => !linha.classList.contains("ficha-tecnica-row"),
- );
+const obterLinhasBase = () =>
+Array.from(tabela.querySelectorAll("tbody tr")).filter(
+(linha) => !linha.classList.contains("ficha-tecnica-row"),
+);
 
- const obterValorColuna = (linha, idx) => {
- const celula = linha.children[idx];
- return (celula?.innerText || "").replace(/\s+/g, " ").trim();
- };
+ obterLinhasBase().forEach((linha, indice) => {
+ if (!linha.dataset.originalOrder) {
+ linha.dataset.originalOrder = String(indice);
+ }
+ });
 
- const fecharPainel = () => {
- if (!painelAtivo) return;
- painelAtivo.remove();
- painelAtivo = null;
- };
+const obterValorColuna = (linha, idx) => {
+const celula = linha.children[idx];
+return (celula?.innerText || "").replace(/\s+/g, " ").trim();
+};
+
+const slugCabecalho = (idx) => {
+const th = titulos[idx];
+const txt = (th?.textContent || "").replace(/\s+/g, " ").trim();
+return normalizarFiltroTabela(txt).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+};
+
+const parseCfUrl = () => {
+const raw = new URLSearchParams(window.location.search).get("cf");
+if (!raw) return {};
+try {
+const parsed = JSON.parse(raw);
+if (!parsed || typeof parsed !== "object") return {};
+return parsed;
+} catch (_err) {
+return {};
+}
+};
+
+const syncServerFromState = () => {
+if (!sincronizaComBackend) return false;
+const payload = {};
+Object.entries(estado.filtros).forEach(([idxStr, selecionados]) => {
+const idx = Number(idxStr);
+if (!selecionados || !selecionados.size) return;
+const slug = slugCabecalho(idx);
+if (!slug) return;
+payload[slug] = Array.from(selecionados);
+});
+ if (estado.sort && estado.sort.col !== null && (estado.sort.dir === "asc" || estado.sort.dir === "desc")) {
+ const sortSlug = slugCabecalho(estado.sort.col);
+ if (sortSlug) {
+ payload.__sort_col = [sortSlug];
+ payload.__sort_dir = [estado.sort.dir];
+ }
+ }
+const url = new URL(window.location.href);
+if (Object.keys(payload).length) {
+url.searchParams.set("cf", JSON.stringify(payload));
+} else {
+url.searchParams.delete("cf");
+}
+ const inputCf = document.getElementById("colFiltersInputVD");
+ if (inputCf) {
+ inputCf.value = url.searchParams.get("cf") || "";
+ }
+url.searchParams.set("page", "1");
+window.location.href = url.toString();
+return true;
+};
+
+const linhaPassaFiltros = (linha, ignorarColuna = null) => {
+let ok = true;
+Object.entries(estado.filtros).forEach(([colStr, selecionados]) => {
+if (!ok) return;
+const col = Number(colStr);
+if (ignorarColuna !== null && col === ignorarColuna) return;
+const valor = normalizarFiltroTabela(obterValorColuna(linha, col) || "(vazio)");
+if (!selecionados || !selecionados.size) return;
+if (!selecionados.has(valor)) ok = false;
+});
+return ok;
+};
+
+const fecharPainel = () => {
+if (limparListenersPainel) {
+limparListenersPainel();
+limparListenersPainel = null;
+}
+if (!painelAtivo) return;
+painelAtivo.remove();
+painelAtivo = null;
+};
 
  const aplicarEstadoTabela = () => {
  const linhas = obterLinhasBase();
 
- linhas.forEach((linha) => {
- let ok = true;
- Object.entries(estado.filtros).forEach(([colStr, selecionados]) => {
- if (!ok) return;
- const col = Number(colStr);
- const valor = normalizarFiltroTabela(obterValorColuna(linha, col) || "(vazio)");
- if (!selecionados || !selecionados.size) return;
- if (!selecionados.has(valor)) ok = false;
- });
- linha.classList.toggle("column-filter-hidden", !ok);
+linhas.forEach((linha) => {
+const ok = linhaPassaFiltros(linha);
+linha.classList.toggle("column-filter-hidden", !ok);
  const ficha = linha.nextElementSibling;
  if (
  ficha?.classList.contains("ficha-tecnica-row") &&
@@ -894,6 +969,17 @@ let fichaAberta = false;
  ficha.classList.toggle("column-filter-hidden", !ok);
  }
  });
+
+ const moverLinhaComFicha = (linha, tbody) => {
+ const ficha = linha.nextElementSibling;
+ tbody?.appendChild(linha);
+ if (
+ ficha?.classList.contains("ficha-tecnica-row") &&
+ ficha.getAttribute("data-processo") === linha.getAttribute("data-processo")
+ ) {
+ tbody?.appendChild(ficha);
+ }
+ };
 
  if (estado.sort.col !== null && estado.sort.dir) {
  const col = estado.sort.col;
@@ -904,16 +990,13 @@ let fichaAberta = false;
  const vb = normalizarFiltroTabela(obterValorColuna(b, col));
  return va.localeCompare(vb, "pt-BR", { numeric: true }) * dir;
  });
- ordenadas.forEach((linha) => {
- const ficha = linha.nextElementSibling;
- tbody?.appendChild(linha);
- if (
- ficha?.classList.contains("ficha-tecnica-row") &&
- ficha.getAttribute("data-processo") === linha.getAttribute("data-processo")
- ) {
- tbody?.appendChild(ficha);
- }
- });
+ ordenadas.forEach((linha) => moverLinhaComFicha(linha, tbody));
+ } else {
+ const tbody = tabela.querySelector("tbody");
+ const ordemOriginal = [...linhas].sort(
+ (a, b) => Number(a.dataset.originalOrder || "0") - Number(b.dataset.originalOrder || "0"),
+ );
+ ordemOriginal.forEach((linha) => moverLinhaComFicha(linha, tbody));
  }
 
  titulos.forEach((th, idx) => {
@@ -926,41 +1009,89 @@ let fichaAberta = false;
   atualizarMetricasPainel(!refs.visaoTabelaDemanda || !refs.visaoTabelaDemanda.checked);
   };
 
- const abrirPainelColuna = (idx, btn) => {
- fecharPainel();
- const linhas = obterLinhasBase();
- const valoresUnicosMap = new Map();
- linhas.forEach((linha) => {
- const bruto = obterValorColuna(linha, idx) || "(Vazio)";
- const chave = normalizarFiltroTabela(bruto || "(vazio)");
- if (!valoresUnicosMap.has(chave)) valoresUnicosMap.set(chave, bruto);
+const cfInicial = parseCfUrl();
+if (cfInicial && typeof cfInicial === "object") {
+ const sortColRaw = Array.isArray(cfInicial.__sort_col) ? (cfInicial.__sort_col[0] || "") : "";
+ const sortDirRaw = Array.isArray(cfInicial.__sort_dir) ? (cfInicial.__sort_dir[0] || "") : "";
+ titulos.forEach((_, idx) => {
+ const slug = slugCabecalho(idx);
+ if (!slug || slug === "__sort_col" || slug === "__sort_dir") return;
+ const vals = cfInicial[slug];
+ if (!Array.isArray(vals) || !vals.length) return;
+ estado.filtros[idx] = new Set(vals.map((v) => normalizarFiltroTabela(v)));
  });
+ if (sortColRaw && (sortDirRaw === "asc" || sortDirRaw === "desc")) {
+ const sortIdx = titulos.findIndex((_, idx) => slugCabecalho(idx) === sortColRaw);
+ if (sortIdx >= 0) {
+ estado.sort = { col: sortIdx, dir: sortDirRaw };
+ }
+ }
+}
+
+const abrirPainelColuna = (idx, btn) => {
+fecharPainel();
+const linhas = obterLinhasBase();
+const linhasContexto = linhas.filter((linha) => linhaPassaFiltros(linha, idx));
+const valoresUnicosMap = new Map();
+linhasContexto.forEach((linha) => {
+const bruto = obterValorColuna(linha, idx) || "(Vazio)";
+const chave = normalizarFiltroTabela(bruto || "(vazio)");
+if (!valoresUnicosMap.has(chave)) valoresUnicosMap.set(chave, bruto);
+});
  const valoresUnicos = [...valoresUnicosMap.entries()].sort((a, b) =>
  a[1].localeCompare(b[1], "pt-BR", { numeric: true }),
  );
  const selecionadosAtuais = estado.filtros[idx] ? new Set(estado.filtros[idx]) : new Set(valoresUnicos.map(([k]) => k));
  let selecionadosTemp = new Set(selecionadosAtuais);
 
- const painel = document.createElement("div");
- painel.className = "excel-filter-menu";
+const painel = document.createElement("div");
+painel.className = "excel-filter-menu";
  painel.innerHTML = `
- <div class="excel-filter-actions">
-   <button type="button" class="btn btn-outline-secondary btn-sm" data-sort="asc">Ordem crescente</button>
-   <button type="button" class="btn btn-outline-secondary btn-sm" data-sort="desc">Ordem decrescente</button>
-   <button type="button" class="btn btn-outline-secondary btn-sm" data-sort="clear">Limpar ordenação</button>
- </div>
- <input type="search" class="form-control form-control-sm excel-filter-search" placeholder="Pesquisar">
- <div class="excel-filter-list"></div>
+<div class="excel-filter-actions">
+  <button type="button" class="excel-filter-action-btn" data-sort="asc"><i class="bi bi-sort-alpha-down" aria-hidden="true"></i> Ordem crescente</button>
+  <button type="button" class="excel-filter-action-btn" data-sort="desc"><i class="bi bi-sort-alpha-up" aria-hidden="true"></i> Ordem decrescente</button>
+  <button type="button" class="excel-filter-action-btn" data-sort="clear"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Limpar ordenação</button>
+</div>
+<input type="search" class="form-control form-control-sm excel-filter-search" placeholder="Pesquisar">
+<div class="excel-filter-list"></div>
  <div class="excel-filter-footer">
    <button type="button" class="btn btn-outline-secondary btn-sm" data-cancel>Cancelar</button>
    <button type="button" class="btn btn-primary btn-sm" data-ok>OK</button>
  </div>`;
- document.body.appendChild(painel);
- painelAtivo = painel;
+document.body.appendChild(painel);
+painelAtivo = painel;
 
- const rect = btn.getBoundingClientRect();
- painel.style.left = `${Math.max(8, rect.left)}px`;
- painel.style.top = `${rect.bottom + 6}px`;
+const posicionarPainel = () => {
+const rect = btn.getBoundingClientRect();
+const margem = 8;
+const largura = painel.offsetWidth || 280;
+const altura = painel.offsetHeight || 320;
+let left = rect.left;
+if (left + largura > window.innerWidth - margem) {
+left = window.innerWidth - largura - margem;
+}
+if (left < margem) {
+left = margem;
+}
+let top = rect.bottom + 6;
+if (top + altura > window.innerHeight - margem) {
+const acima = rect.top - altura - 6;
+top = acima >= margem ? acima : Math.max(margem, window.innerHeight - altura - margem);
+}
+if (top < margem) {
+top = margem;
+}
+painel.style.left = `${left}px`;
+painel.style.top = `${top}px`;
+};
+const aoReposicionar = () => window.requestAnimationFrame(posicionarPainel);
+window.addEventListener("scroll", aoReposicionar, true);
+window.addEventListener("resize", aoReposicionar);
+limparListenersPainel = () => {
+window.removeEventListener("scroll", aoReposicionar, true);
+window.removeEventListener("resize", aoReposicionar);
+};
+window.requestAnimationFrame(posicionarPainel);
 
  const listEl = painel.querySelector(".excel-filter-list");
  const searchEl = painel.querySelector(".excel-filter-search");
@@ -1013,6 +1144,7 @@ let fichaAberta = false;
  } else {
  estado.sort = { col: idx, dir: direcao };
  }
+ if (syncServerFromState()) return;
  aplicarEstadoTabela();
  fecharPainel();
  });
@@ -1027,12 +1159,14 @@ let fichaAberta = false;
  } else {
  estado.filtros[idx] = new Set(selecionadosTemp);
  }
+ if (syncServerFromState()) return;
  aplicarEstadoTabela();
  fecharPainel();
  });
  };
 
  titulos.forEach((th, idx) => {
+ if (idx === 0) return;
  if (th.querySelector(".col-filter-trigger")) return;
  const btn = document.createElement("button");
  btn.type = "button";
@@ -1058,6 +1192,13 @@ let fichaAberta = false;
  botaoLimpar.addEventListener("click", () => {
  estado.filtros = {};
  estado.sort = { col: null, dir: null };
+ if (sincronizaComBackend) {
+ const url = new URL(window.location.href);
+ url.searchParams.delete("cf");
+ url.searchParams.set("page", "1");
+ window.location.href = url.toString();
+ return;
+ }
  aplicarEstadoTabela();
  });
  }
@@ -1629,7 +1770,17 @@ const inserirFichaTecnicaNaTabela = (processo) => {
  const corpo = refs.tabelaProcessos.querySelector("tbody");
  if (!corpo) return;
 
- const alvo = Array.from(corpo.querySelectorAll("tr")).find(
+ const linhasBase = Array.from(corpo.querySelectorAll("tr")).filter(
+ (linha) => !linha.classList.contains("ficha-tecnica-row"),
+ );
+ const alvoAtivo = linhasBase.find(
+ (linha) =>
+ linha.classList.contains("table-active") &&
+ normalizarSei(linha.getAttribute("data-processo")) === normalizarSei(processo.numero_sei),
+ );
+ const alvo =
+ alvoAtivo ||
+ linhasBase.find(
  (linha) => normalizarSei(linha.getAttribute("data-processo")) === normalizarSei(processo.numero_sei),
  );
 
@@ -1644,7 +1795,10 @@ const inserirFichaTecnicaNaTabela = (processo) => {
  fichaLinha.appendChild(celula);
 
  if (alvo?.parentNode) {
- alvo.parentNode.insertBefore(fichaLinha, alvo.nextElementSibling);
+ const tbody = alvo.parentNode;
+ // Garante a linha principal em cima e a ficha logo abaixo.
+ tbody.insertBefore(alvo, tbody.firstChild);
+ tbody.insertBefore(fichaLinha, alvo.nextSibling);
  } else {
  corpo.appendChild(fichaLinha);
  }
@@ -1656,7 +1810,24 @@ const inserirFichaTecnicaNaTabela = (processo) => {
  const corpo = refs.tabelaDemandas.querySelector("tbody");
  if (!corpo) return;
 
- const alvo = Array.from(corpo.querySelectorAll("tr")).find(
+ const linhasBase = Array.from(corpo.querySelectorAll("tr")).filter(
+ (linha) => !linha.classList.contains("ficha-tecnica-row"),
+ );
+ const alvoPorIndice =
+ demandaSelecionadaIdx !== null && demandaSelecionadaIdx !== undefined
+ ? linhasBase.find(
+ (linha) => String(linha.getAttribute("data-demanda-idx") || "") === String(demandaSelecionadaIdx),
+ )
+ : null;
+ const alvoAtivo = linhasBase.find(
+ (linha) =>
+ linha.classList.contains("table-active") &&
+ normalizarSei(linha.getAttribute("data-processo")) === normalizarSei(demanda.numero_sei),
+ );
+ const alvo =
+ alvoPorIndice ||
+ alvoAtivo ||
+ linhasBase.find(
  (linha) => normalizarSei(linha.getAttribute("data-processo")) === normalizarSei(demanda.numero_sei),
  );
 
@@ -1672,7 +1843,10 @@ const inserirFichaTecnicaNaTabela = (processo) => {
  fichaLinha.appendChild(celula);
 
  if (alvo?.parentNode) {
- alvo.parentNode.insertBefore(fichaLinha, alvo.nextElementSibling);
+ const tbody = alvo.parentNode;
+ // Garante a linha principal em cima e a ficha logo abaixo.
+ tbody.insertBefore(alvo, tbody.firstChild);
+ tbody.insertBefore(fichaLinha, alvo.nextSibling);
  } else {
  corpo.appendChild(fichaLinha);
  }
@@ -2902,10 +3076,12 @@ refs.btnVerHistorico?.addEventListener("click", () => {
 })();
 </script>
 {% endif %}
-{% include "_assistente_global.html" %}
+{# Assistente global desativado temporariamente #}
 </body>
 
 </html>
+
+
 
 
 

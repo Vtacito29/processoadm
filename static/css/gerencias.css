@@ -88,13 +88,16 @@ body {
 .process-table th {
     text-align: center;
     white-space: normal;
-    word-break: keep-all;
+    word-break: break-word;
+    overflow-wrap: anywhere;
     hyphens: auto;
     min-width: 130px;
     font-size: 0.9rem;
 }
 .process-table td {
     white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
     font-size: 0.92rem;
 }
 
@@ -223,6 +226,10 @@ body.col-resizing {
     background: linear-gradient(90deg, #fff 70%, rgba(255, 255, 255, 0.92));
     min-width: 240px;
     width: 260px;
+}
+
+.process-table thead .col-acoes {
+    z-index: 6;
 }
 
 .action-quick.icons-only {
@@ -604,7 +611,7 @@ body.col-resizing {
 }
 
 #conteudo-arquivos .process-assunto {
-    max-width: none;
+    max-width: 420px;
 }
 
 /* Interações: segue o mesmo padrão de leitura da aba de arquivos */
@@ -1041,6 +1048,32 @@ body.col-resizing {
 
 #conteudo-arquivos .process-table.table-arquivos-fixa td:nth-child(1) .d-flex {
     justify-content: center;
+}
+
+/* Permite expandir com muitas colunas selecionadas sem quebrar layout */
+#conteudo-arquivos .process-table.table-arquivos-fixa.colunas-expandiveis {
+    table-layout: auto;
+    width: max-content;
+    min-width: 100%;
+}
+
+#conteudo-arquivos .process-table.table-arquivos-fixa.colunas-expandiveis th,
+#conteudo-arquivos .process-table.table-arquivos-fixa.colunas-expandiveis td {
+    width: auto !important;
+    min-width: 170px;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+}
+
+#conteudo-arquivos .process-table.table-arquivos-fixa.colunas-expandiveis th:first-child,
+#conteudo-arquivos .process-table.table-arquivos-fixa.colunas-expandiveis td:first-child {
+    min-width: 70px;
+}
+
+#conteudo-arquivos .process-table.table-arquivos-fixa.colunas-expandiveis .process-assunto {
+    max-width: 320px;
 }
 
 #conteudo-devolvidos .process-table {

@@ -1,4 +1,4 @@
-<!-- Arquivo: templates/gerencias.html | Objetivo: painel principal por gerencia (ativos/finalizados/devolvidos) -->
+﻿<!-- Arquivo: templates/gerencias.html | Objetivo: painel principal por gerencia (ativos/finalizados/devolvidos) -->
 <!DOCTYPE html>
 
 
@@ -19,6 +19,7 @@
 
  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
  <link href="{{ url_for('static', filename='css/global.css') }}" rel="stylesheet">
+ <link href="{{ url_for('static', filename='css/table_column_filter.css') }}" rel="stylesheet">
 
 
  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
@@ -173,10 +174,23 @@
  </button>
 
 
- {% endif %}
+{% endif %}
 
- {% if pode_configurar_campos or pode_exportar_gerencia %}
- <div class="dropdown">
+{% if gerencia != 'SAIDA' %}
+<div id="toolbar-colunas-finalizados" class="dropdown{% if aba_ativa != 'arquivos' %} d-none{% endif %}">
+<button class="btn btn-outline-secondary btn-sm" type="button" id="dropdown-colunas-finalizados" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="Selecionar colunas da tabela de finalizados" aria-label="Selecionar colunas da tabela de finalizados">
+<i class="bi bi-layout-three-columns"></i>
+</button>
+<div class="dropdown-menu dropdown-menu-end p-3 shadow-sm js-colunas-finalizados-menu" aria-labelledby="dropdown-colunas-finalizados" style="min-width: 280px;">
+<div class="small text-muted mb-2">Colunas da tabela de finalizados</div>
+<div class="d-flex flex-column gap-2 js-colunas-finalizados-opcoes"></div>
+<button type="button" class="btn btn-link btn-sm p-0 mt-2 js-colunas-finalizados-reset">Restaurar padrão</button>
+</div>
+</div>
+{% endif %}
+
+{% if pode_configurar_campos or pode_exportar_gerencia %}
+<div class="dropdown">
  <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
  <i class="bi bi-three-dots"></i>
  </button>
@@ -270,6 +284,7 @@
  
  <form class="row g-3 align-items-end mb-3" method="get" autocomplete="off">
  <input type="hidden" name="aba" value="interacoes">
+ <input type="hidden" name="cf" value="{{ filtro_colunas_cf or '' }}">
  {% if filtro_responsavel_id %}
  <input type="hidden" name="responsavel_id" value="{{ filtro_responsavel_id }}">
  {% endif %}
@@ -368,7 +383,7 @@
  <div class="col-12 col-md-3 col-lg-2 d-grid">
 
 
- <a class="btn btn-outline-secondary" href="{{ url_for('gerencia', nome_gerencia=gerencia, aba='interacoes') }}">Limpar</a>
+ <a class="btn btn-outline-secondary" href="{{ url_for('gerencia', nome_gerencia=gerencia, cf=(filtro_colunas_cf or None), aba='interacoes') }}">Limpar</a>
 
 
  </div>
@@ -384,7 +399,7 @@
  <div class="table-responsive process-list-wrapper mb-3">
 
 
- <table class="table process-table align-middle">
+ <table class="table process-table align-middle" data-filter-scope="interacoes">
 
 
  <thead>
@@ -393,7 +408,7 @@
  <tr>
 
 
- <th class="col-check"><div class="resizable">Ações</div></th>
+ <th class="col-check col-acoes"><div class="resizable">Ações</div></th>
 
 
  <th><div class="resizable">Número SEI</div></th>
@@ -562,7 +577,7 @@
  {% set gerencias_env = gerencias_envolvidas_map.get(processo.id, []) if gerencias_envolvidas_map else [] %}
  {% set gerencias_abertas = gerencias_abertas_map.get(processo.id, []) if gerencias_abertas_map else [] %}
  {% set trilhas_saida = trilhas_saida_map.get(processo.id, []) if trilhas_saida_map else [] %}
- {% set tooltip_demanda_aberta = "Ainda existe uma demanda ativa nesta gerencia. O processo so pode ser finalizado apos finalizar essa demanda." %}
+{% set tooltip_demanda_aberta = "Ainda existe uma demanda ativa nesta gerência. O processo só pode ser finalizado após finalizar essa demanda." %}
  {% if gerencia == 'SAIDA' %}
  {% if gerencias_env %}
  {% for ger in gerencias_env %}
@@ -787,7 +802,8 @@
  {% if paginacao and paginacao.total %}
 
 
- <small class="text-muted">Exibindo {{ processos|length }} de {{ paginacao.total }} processos</small>
+ <small class="text-muted">Exibindo {{ processos|length }} de {{ paginacao.total }} processos</small><br>
+ <small class="text-muted">Página {{ paginacao.page }} de {{ paginacao.pages or 1 }}</small>
 
 
  {% endif %}
@@ -802,30 +818,20 @@
  <nav>
 
 
- <ul class="pagination pagination-sm mb-0">
-
-
+  <ul class="pagination pagination-sm mb-0">
+ <li class="page-item {% if paginacao.page <= 1 %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=1, page_arq=(paginacao_finalizados.page if paginacao_finalizados else None), page_dev=(paginacao_devolvidos.page if paginacao_devolvidos else None), sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, responsavel_id=filtro_responsavel_id or None, cf=(filtro_colunas_cf or None), aba='interacoes') }}">Primeira</a>
+ </li>
  <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
-
-
- <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=paginacao.prev_num, sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, responsavel_id=filtro_responsavel_id or None, aba='interacoes') }}">Anterior</a>
-
-
+ <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=paginacao.prev_num, page_arq=(paginacao_finalizados.page if paginacao_finalizados else None), page_dev=(paginacao_devolvidos.page if paginacao_devolvidos else None), sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, responsavel_id=filtro_responsavel_id or None, cf=(filtro_colunas_cf or None), aba='interacoes') }}">Anterior</a>
  </li>
-
-
  <li class="page-item active"><span class="page-link">{{ paginacao.page }}</span></li>
-
-
  <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
-
-
- <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=paginacao.next_num, sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, aba='interacoes') }}">Próxima</a>
-
-
+ <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=paginacao.next_num, page_arq=(paginacao_finalizados.page if paginacao_finalizados else None), page_dev=(paginacao_devolvidos.page if paginacao_devolvidos else None), sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, responsavel_id=filtro_responsavel_id or None, cf=(filtro_colunas_cf or None), aba='interacoes') }}">Pr&oacute;xima</a>
  </li>
-
-
+ <li class="page-item {% if (paginacao.pages or 1) <= paginacao.page %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=(paginacao.pages or 1), page_arq=(paginacao_finalizados.page if paginacao_finalizados else None), page_dev=(paginacao_devolvidos.page if paginacao_devolvidos else None), sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, responsavel_id=filtro_responsavel_id or None, cf=(filtro_colunas_cf or None), aba='interacoes') }}">&Uacute;ltima</a>
+ </li>
  </ul>
 
 
@@ -852,6 +858,7 @@
 
  <form class="row g-3 align-items-end mb-3" method="get" autocomplete="off">
  <input type="hidden" name="aba" value="arquivos">
+ <input type="hidden" name="cf" value="{{ filtro_colunas_cf or '' }}">
 
 
  <div class="col-12 col-md-6 col-lg-3">
@@ -944,34 +951,53 @@
  </div>
 
 
- <div class="col-12 col-md-3 col-lg-2 d-grid">
+<div class="col-12 col-md-3 col-lg-2 d-grid">
 
 
- <a class="btn btn-outline-secondary" href="{{ url_for('gerencia', nome_gerencia=gerencia, aba='arquivos') }}">Limpar</a>
+<a class="btn btn-outline-secondary" href="{{ url_for('gerencia', nome_gerencia=gerencia, cf=(filtro_colunas_cf or None), aba='arquivos') }}">Limpar</a>
 
 
- </div>
+</div>
 
 
- </form>
+</form>
 
 
  <div class="table-responsive process-list-wrapper mb-3">
 
 
- <table class="table process-table align-middle table-arquivos-fixa">
+<table class="table process-table align-middle table-arquivos-fixa" data-filter-scope="arquivos">
 
 
- <thead>
- <tr>
- <th class="col-check"><input class="form-check-input" type="checkbox" disabled></th>
- <th><div class="resizable">N?mero SEI</div></th>
- <th><div class="resizable">Data de entrada</div></th>
- <th><div class="resizable">Interessado</div></th>
- <th><div class="resizable">Assunto</div></th>
- <th><div class="resizable">Finalizado em</div></th>
- </tr>
- </thead>
+{% set total_colunas_finalizados = 21 + (campos_extra|length) %}
+<thead>
+<tr>
+<th class="col-check"><input class="form-check-input" type="checkbox" disabled></th>
+<th data-col-key="numero_sei"><div class="resizable">Número SEI</div></th>
+<th data-col-key="data_entrada"><div class="resizable">Data de entrada</div></th>
+<th data-col-key="interessado"><div class="resizable">Interessado</div></th>
+<th data-col-key="assunto"><div class="resizable">Assunto</div></th>
+<th data-col-key="finalizado_em"><div class="resizable">Finalizado em</div></th>
+<th data-col-key="concessionaria" data-col-default-hidden="1" style="display:none;"><div class="resizable">Concessionária</div></th>
+<th data-col-key="gerencia" data-col-default-hidden="1" style="display:none;"><div class="resizable">Gerência</div></th>
+<th data-col-key="status" data-col-default-hidden="1" style="display:none;"><div class="resizable">Status</div></th>
+<th data-col-key="responsavel_adm" data-col-default-hidden="1" style="display:none;"><div class="resizable">Responsável Adm</div></th>
+<th data-col-key="classificacao_institucional" data-col-default-hidden="1" style="display:none;"><div class="resizable">Classificação institucional</div></th>
+<th data-col-key="entrada_gabinete" data-col-default-hidden="1" style="display:none;"><div class="resizable">Data entrada GABINETE</div></th>
+<th data-col-key="descricao_melhorada" data-col-default-hidden="1" style="display:none;"><div class="resizable">Descrição melhorada</div></th>
+<th data-col-key="coordenadoria" data-col-default-hidden="1" style="display:none;"><div class="resizable">Coordenadoria</div></th>
+<th data-col-key="equipe_area" data-col-default-hidden="1" style="display:none;"><div class="resizable">Equipe / Área</div></th>
+<th data-col-key="responsavel_equipe" data-col-default-hidden="1" style="display:none;"><div class="resizable">Responsável (Equipe)</div></th>
+<th data-col-key="tipo_processo" data-col-default-hidden="1" style="display:none;"><div class="resizable">Tipo de processo</div></th>
+<th data-col-key="palavras_chave" data-col-default-hidden="1" style="display:none;"><div class="resizable">Palavras-chave</div></th>
+<th data-col-key="status_equipe" data-col-default-hidden="1" style="display:none;"><div class="resizable">Status (Equipe)</div></th>
+<th data-col-key="prazo_equipe" data-col-default-hidden="1" style="display:none;"><div class="resizable">Prazo equipe</div></th>
+<th data-col-key="observacoes" data-col-default-hidden="1" style="display:none;"><div class="resizable">Observações complementares</div></th>
+{% for campo in campos_extra %}
+<th data-col-key="extra_{{ campo.slug }}" data-col-default-hidden="1" style="display:none;"><div class="resizable">{{ campo.label }}</div></th>
+{% endfor %}
+</tr>
+</thead>
 
 
  <tbody>
@@ -995,27 +1021,55 @@
  <td class="col-check">
  <div class="d-flex align-items-center gap-2">
  <div class="d-flex gap-1">
- <button class="btn btn-sm btn-outline-primary btn-toggle-ficha" type="button" data-ficha-target="ficha-finalizado-{{ processo.id }}" data-proc-id="{{ processo.id }}" aria-expanded="false" aria-label="Ficha t?cnica" title="Ficha t?cnica">
+ <button class="btn btn-sm btn-outline-primary btn-toggle-ficha" type="button" data-ficha-target="ficha-finalizado-{{ processo.id }}" data-proc-id="{{ processo.id }}" aria-expanded="false" aria-label="Ficha técnica" title="Ficha técnica">
  <i class="bi bi-journal-text"></i>
  </button>
- <button class="btn btn-sm btn-outline-secondary btn-toggle-hist" type="button" data-hist-target="hist{{ processo.id }}" data-proc-id="{{ processo.id }}" aria-expanded="false" aria-label="Ver hist?rico" title="Ver hist?rico">
+ <button class="btn btn-sm btn-outline-secondary btn-toggle-hist" type="button" data-hist-target="hist{{ processo.id }}" data-proc-id="{{ processo.id }}" aria-expanded="false" aria-label="Ver histórico" title="Ver histórico">
  <i class="bi bi-clock-history"></i>
  </button>
  </div>
  </div>
  </td>
- <td class="fw-semibold text-nowrap numero-sei">{{ numero_display }}</td>
- <td><div class="pill light">{{ processo.data_entrada|date_br if processo.data_entrada else "-" }}</div></td>
- <td><div class="text-truncate process-assunto" title="{{ processo.interessado or '-' }}">{{ processo.interessado or "-" }}</div></td>
- <td><div class="text-truncate process-assunto" title="{{ processo.assunto or '-' }}">{{ processo.assunto or "-" }}</div></td>
- <td><div class="pill secondary">{{ processo.finalizado_em.strftime('%d/%m/%Y') if processo.finalizado_em else '-' }}</div></td>
- </tr>
+<td class="fw-semibold text-nowrap numero-sei">{{ numero_display }}</td>
+<td><div class="pill light">{{ processo.data_entrada|date_br if processo.data_entrada else "-" }}</div></td>
+<td><div class="text-truncate process-assunto" title="{{ processo.interessado or '-' }}">{{ processo.interessado or "-" }}</div></td>
+<td><div class="text-truncate process-assunto" title="{{ processo.assunto or '-' }}">{{ processo.assunto or "-" }}</div></td>
+<td><div class="pill secondary">{{ processo.finalizado_em.strftime('%d/%m/%Y') if processo.finalizado_em else '-' }}</div></td>
+<td style="display:none;"><div class="text-truncate process-assunto" title="{{ snapshot.get('concessionaria') or processo.concessionaria or '-' }}">{{ snapshot.get('concessionaria') or processo.concessionaria or "-" }}</div></td>
+<td style="display:none;">
+{% if processo.gerencia == 'SAIDA' and gerencia != 'SAIDA' %}
+{{ gerencia }}
+{% else %}
+{{ processo.gerencia or "-" }}
+{% endif %}
+</td>
+<td style="display:none;">{{ snapshot_status or processo.status or "Finalizado" }}</td>
+<td style="display:none;">{{ snapshot.get('responsavel_adm') or processo.responsavel_adm or "-" }}</td>
+<td style="display:none;">{{ snapshot.get('classificacao_institucional') or processo.classificacao_institucional or "-" }}</td>
+<td style="display:none;">{{ calcular_data_entrada_na_gerencia(processo, 'GABINETE')|date_br if calcular_data_entrada_na_gerencia(processo, 'GABINETE') else "-" }}</td>
+<td style="display:none;"><div class="text-truncate process-assunto" title="{{ snapshot.get('descricao_melhorada') or processo.descricao_melhorada or '-' }}">{{ snapshot.get('descricao_melhorada') or processo.descricao_melhorada or "-" }}</div></td>
+<td style="display:none;">{{ snapshot.get('coordenadoria') or processo.coordenadoria or "-" }}</td>
+<td style="display:none;">{{ snapshot.get('equipe_area') or processo.equipe_area or "-" }}</td>
+<td style="display:none;">{{ snapshot.get('responsavel_equipe') or processo.responsavel_equipe or "-" }}</td>
+<td style="display:none;">{{ snapshot.get('tipo_processo') or processo.tipo_processo or "-" }}</td>
+<td style="display:none;"><div class="text-truncate process-assunto" title="{{ snapshot.get('palavras_chave') or processo.palavras_chave or '-' }}">{{ snapshot.get('palavras_chave') or processo.palavras_chave or "-" }}</div></td>
+<td style="display:none;">{{ snapshot_status or processo.status or "Finalizado" }}</td>
+<td style="display:none;">{{ snapshot_prazo_equipe|date_br if snapshot_prazo_equipe else (processo.prazo_equipe|date_br if processo.prazo_equipe else "Sem prazo") }}</td>
+<td style="display:none;"><div class="text-truncate process-assunto" title="{{ (snapshot_obs or processo.observacoes_complementares or processo.observacao or 'Nenhuma observação registrada.')|replace('\n', ' ') }}">{{ (snapshot_obs or processo.observacoes_complementares or processo.observacao or 'Nenhuma observação registrada.') }}</div></td>
+{% for campo in campos_extra %}
+{% set valor_extra_coluna = (snapshot_extras or processo.dados_extra or {}).get(campo.slug) %}
+{% if not valor_extra_coluna and campo.slug == 'tipodeprocesso' %}
+{% set valor_extra_coluna = processo.tipo_processo %}
+{% endif %}
+<td style="display:none;">{{ valor_extra_coluna or "-" }}</td>
+{% endfor %}
+</tr>
 
 
  <tr class="ficha-tecnica-row d-none ficha-finalizados" id="ficha-finalizado-{{ processo.id }}" data-proc-id="{{ processo.id }}">
 
 
- <td colspan="6">
+<td colspan="{{ total_colunas_finalizados }}">
 
 
  <div class="ficha-tecnica-wrapper">
@@ -1242,7 +1296,7 @@
  <tr class="collapse history-row" id="hist{{ processo.id }}" data-proc-id="{{ processo.id }}">
 
 
- <td colspan="{{ 21 + (campos_extra|length) }}">
+<td colspan="{{ total_colunas_finalizados }}">
 
 
  <div class="timeline">
@@ -1296,7 +1350,7 @@
  <tr>
 
 
- <td colspan="{{ 21 + (campos_extra|length) }}" class="text-center text-muted py-4">Nenhum processo finalizado nesta gerência.</td>
+<td colspan="{{ total_colunas_finalizados }}" class="text-center text-muted py-4">Nenhum processo finalizado nesta gerência.</td>
 
 
  </tr>
@@ -1313,6 +1367,34 @@
 
  </div>
 
+ <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 pagination-bar">
+ <div>
+ {% if paginacao_finalizados and paginacao_finalizados.total %}
+ <small class="text-muted">Exibindo {{ finalizados|length }} de {{ paginacao_finalizados.total }} processos</small><br>
+ <small class="text-muted">P&aacute;gina {{ paginacao_finalizados.page }} de {{ paginacao_finalizados.pages or 1 }}</small>
+ {% endif %}
+ </div>
+ {% if paginacao_finalizados %}
+ <nav>
+ <ul class="pagination pagination-sm mb-0">
+ <li class="page-item {% if paginacao_finalizados.page <= 1 %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=(paginacao.page if paginacao else None), page_arq=1, page_dev=(paginacao_devolvidos.page if paginacao_devolvidos else None), sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, responsavel_id=filtro_responsavel_id or None, cf=(filtro_colunas_cf or None), aba='arquivos') }}">Primeira</a>
+ </li>
+ <li class="page-item {% if not paginacao_finalizados.has_prev %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=(paginacao.page if paginacao else None), page_arq=paginacao_finalizados.prev_num, page_dev=(paginacao_devolvidos.page if paginacao_devolvidos else None), sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, responsavel_id=filtro_responsavel_id or None, cf=(filtro_colunas_cf or None), aba='arquivos') }}">Anterior</a>
+ </li>
+ <li class="page-item active"><span class="page-link">{{ paginacao_finalizados.page }}</span></li>
+ <li class="page-item {% if not paginacao_finalizados.has_next %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=(paginacao.page if paginacao else None), page_arq=paginacao_finalizados.next_num, page_dev=(paginacao_devolvidos.page if paginacao_devolvidos else None), sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, responsavel_id=filtro_responsavel_id or None, cf=(filtro_colunas_cf or None), aba='arquivos') }}">Pr&oacute;xima</a>
+ </li>
+ <li class="page-item {% if (paginacao_finalizados.pages or 1) <= paginacao_finalizados.page %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=(paginacao.page if paginacao else None), page_arq=(paginacao_finalizados.pages or 1), page_dev=(paginacao_devolvidos.page if paginacao_devolvidos else None), sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, responsavel_id=filtro_responsavel_id or None, cf=(filtro_colunas_cf or None), aba='arquivos') }}">&Uacute;ltima</a>
+ </li>
+ </ul>
+ </nav>
+ {% endif %}
+ </div>
+
 
  </div>
 
@@ -1321,7 +1403,7 @@
  {% if pode_ver_devolvidos %}
  <div class="tab-pane fade{% if aba_ativa == 'devolvidos' %} show active{% endif %}" id="conteudo-devolvidos" role="tabpanel" aria-labelledby="tab-devolvidos">
  <div class="table-responsive process-list-wrapper mb-3">
- <table class="table process-table align-middle">
+ <table class="table process-table align-middle" data-filter-scope="devolvidos">
  <thead>
  <tr>
  <th>Número SEI</th>
@@ -1362,6 +1444,33 @@
  {% endfor %}
  </tbody>
  </table>
+ </div>
+ <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 pagination-bar">
+ <div>
+ {% if paginacao_devolvidos and paginacao_devolvidos.total %}
+ <small class="text-muted">Exibindo {{ devolvidos|length }} de {{ paginacao_devolvidos.total }} processos</small><br>
+ <small class="text-muted">P&aacute;gina {{ paginacao_devolvidos.page }} de {{ paginacao_devolvidos.pages or 1 }}</small>
+ {% endif %}
+ </div>
+ {% if paginacao_devolvidos %}
+ <nav>
+ <ul class="pagination pagination-sm mb-0">
+ <li class="page-item {% if paginacao_devolvidos.page <= 1 %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=(paginacao.page if paginacao else None), page_arq=(paginacao_finalizados.page if paginacao_finalizados else None), page_dev=1, sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, responsavel_id=filtro_responsavel_id or None, cf=(filtro_colunas_cf or None), aba='devolvidos') }}">Primeira</a>
+ </li>
+ <li class="page-item {% if not paginacao_devolvidos.has_prev %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=(paginacao.page if paginacao else None), page_arq=(paginacao_finalizados.page if paginacao_finalizados else None), page_dev=paginacao_devolvidos.prev_num, sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, responsavel_id=filtro_responsavel_id or None, cf=(filtro_colunas_cf or None), aba='devolvidos') }}">Anterior</a>
+ </li>
+ <li class="page-item active"><span class="page-link">{{ paginacao_devolvidos.page }}</span></li>
+ <li class="page-item {% if not paginacao_devolvidos.has_next %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=(paginacao.page if paginacao else None), page_arq=(paginacao_finalizados.page if paginacao_finalizados else None), page_dev=paginacao_devolvidos.next_num, sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, responsavel_id=filtro_responsavel_id or None, cf=(filtro_colunas_cf or None), aba='devolvidos') }}">Pr&oacute;xima</a>
+ </li>
+ <li class="page-item {% if (paginacao_devolvidos.pages or 1) <= paginacao_devolvidos.page %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('gerencia', nome_gerencia=gerencia, page=(paginacao.page if paginacao else None), page_arq=(paginacao_finalizados.page if paginacao_finalizados else None), page_dev=(paginacao_devolvidos.pages or 1), sei=filtro_sei, coordenadoria=filtro_coordenadoria or None, equipe_area=filtro_equipe_area or None, responsavel_equipe=filtro_responsavel_equipe or None, responsavel_id=filtro_responsavel_id or None, cf=(filtro_colunas_cf or None), aba='devolvidos') }}">&Uacute;ltima</a>
+ </li>
+ </ul>
+ </nav>
+ {% endif %}
  </div>
  </div>
  {% endif %}
@@ -1675,7 +1784,7 @@
  <div class="modal-header">
  <div>
  <h5 class="modal-title">Excluir processo devolvido</h5>
- <div class="text-muted small" id="textoExcluirSelecionado">Tem certeza de que desejá excluir?</div>
+ <div class="text-muted small" id="textoExcluirSelecionado">Tem certeza de que deseja excluir?</div>
  </div>
  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
  </div>
@@ -1817,7 +1926,7 @@
  ('coordenadoria', 'Coordenadoria'),
 
 
- ('equipe_area', 'Equipe / ?rea'),
+('equipe_area', 'Equipe / Área'),
 
 
  ('responsavel_equipe', 'Responsavel (Equipe)'),
@@ -1916,7 +2025,7 @@
  <div class="alert alert-info small mb-0">
 
 
- Selecione as colunas desejádas. Campos extras são exportados apenas desta gerência.
+ Selecione as colunas desejadas. Campos extras são exportados apenas desta gerência.
 
 
  </div>
@@ -1956,6 +2065,7 @@
 
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/table_column_filter.js') }}"></script>
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
@@ -2395,17 +2505,33 @@ document.addEventListener("DOMContentLoaded", function () {
  document.querySelectorAll(".ficha-tecnica-row").forEach((linha) => {
  if (linha.dataset.procId !== procId) {
  linha.classList.add("d-none");
- } else {
- linha.classList.remove("d-none");
  }
  });
  document.querySelectorAll(".history-row").forEach((linha) => {
  if (linha.dataset.procId !== procId) {
  linha.classList.add("d-none");
- } else {
- linha.classList.remove("d-none");
+ const instancia = bootstrap.Collapse.getInstance(linha);
+ if (instancia) instancia.hide();
+ linha.classList.remove("show");
+ linha.classList.add("collapse");
  }
  });
+ };
+
+ const organizarLinhasProcesso = (procId) => {
+ if (!procId) return;
+ const principal = document.querySelector(`.process-row[data-proc-id="${procId}"]`);
+ if (!principal || !principal.parentElement) return;
+ const tbody = principal.parentElement;
+ const ficha = document.querySelector(`.ficha-tecnica-row[data-proc-id="${procId}"]`);
+ const historico = document.querySelector(`.history-row[data-proc-id="${procId}"]`);
+ if (ficha) {
+ tbody.insertBefore(ficha, principal.nextSibling);
+ }
+ if (historico) {
+ const referencia = ficha ? ficha.nextSibling : principal.nextSibling;
+ tbody.insertBefore(historico, referencia);
+ }
  };
 
  const alternarFicha = (alvoId, procId) => {
@@ -2413,18 +2539,25 @@ document.addEventListener("DOMContentLoaded", function () {
  const linha = document.getElementById(alvoId);
  if (!linha) return;
  const estavaAberta = !linha.classList.contains("d-none");
- ocultarHistoricos();
- ocultarFichas();
+ filtrarParaProcesso(procId);
  if (estavaAberta) {
+ linha.classList.add("d-none");
+ const botaoAtual = document.querySelector(`[data-ficha-target="${alvoId}"]`);
+ if (botaoAtual) {
+ botaoAtual.setAttribute("aria-expanded", "false");
+ }
+ const histLinha = document.querySelector(`.history-row[data-proc-id="${procId}"]`);
+ if (!histLinha || !histLinha.classList.contains("show")) {
  mostrarTodosProcessos();
+ }
  return;
  }
- filtrarParaProcesso(procId);
  linha.classList.remove("d-none");
  const botaoAtual = document.querySelector(`[data-ficha-target="${alvoId}"]`);
  if (botaoAtual) {
  botaoAtual.setAttribute("aria-expanded", "true");
  }
+ organizarLinhasProcesso(procId);
  alinharInicio(linha);
  };
 
@@ -2446,19 +2579,28 @@ document.addEventListener("DOMContentLoaded", function () {
  if (!linha) return;
  const instancia = bootstrap.Collapse.getOrCreateInstance(linha, { toggle: false });
  const estavaAberto = linha.classList.contains("show");
- ocultarHistoricos();
- ocultarFichas();
+ filtrarParaProcesso(procId);
  if (estavaAberto) {
+ instancia.hide();
+ linha.classList.remove("show");
+ linha.classList.add("collapse");
+ const botao = document.querySelector(`[data-hist-target="${alvoId}"]`);
+ if (botao) {
+ botao.setAttribute("aria-expanded", "false");
+ }
+ const fichaLinha = document.querySelector(`.ficha-tecnica-row[data-proc-id="${procId}"]`);
+ if (!fichaLinha || fichaLinha.classList.contains("d-none")) {
  mostrarTodosProcessos();
+ }
  return;
  }
- filtrarParaProcesso(procId);
  linha.classList.remove("d-none");
  instancia.show();
  const botao = document.querySelector(`[data-hist-target="${alvoId}"]`);
  if (botao) {
  botao.setAttribute("aria-expanded", "true");
  }
+ organizarLinhasProcesso(procId);
  alinharInicio(linha);
  };
 
@@ -2603,6 +2745,115 @@ document.addEventListener("DOMContentLoaded", function () {
   });
   };
 
+ const inicializarSeletorColunasFinalizados = (root = document) => {
+ const tabela = root.querySelector(".table-arquivos-fixa");
+ const menu = root.querySelector(".js-colunas-finalizados-menu");
+ const opcoesWrapper = root.querySelector(".js-colunas-finalizados-opcoes");
+ const btnReset = root.querySelector(".js-colunas-finalizados-reset");
+ if (!tabela || !menu || !opcoesWrapper || !btnReset) return;
+ if (tabela.dataset.colunasBound === "1") return;
+
+ const cabecalhos = Array.from(tabela.querySelectorAll("thead th"));
+ if (cabecalhos.length <= 1) return;
+ const chaveStorage = `gerencia:{{ gerencia|lower }}:colunas_finalizados_v3`;
+ const defaultOcultas = new Set();
+ cabecalhos.forEach((th, indice) => {
+ if (indice === 0) return;
+ if ((th.dataset.colDefaultHidden || "") === "1") {
+ defaultOcultas.add(indice);
+ }
+ });
+
+ const carregarOcultas = () => {
+ try {
+ const bruto = window.localStorage.getItem(chaveStorage);
+ if (!bruto) return new Set(defaultOcultas);
+ const dados = JSON.parse(bruto || "[]");
+ if (!Array.isArray(dados)) return new Set(defaultOcultas);
+ return new Set(dados.filter((idx) => Number.isInteger(idx) && idx > 0 && idx < cabecalhos.length));
+ } catch (_err) {
+ return new Set(defaultOcultas);
+ }
+ };
+
+ const salvarOcultas = (ocultas) => {
+ try {
+ window.localStorage.setItem(chaveStorage, JSON.stringify(Array.from(ocultas).sort((a, b) => a - b)));
+ } catch (_err) {
+ // Ignora indisponibilidade de localStorage.
+ }
+ };
+
+ const aplicarVisibilidade = (ocultas) => {
+ let visiveis = 0;
+ cabecalhos.forEach((th, indice) => {
+ if (indice === 0) return;
+ const oculto = ocultas.has(indice);
+ th.style.display = oculto ? "none" : "";
+ if (!oculto) visiveis += 1;
+ });
+ tabela.querySelectorAll("tbody tr.process-row").forEach((linha) => {
+ const celulas = Array.from(linha.children);
+ celulas.forEach((td, indice) => {
+ if (indice === 0) return;
+ td.style.display = ocultas.has(indice) ? "none" : "";
+ });
+ });
+ const usaModoExpandido = visiveis >= 6;
+ tabela.classList.toggle("colunas-expandiveis", usaModoExpandido);
+ };
+
+ const obterTituloColuna = (th, indice) => {
+ const texto = (th.textContent || "").replace(/\s+/g, " ").trim();
+ return texto || `Coluna ${indice + 1}`;
+ };
+
+ let ocultas = carregarOcultas();
+
+ opcoesWrapper.innerHTML = "";
+ cabecalhos.forEach((th, indice) => {
+ if (indice === 0) return;
+ const id = `col-finalizados-${indice}`;
+ const item = document.createElement("div");
+ item.className = "form-check";
+ const input = document.createElement("input");
+ input.type = "checkbox";
+ input.className = "form-check-input";
+ input.id = id;
+ input.checked = !ocultas.has(indice);
+ const label = document.createElement("label");
+ label.className = "form-check-label small";
+ label.htmlFor = id;
+ label.textContent = obterTituloColuna(th, indice);
+ input.addEventListener("change", () => {
+ if (input.checked) {
+ ocultas.delete(indice);
+ } else {
+ ocultas.add(indice);
+ }
+ salvarOcultas(ocultas);
+ aplicarVisibilidade(ocultas);
+ });
+ item.appendChild(input);
+ item.appendChild(label);
+ opcoesWrapper.appendChild(item);
+ });
+
+ btnReset.addEventListener("click", () => {
+ ocultas = new Set(defaultOcultas);
+ salvarOcultas(ocultas);
+ opcoesWrapper.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+ const partes = (input.id || "").split("-");
+ const indice = parseInt(partes[partes.length - 1], 10);
+ input.checked = !ocultas.has(indice);
+ });
+ aplicarVisibilidade(ocultas);
+ });
+
+ aplicarVisibilidade(ocultas);
+ tabela.dataset.colunasBound = "1";
+ };
+
 if (btnDesatribuirModal && formAtribuir) {
  btnDesatribuirModal.addEventListener("click", function () {
  if (acaoAtribuirHidden) acaoAtribuirHidden.value = "liberar";
@@ -2651,16 +2902,29 @@ if (btnDesatribuirModal && formAtribuir) {
   vincularBotoesHistorico(root);
   vincularResizeTabelas(root);
   vincularBotoesAtribuir(root);
+  inicializarSeletorColunasFinalizados(root);
   };
 
   inicializarComponentesDinamicos(document);
+
+  const atualizarVisibilidadeBotaoColunasFinalizados = () => {
+  const toolbar = document.getElementById("toolbar-colunas-finalizados");
+  if (!toolbar) return;
+  const abaArquivos = document.getElementById("conteudo-arquivos");
+  const mostrar = Boolean(abaArquivos && abaArquivos.classList.contains("active"));
+  toolbar.classList.toggle("d-none", !mostrar);
+  };
+  atualizarVisibilidadeBotaoColunasFinalizados();
+  document.querySelectorAll('[data-bs-toggle="tab"]').forEach((tabBtn) => {
+  tabBtn.addEventListener("shown.bs.tab", atualizarVisibilidadeBotaoColunasFinalizados);
+  });
 
   const obterBadgeDevolvidos = () => {
   const tab = document.getElementById("tab-devolvidos");
   return tab ? tab.querySelector(".badge") : null;
   };
 
-  const haInteracaoEmCurso = () => {
+ const haInteracaoEmCurso = () => {
   if (document.querySelector(".modal.show, .offcanvas.show, .select-dropdown.show")) {
   return true;
   }
@@ -2678,6 +2942,10 @@ if (btnDesatribuirModal && formAtribuir) {
   ativo.isContentEditable
   )
   ) {
+  return true;
+  }
+  const wrappers = Array.from(document.querySelectorAll(".process-list-wrapper"));
+  if (wrappers.some((wrapper) => Math.abs(wrapper.scrollLeft || 0) > 2)) {
   return true;
   }
   return false;
@@ -2721,7 +2989,7 @@ if (btnDesatribuirModal && formAtribuir) {
   badgeAtual.textContent = badgeNovo.textContent;
   }
   } catch (erro) {
-  console.error("Nao foi possivel atualizar a gerencia automaticamente.", erro);
+ console.error("Não foi possível atualizar a gerência automaticamente.", erro);
   }
   };
 
@@ -2731,10 +2999,17 @@ if (btnDesatribuirModal && formAtribuir) {
 </script>
 
 
-{% include "_assistente_global.html" %}
+{# Assistente global desativado temporariamente #}
 </body>
 
 </html>
+
+
+
+
+
+
+
 
 
 

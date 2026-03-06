@@ -2338,7 +2338,7 @@ def login():
                 ),
                 "",
             )
-            nome_cadastro = nome_vinculado_contexto or nome
+            nome_cadastro = nome
             erros = []
             if not username:
                 erros.append("Usuario")
@@ -4461,6 +4461,42 @@ def index():
     filtro_gerencia = normalizar_gerencia(filtro_gerencia_bruto)
     filtro_sei = request.args.get("sei", "").strip()
     filtro_prazo = (request.args.get("prazo") or "").strip().lower()
+    filtro_resp_eq_vazio = (request.args.get("resp_eq_vazio") or "").strip() == "1"
+    filtros_coluna_raw = (request.args.get("cf") or "").strip()
+    filtros_coluna: Dict[str, Set[str]] = {}
+    ordem_coluna = ""
+    ordem_direcao = ""
+    if filtros_coluna_raw:
+        try:
+            filtros_tmp = json.loads(filtros_coluna_raw)
+            if isinstance(filtros_tmp, dict):
+                for chave, valores in filtros_tmp.items():
+                    if not isinstance(chave, str) or not isinstance(valores, list):
+                        continue
+                    chave_limpa = re.sub(r"[^a-z0-9_]+", "", chave.strip().lower())
+                    if not chave_limpa:
+                        continue
+                    if chave_limpa == "__sort_col":
+                        if isinstance(valores, list) and valores:
+                            ordem_coluna = re.sub(
+                                r"[^a-z0-9_]+", "", str(valores[0] or "").strip().lower()
+                            )
+                        continue
+                    if chave_limpa == "__sort_dir":
+                        if isinstance(valores, list) and valores:
+                            direcao = str(valores[0] or "").strip().lower()
+                            if direcao in {"asc", "desc"}:
+                                ordem_direcao = direcao
+                        continue
+                    valores_norm = {
+                        normalizar_chave(limpar_texto(str(v), "")).lower()
+                        for v in valores
+                        if limpar_texto(str(v), "")
+                    }
+                    if valores_norm:
+                        filtros_coluna[chave_limpa] = valores_norm
+        except Exception:
+            filtros_coluna = {}
     pagina = request.args.get("page", type=int, default=1)
     por_pagina = 10
 
@@ -4496,11 +4532,168 @@ def index():
             consulta = consulta.filter(
                 or_(Processo.prazo.is_(None), Processo.prazo > limite)
             )
+        if filtro_resp_eq_vazio:
+            consulta = consulta.filter(
+                Processo.assigned_to_id.is_(None),
+                or_(
+                    Processo.responsavel_equipe.is_(None),
+                    func.trim(Processo.responsavel_equipe) == "",
+                ),
+            )
 
-        paginacao = consulta.order_by(Processo.atualizado_em.desc()).paginate(
-            page=pagina, per_page=por_pagina, error_out=False
-        )
-        processos = paginacao.items
+        if filtros_coluna:
+            processos_ordenados = consulta.order_by(Processo.atualizado_em.desc()).all()
+
+            def _normalizar_coluna(valor: object) -> str:
+                if valor is None:
+                    return "(vazio)"
+                texto = str(valor).strip()
+                if not texto:
+                    return "(vazio)"
+                return normalizar_chave(texto).lower()
+
+            def _valor_dashboard_coluna(proc: Processo, slug_coluna: str) -> str:
+                sufixo = (
+                    (proc.dados_extra or {}).get("sufixo")
+                    if isinstance(proc.dados_extra, dict)
+                    else ""
+                ) or ""
+                numero_display = f"{proc.numero_sei_base or ''}{sufixo}".strip() or proc.numero_sei or "-"
+                responsavel_eq = (
+                    proc.responsavel_equipe
+                    or (proc.assigned_to.nome if getattr(proc, "assigned_to", None) else None)
+                    or (proc.assigned_to.username if getattr(proc, "assigned_to", None) else None)
+                    or "(Vazio)"
+                )
+                if slug_coluna == "numero_sei":
+                    return _normalizar_coluna(numero_display)
+                if slug_coluna == "data_de_entrada":
+                    return _normalizar_coluna(proc.data_entrada.strftime("%d/%m/%Y") if proc.data_entrada else "-")
+                if slug_coluna == "interessado":
+                    return _normalizar_coluna(proc.interessado or "-")
+                if slug_coluna == "concessionaria":
+                    return _normalizar_coluna(proc.concessionaria or "-")
+                if slug_coluna == "gerencia":
+                    return _normalizar_coluna(proc.gerencia or "-")
+                if slug_coluna == "assunto":
+                    return _normalizar_coluna(proc.assunto or "-")
+                if slug_coluna == "prazo":
+                    return _normalizar_coluna(proc.prazo.strftime("%d/%m/%Y") if proc.prazo else "Sem prazo")
+                if slug_coluna == "responsavel_equipe":
+                    return _normalizar_coluna(responsavel_eq)
+                return ""
+
+            def _sort_key_dashboard(proc: Processo, slug_coluna: str):
+                if slug_coluna == "data_de_entrada":
+                    return (proc.data_entrada is None, proc.data_entrada or date.min)
+                if slug_coluna == "prazo":
+                    return (proc.prazo is None, proc.prazo or date.min)
+                return _valor_dashboard_coluna(proc, slug_coluna)
+
+            def _processo_atende_filtros_coluna(proc: Processo) -> bool:
+                for slug_coluna, valores_filtrados in filtros_coluna.items():
+                    valor = _valor_dashboard_coluna(proc, slug_coluna)
+                    if not valor:
+                        continue
+                    if slug_coluna in {"responsavel_equipe", "responsavel_adm"}:
+                        variantes = {
+                            valor,
+                            normalizar_chave(f"{valor} responsavel equipe").lower(),
+                            normalizar_chave(f"{valor} responsavel adm").lower(),
+                        }
+                        if not variantes.intersection(valores_filtrados):
+                            return False
+                    elif valor not in valores_filtrados:
+                        return False
+                return True
+
+            processos_filtrados = [
+                proc for proc in processos_ordenados if _processo_atende_filtros_coluna(proc)
+            ]
+            if ordem_coluna:
+                processos_filtrados = sorted(
+                    processos_filtrados,
+                    key=lambda p: _sort_key_dashboard(p, ordem_coluna),
+                    reverse=ordem_direcao == "desc",
+                )
+
+            total_filtrado = len(processos_filtrados)
+            total_paginas = max(1, (total_filtrado + por_pagina - 1) // por_pagina)
+            pagina = max(1, min(pagina, total_paginas))
+            inicio = (pagina - 1) * por_pagina
+            fim = inicio + por_pagina
+            processos = processos_filtrados[inicio:fim]
+
+            class PaginacaoSimples:
+                def __init__(self, page: int, per_page: int, total: int, pages: int):
+                    self.page = page
+                    self.per_page = per_page
+                    self.total = total
+                    self._pages = pages
+
+                @property
+                def pages(self):
+                    return self._pages
+
+                @property
+                def has_prev(self):
+                    return self.page > 1
+
+                @property
+                def has_next(self):
+                    return self.page < self.pages
+
+                @property
+                def prev_num(self):
+                    return max(1, self.page - 1)
+
+                @property
+                def next_num(self):
+                    return min(self.pages, self.page + 1)
+
+            paginacao = PaginacaoSimples(
+                page=pagina,
+                per_page=por_pagina,
+                total=total_filtrado,
+                pages=total_paginas,
+            )
+        else:
+            mapa_ordem = {
+                "numero_sei": Processo.numero_sei,
+                "data_de_entrada": Processo.data_entrada,
+                "interessado": Processo.interessado,
+                "concessionaria": Processo.concessionaria,
+                "gerencia": Processo.gerencia,
+                "assunto": Processo.assunto,
+                "prazo": Processo.prazo,
+                "responsavel_equipe": Processo.responsavel_equipe,
+            }
+            colunas_texto = {
+                "numero_sei",
+                "interessado",
+                "concessionaria",
+                "gerencia",
+                "assunto",
+                "responsavel_equipe",
+            }
+            coluna_ordem = mapa_ordem.get(ordem_coluna)
+            if coluna_ordem is not None:
+                ordem_base = (
+                    func.lower(func.ifnull(coluna_ordem, ""))
+                    if ordem_coluna in colunas_texto
+                    else coluna_ordem
+                )
+                consulta_ordenada = consulta.order_by(
+                    ordem_base.desc() if ordem_direcao == "desc" else ordem_base.asc(),
+                    Processo.atualizado_em.desc(),
+                )
+            else:
+                consulta_ordenada = consulta.order_by(Processo.atualizado_em.desc())
+
+            paginacao = consulta_ordenada.paginate(
+                page=pagina, per_page=por_pagina, error_out=False
+            )
+            processos = paginacao.items
         contagens = obter_contagens_por_gerencia()
         metricas = obter_metricas_processos()
         contagem_saida = (
@@ -4550,6 +4743,8 @@ def index():
         filtro_gerencia=filtro_gerencia or "",
         filtro_sei=filtro_sei,
         filtro_prazo=filtro_prazo,
+        filtro_resp_eq_vazio=filtro_resp_eq_vazio,
+        filtro_colunas_cf=filtros_coluna_raw,
         now=hoje,
         now_plus_7=hoje + timedelta(days=7),
         extras_por_gerencia=gerar_mapa_campos_extra(),
@@ -4626,6 +4821,146 @@ def api_atualizacoes_painel():
         resposta["gerencia_padrao_usuario"] = gerencia_padrao_usuario
 
     return jsonify(resposta)
+
+
+@app.route("/api/home-column-options")
+def api_home_column_options():
+    """Retorna valores unicos de uma coluna da tabela inicial considerando o total filtrado."""
+    if SITE_EM_CONFIGURACAO:
+        return jsonify({"ok": True, "values": []})
+
+    col_slug = re.sub(r"[^a-z0-9_]+", "", (request.args.get("col") or "").strip().lower())
+    if not col_slug:
+        return jsonify({"ok": False, "error": "col obrigatoria"}), 400
+
+    filtro_gerencia_bruto = request.args.get("gerencia", "")
+    filtro_gerencia = normalizar_gerencia(filtro_gerencia_bruto)
+    filtro_sei = (request.args.get("sei") or "").strip()
+    filtro_prazo = (request.args.get("prazo") or "").strip().lower()
+    filtro_resp_eq_vazio = (request.args.get("resp_eq_vazio") or "").strip() == "1"
+    filtros_coluna_raw = (request.args.get("cf") or "").strip()
+
+    filtros_coluna: Dict[str, Set[str]] = {}
+    if filtros_coluna_raw:
+        try:
+            filtros_tmp = json.loads(filtros_coluna_raw)
+            if isinstance(filtros_tmp, dict):
+                for chave, valores in filtros_tmp.items():
+                    if not isinstance(chave, str) or not isinstance(valores, list):
+                        continue
+                    chave_limpa = re.sub(r"[^a-z0-9_]+", "", chave.strip().lower())
+                    if not chave_limpa:
+                        continue
+                    if chave_limpa in {"__sort_col", "__sort_dir"}:
+                        continue
+                    valores_norm = {
+                        normalizar_chave(limpar_texto(str(v), "")).lower()
+                        for v in valores
+                        if limpar_texto(str(v), "")
+                    }
+                    if valores_norm:
+                        filtros_coluna[chave_limpa] = valores_norm
+        except Exception:
+            filtros_coluna = {}
+
+    # Para calcular opcoes de uma coluna, desconsidera o filtro dela mesma.
+    filtros_coluna.pop(col_slug, None)
+
+    hoje = datetime.utcnow().date()
+    consulta = Processo.query.options(joinedload(Processo.assigned_to)).filter(
+        Processo.finalizado_em.is_(None)
+    )
+    consulta = aplicar_filtro_devolvidos_gabinete(consulta)
+    if filtro_gerencia:
+        consulta = consulta.filter(Processo.gerencia == filtro_gerencia)
+    if filtro_sei:
+        consulta = consulta.filter(Processo.numero_sei.ilike(f"%{filtro_sei}%"))
+    if filtro_prazo == "vencido":
+        consulta = consulta.filter(Processo.prazo.isnot(None), Processo.prazo < hoje)
+    elif filtro_prazo == "proximo":
+        limite = hoje + timedelta(days=7)
+        consulta = consulta.filter(
+            Processo.prazo.isnot(None),
+            Processo.prazo >= hoje,
+            Processo.prazo <= limite,
+        )
+    elif filtro_prazo == "em_dia":
+        limite = hoje + timedelta(days=7)
+        consulta = consulta.filter(or_(Processo.prazo.is_(None), Processo.prazo > limite))
+    if filtro_resp_eq_vazio:
+        consulta = consulta.filter(
+            Processo.assigned_to_id.is_(None),
+            or_(
+                Processo.responsavel_equipe.is_(None),
+                func.trim(Processo.responsavel_equipe) == "",
+            ),
+        )
+
+    processos = consulta.order_by(Processo.atualizado_em.desc()).all()
+
+    def _normalizar_coluna(valor: object) -> str:
+        if valor is None:
+            return "(vazio)"
+        texto = str(valor).strip()
+        if not texto:
+            return "(vazio)"
+        return normalizar_chave(texto).lower()
+
+    def _valor_dashboard_coluna(proc: Processo, slug_coluna: str, *, bruto: bool = False) -> str:
+        sufixo = ((proc.dados_extra or {}).get("sufixo") if isinstance(proc.dados_extra, dict) else "") or ""
+        numero_display = f"{proc.numero_sei_base or ''}{sufixo}".strip() or proc.numero_sei or "-"
+        responsavel_eq = (
+            proc.responsavel_equipe
+            or (proc.assigned_to.nome if getattr(proc, "assigned_to", None) else None)
+            or (proc.assigned_to.username if getattr(proc, "assigned_to", None) else None)
+            or "(Vazio)"
+        )
+        mapa_bruto = {
+            "numero_sei": numero_display,
+            "data_de_entrada": proc.data_entrada.strftime("%d/%m/%Y") if proc.data_entrada else "-",
+            "interessado": proc.interessado or "-",
+            "concessionaria": proc.concessionaria or "-",
+            "gerencia": proc.gerencia or "-",
+            "assunto": proc.assunto or "-",
+            "prazo": proc.prazo.strftime("%d/%m/%Y") if proc.prazo else "Sem prazo",
+            "responsavel_equipe": responsavel_eq,
+        }
+        valor = mapa_bruto.get(slug_coluna, "")
+        return (valor or "").strip() if bruto else _normalizar_coluna(valor)
+
+    def _processo_atende_filtros_coluna(proc: Processo) -> bool:
+        for slug_coluna, valores_filtrados in filtros_coluna.items():
+            valor = _valor_dashboard_coluna(proc, slug_coluna, bruto=False)
+            if not valor:
+                continue
+            if slug_coluna in {"responsavel_equipe", "responsavel_adm"}:
+                variantes = {
+                    valor,
+                    normalizar_chave(f"{valor} responsavel equipe").lower(),
+                    normalizar_chave(f"{valor} responsavel adm").lower(),
+                }
+                if not variantes.intersection(valores_filtrados):
+                    return False
+            elif valor not in valores_filtrados:
+                return False
+        return True
+
+    processos_filtrados = [proc for proc in processos if _processo_atende_filtros_coluna(proc)]
+
+    valores_unicos: Dict[str, str] = {}
+    for proc in processos_filtrados:
+        valor_bruto = _valor_dashboard_coluna(proc, col_slug, bruto=True)
+        valor_key = _normalizar_coluna(valor_bruto)
+        if not valor_key:
+            continue
+        if valor_key not in valores_unicos:
+            valores_unicos[valor_key] = valor_bruto or "(Vazio)"
+
+    valores_ordenados = sorted(
+        valores_unicos.values(),
+        key=lambda txt: normalizar_chave(txt).lower(),
+    )
+    return jsonify({"ok": True, "values": valores_ordenados})
 
 
 @app.route("/exportar-geral", methods=["POST"])
@@ -5257,7 +5592,44 @@ def gerencia(nome_gerencia):
     filtro_equipe_area = request.args.get("equipe_area", "").strip()
     filtro_responsavel_equipe = request.args.get("responsavel_equipe", "").strip()
     filtro_responsavel_id = request.args.get("responsavel_id", type=int)
+    filtros_coluna_raw = (request.args.get("cf") or "").strip()
+    filtros_coluna: Dict[str, Set[str]] = {}
+    ordem_coluna = ""
+    ordem_direcao = ""
+    if filtros_coluna_raw:
+        try:
+            filtros_tmp = json.loads(filtros_coluna_raw)
+            if isinstance(filtros_tmp, dict):
+                for chave, valores in filtros_tmp.items():
+                    if not isinstance(chave, str) or not isinstance(valores, list):
+                        continue
+                    chave_limpa = re.sub(r"[^a-z0-9_]+", "", chave.strip().lower())
+                    if not chave_limpa:
+                        continue
+                    if chave_limpa == "__sort_col":
+                        if isinstance(valores, list) and valores:
+                            ordem_coluna = re.sub(
+                                r"[^a-z0-9_]+", "", str(valores[0] or "").strip().lower()
+                            )
+                        continue
+                    if chave_limpa == "__sort_dir":
+                        if isinstance(valores, list) and valores:
+                            direcao = str(valores[0] or "").strip().lower()
+                            if direcao in {"asc", "desc"}:
+                                ordem_direcao = direcao
+                        continue
+                    valores_norm = {
+                        normalizar_chave(limpar_texto(str(v), "")).lower()
+                        for v in valores
+                        if limpar_texto(str(v), "")
+                    }
+                    if valores_norm:
+                        filtros_coluna[chave_limpa] = valores_norm
+        except Exception:
+            filtros_coluna = {}
     pagina = request.args.get("page", type=int, default=1)
+    pagina_arquivos = request.args.get("page_arq", type=int, default=1)
+    pagina_devolvidos = request.args.get("page_dev", type=int, default=1)
     aba_ativa = (request.args.get("aba") or "interacoes").strip().lower()
     pode_ver_devolvidos = (
         gerencia_alvo == "GABINETE"
@@ -5279,7 +5651,9 @@ def gerencia(nome_gerencia):
     processos = []
     paginacao = None
     finalizados = []
+    paginacao_finalizados = None
     devolvidos = []
+    paginacao_devolvidos = None
     total_devolvidos = 0
     origens_saida = {}
     gerencias_envolvidas_map = {}
@@ -5303,6 +5677,95 @@ def gerencia(nome_gerencia):
         if filtro_responsavel_id:
             consulta = consulta.filter(Processo.assigned_to_id == filtro_responsavel_id)
         return consulta
+
+    def _normalizar_coluna(valor: object) -> str:
+        if valor is None:
+            return "(vazio)"
+        texto = str(valor).strip()
+        if not texto:
+            return "(vazio)"
+        return normalizar_chave(texto).lower()
+
+    def _numero_display(proc: Processo) -> str:
+        dados_extra = _normalizar_dados_extra(getattr(proc, "dados_extra", None))
+        sufixo = limpar_texto(dados_extra.get("sufixo"), "")
+        return f"{proc.numero_sei_base or ''}{sufixo}".strip() or (proc.numero_sei or "-")
+
+    def _valor_coluna_scope(proc: Processo, scope: str, slug: str) -> str:
+        dados_extra = _normalizar_dados_extra(getattr(proc, "dados_extra", None))
+        if slug == "numero_sei":
+            return _numero_display(proc)
+        if slug == "data_de_entrada":
+            return proc.data_entrada.strftime("%d/%m/%Y") if proc.data_entrada else "-"
+        if slug == "interessado":
+            return proc.interessado or "-"
+        if slug == "concessionaria":
+            return proc.concessionaria or "-"
+        if slug == "gerencia":
+            return proc.gerencia or "-"
+        if slug == "assunto":
+            return proc.assunto or "-"
+        if slug == "status":
+            return proc.status or "-"
+        if slug == "prazo":
+            return proc.prazo.strftime("%d/%m/%Y") if proc.prazo else "Sem prazo"
+        if slug == "responsavel_adm":
+            return proc.responsavel_adm or "-"
+        if slug == "classificacao_institucional":
+            return proc.classificacao_institucional or "-"
+        if slug in {"data_de_entrada_na_gerencia", "entrada_gabinete", "data_entrada_gabinete"}:
+            ref = "GABINETE" if slug in {"entrada_gabinete", "data_entrada_gabinete"} else gerencia_alvo
+            dt_ref = data_entrada_na_gerencia(proc, ref)
+            return dt_ref.strftime("%d/%m/%Y") if dt_ref else "-"
+        if slug == "descricao_melhorada":
+            return proc.descricao_melhorada or "-"
+        if slug == "coordenadoria":
+            return proc.coordenadoria or "-"
+        if slug in {"equipe_area", "equipe_area_"}:
+            return proc.equipe_area or "-"
+        if slug == "responsavel_equipe":
+            return proc.responsavel_equipe or "-"
+        if slug == "tipo_de_processo":
+            return proc.tipo_processo or "-"
+        if slug == "palavras_chave":
+            return proc.palavras_chave or "-"
+        if slug == "status_equipe":
+            return proc.status or "-"
+        if slug == "prazo_equipe":
+            return proc.prazo_equipe.strftime("%d/%m/%Y") if proc.prazo_equipe else "Sem prazo"
+        if slug in {"observacoes_complementares", "observacoes"}:
+            return proc.observacoes_complementares or proc.observacao or "-"
+        if slug == "finalizado_em":
+            return proc.finalizado_em.strftime("%d/%m/%Y") if proc.finalizado_em else "-"
+        if scope == "devolvidos":
+            if slug == "origem_da_devolucao":
+                return limpar_texto(dados_extra.get("origem_devolucao"), "") or "-"
+            if slug == "motivo_da_devolucao":
+                return limpar_texto(dados_extra.get("motivo_devolucao"), "") or "-"
+        return ""
+
+    def _proc_atende_cf(proc: Processo, scope: str) -> bool:
+        if not filtros_coluna:
+            return True
+        for slug_coluna, valores in filtros_coluna.items():
+            valor = _normalizar_coluna(_valor_coluna_scope(proc, scope, slug_coluna))
+            if valor not in valores:
+                return False
+        return True
+
+    def _sort_key_processo(proc: Processo, scope: str, slug_coluna: str):
+        if slug_coluna in {"data_de_entrada", "prazo", "prazo_equipe"}:
+            valor = _valor_coluna_scope(proc, scope, slug_coluna)
+            if slug_coluna == "data_de_entrada":
+                return (proc.data_entrada is None, proc.data_entrada or date.min)
+            if slug_coluna == "prazo":
+                return (proc.prazo is None, proc.prazo or date.min)
+            if slug_coluna == "prazo_equipe":
+                return (proc.prazo_equipe is None, proc.prazo_equipe or date.min)
+            return valor
+        if slug_coluna in {"finalizado_em"}:
+            return (proc.finalizado_em is None, proc.finalizado_em or datetime.min)
+        return _normalizar_coluna(_valor_coluna_scope(proc, scope, slug_coluna))
 
     def ordenar_finalizados(proc: Processo) -> datetime:
         """Ordena finalizados pelos mais recentes (finalizado -> data_saida -> atualizado)."""
@@ -5418,6 +5881,18 @@ def gerencia(nome_gerencia):
             grupos_saida = agrupar_processos_saida(
                 processos_filtrados, chave_referencia_por_base
             )
+            if filtros_coluna:
+                grupos_saida = [
+                    grupo
+                    for grupo in grupos_saida
+                    if _proc_atende_cf(grupo["representante"], "interacoes")
+                ]
+            if ordem_coluna:
+                grupos_saida = sorted(
+                    grupos_saida,
+                    key=lambda g: _sort_key_processo(g["representante"], "interacoes", ordem_coluna),
+                    reverse=ordem_direcao == "desc",
+                )
             grupos_pagina, paginacao = paginar_lista(grupos_saida, pagina, 10)
             processos = [grupo["representante"] for grupo in grupos_pagina]
 
@@ -5611,10 +6086,18 @@ def gerencia(nome_gerencia):
                     trilhas_lista = [reg for reg in trilhas_lista if reg.get("texto") not in removidos]
                 trilhas_saida_map[rep.id] = trilhas_lista
         else:
-            paginacao = consulta.order_by(Processo.atualizado_em.desc()).paginate(
-                page=pagina, per_page=10, error_out=False
-            )
-            processos = paginacao.items
+            processos_lista = consulta.order_by(Processo.atualizado_em.desc()).all()
+            if filtros_coluna:
+                processos_lista = [
+                    proc for proc in processos_lista if _proc_atende_cf(proc, "interacoes")
+                ]
+            if ordem_coluna:
+                processos_lista = sorted(
+                    processos_lista,
+                    key=lambda p: _sort_key_processo(p, "interacoes", ordem_coluna),
+                    reverse=ordem_direcao == "desc",
+                )
+            processos, paginacao = paginar_lista(processos_lista, pagina, 10)
 
         consulta_finalizados = Processo.query.filter(
             Processo.gerencia == gerencia_alvo, Processo.finalizado_em.isnot(None)
@@ -5622,9 +6105,7 @@ def gerencia(nome_gerencia):
         if gerencia_alvo == "GABINETE":
             consulta_finalizados = aplicar_filtro_devolvidos_gabinete(consulta_finalizados)
         consulta_finalizados = aplicar_filtros_processo(consulta_finalizados)
-        finalizados = (
-            consulta_finalizados.order_by(Processo.finalizado_em.desc()).limit(50).all()
-        )
+        finalizados = consulta_finalizados.order_by(Processo.finalizado_em.desc()).all()
         if pode_ver_devolvidos:
             consulta_devolvidos = Processo.query.filter(
                 Processo.gerencia == "GABINETE",
@@ -5634,7 +6115,20 @@ def gerencia(nome_gerencia):
                 consulta_devolvidos
             )
             devolvidos = consulta_devolvidos.order_by(Processo.atualizado_em.desc()).all()
+            if filtros_coluna:
+                devolvidos = [
+                    proc for proc in devolvidos if _proc_atende_cf(proc, "devolvidos")
+                ]
+            if ordem_coluna:
+                devolvidos = sorted(
+                    devolvidos,
+                    key=lambda p: _sort_key_processo(p, "devolvidos", ordem_coluna),
+                    reverse=ordem_direcao == "desc",
+                )
             total_devolvidos = len(devolvidos)
+            devolvidos, paginacao_devolvidos = paginar_lista(
+                devolvidos, pagina_devolvidos, 10
+            )
         # Inclui processos finalizados nesta gerencia e tramitados para outra.
         if gerencia_alvo != "SAIDA":
             ids_saida = [
@@ -5705,7 +6199,21 @@ def gerencia(nome_gerencia):
             for proc in finalizados:
                 origens_saida[proc.id] = obter_origem_saida(proc)
         if finalizados:
-            finalizados = sorted(finalizados, key=ordenar_finalizados, reverse=True)
+            if filtros_coluna:
+                finalizados = [
+                    proc for proc in finalizados if _proc_atende_cf(proc, "arquivos")
+                ]
+            if ordem_coluna:
+                finalizados = sorted(
+                    finalizados,
+                    key=lambda p: _sort_key_processo(p, "arquivos", ordem_coluna),
+                    reverse=ordem_direcao == "desc",
+                )
+            else:
+                finalizados = sorted(finalizados, key=ordenar_finalizados, reverse=True)
+            finalizados, paginacao_finalizados = paginar_lista(
+                finalizados, pagina_arquivos, 10
+            )
         usuarios_disponiveis = [
             usuario
             for usuario in listar_usuarios_com_liberacao_gerencia(gerencia_alvo)
@@ -5950,7 +6458,9 @@ def gerencia(nome_gerencia):
         pode_editar_gerencia=pode_editar_gerencia,
         pode_finalizar_gerencia=usuario_pode_finalizar_gerencia(),
         finalizados=finalizados,
+        paginacao_finalizados=paginacao_finalizados,
         devolvidos=devolvidos,
+        paginacao_devolvidos=paginacao_devolvidos,
         origens_saida=origens_saida,
         hoje=hoje,
         historico_finalizados=historico_finalizados,
@@ -5967,7 +6477,312 @@ def gerencia(nome_gerencia):
         gerencias_envolvidas_map=gerencias_envolvidas_map,
         gerencias_abertas_map=gerencias_abertas_map,
         trilhas_saida_map=trilhas_saida_map,
+        filtro_colunas_cf=filtros_coluna_raw,
     )
+
+
+@app.route("/api/gerencia-column-options/<string:nome_gerencia>")
+def api_gerencia_column_options(nome_gerencia: str):
+    """Retorna valores unicos de coluna para tabelas da tela de gerencia (base completa filtrada)."""
+    gerencia_alvo = normalizar_gerencia(nome_gerencia, permitir_entrada=True)
+    if not gerencia_alvo or gerencia_alvo == "ENTRADA":
+        return jsonify({"ok": False, "error": "gerencia invalida"}), 400
+
+    scope = (request.args.get("scope") or "interacoes").strip().lower()
+    col_slug = re.sub(r"[^a-z0-9_]+", "", (request.args.get("col") or "").strip().lower())
+    if scope not in {"interacoes", "arquivos", "devolvidos"}:
+        scope = "interacoes"
+    if not col_slug:
+        return jsonify({"ok": False, "error": "col obrigatoria"}), 400
+
+    filtro_sei = request.args.get("sei", "").strip()
+    filtro_coordenadoria = request.args.get("coordenadoria", "").strip()
+    filtro_equipe_area = request.args.get("equipe_area", "").strip()
+    filtro_responsavel_equipe = request.args.get("responsavel_equipe", "").strip()
+    filtro_responsavel_id = request.args.get("responsavel_id", type=int)
+    filtros_coluna_raw = (request.args.get("cf") or "").strip()
+
+    filtros_coluna: Dict[str, Set[str]] = {}
+    if filtros_coluna_raw:
+        try:
+            filtros_tmp = json.loads(filtros_coluna_raw)
+            if isinstance(filtros_tmp, dict):
+                for chave, valores in filtros_tmp.items():
+                    if not isinstance(chave, str) or not isinstance(valores, list):
+                        continue
+                    chave_limpa = re.sub(r"[^a-z0-9_]+", "", chave.strip().lower())
+                    if not chave_limpa:
+                        continue
+                    if chave_limpa in {"__sort_col", "__sort_dir"}:
+                        continue
+                    valores_norm = {
+                        normalizar_chave(limpar_texto(str(v), "")).lower()
+                        for v in valores
+                        if limpar_texto(str(v), "")
+                    }
+                    if valores_norm:
+                        filtros_coluna[chave_limpa] = valores_norm
+        except Exception:
+            filtros_coluna = {}
+    filtros_coluna.pop(col_slug, None)
+
+    def aplicar_filtros_processo(consulta):
+        if filtro_sei:
+            consulta = consulta.filter(Processo.numero_sei.ilike(f"%{filtro_sei}%"))
+        if filtro_coordenadoria:
+            consulta = consulta.filter(Processo.coordenadoria.ilike(f"%{filtro_coordenadoria}%"))
+        if filtro_equipe_area:
+            consulta = consulta.filter(Processo.equipe_area.ilike(f"%{filtro_equipe_area}%"))
+        if filtro_responsavel_equipe:
+            consulta = consulta.filter(
+                Processo.responsavel_equipe.ilike(f"%{filtro_responsavel_equipe}%")
+            )
+        if filtro_responsavel_id:
+            consulta = consulta.filter(Processo.assigned_to_id == filtro_responsavel_id)
+        return consulta
+
+    def _normalizar_coluna(valor: object) -> str:
+        if valor is None:
+            return "(vazio)"
+        texto = str(valor).strip()
+        if not texto:
+            return "(vazio)"
+        return normalizar_chave(texto).lower()
+
+    def _numero_display(proc: Processo) -> str:
+        sufixo = ((proc.dados_extra or {}).get("sufixo") if isinstance(proc.dados_extra, dict) else "") or ""
+        return f"{proc.numero_sei_base or ''}{sufixo}".strip() or proc.numero_sei or "-"
+
+    def _valor_coluna_scope(proc: Processo, scope: str, slug: str) -> str:
+        dados_extra = _normalizar_dados_extra(getattr(proc, "dados_extra", None))
+        if slug == "numero_sei":
+            return _numero_display(proc)
+        if slug == "data_de_entrada":
+            return proc.data_entrada.strftime("%d/%m/%Y") if proc.data_entrada else "-"
+        if slug == "interessado":
+            return proc.interessado or "-"
+        if slug == "concessionaria":
+            return proc.concessionaria or "-"
+        if slug == "gerencia":
+            return proc.gerencia or "-"
+        if slug == "assunto":
+            return proc.assunto or "-"
+        if slug == "status":
+            return proc.status or "-"
+        if slug == "prazo":
+            return proc.prazo.strftime("%d/%m/%Y") if proc.prazo else "Sem prazo"
+        if slug == "responsavel_adm":
+            return proc.responsavel_adm or "-"
+        if slug == "classificacao_institucional":
+            return proc.classificacao_institucional or "-"
+        if slug in {"data_de_entrada_na_gerencia", "entrada_gabinete"}:
+            ref = "GABINETE" if slug == "entrada_gabinete" else gerencia_alvo
+            dt = data_entrada_na_gerencia(proc, ref)
+            return dt.strftime("%d/%m/%Y") if dt else "-"
+        if slug == "descricao_melhorada":
+            return proc.descricao_melhorada or "-"
+        if slug == "coordenadoria":
+            return proc.coordenadoria or "-"
+        if slug == "equipe_area":
+            return proc.equipe_area or "-"
+        if slug == "responsavel_equipe":
+            return proc.responsavel_equipe or "-"
+        if slug == "tipo_de_processo":
+            return proc.tipo_processo or "-"
+        if slug == "palavras_chave":
+            return proc.palavras_chave or "-"
+        if slug == "status_equipe":
+            return proc.status or "-"
+        if slug == "prazo_equipe":
+            return proc.prazo_equipe.strftime("%d/%m/%Y") if proc.prazo_equipe else "Sem prazo"
+        if slug in {"observacoes_complementares", "observacoes"}:
+            return proc.observacoes_complementares or proc.observacao or "-"
+        if slug == "finalizado_em":
+            return proc.finalizado_em.strftime("%d/%m/%Y") if proc.finalizado_em else "-"
+        if scope == "devolvidos":
+            if slug == "origem_da_devolucao":
+                return limpar_texto(dados_extra.get("origem_devolucao"), "") or "-"
+            if slug == "motivo_da_devolucao":
+                return limpar_texto(dados_extra.get("motivo_devolucao"), "") or "-"
+        return ""
+
+    def _proc_atende_cf(proc: Processo, scope: str) -> bool:
+        if not filtros_coluna:
+            return True
+        for slug_coluna, valores in filtros_coluna.items():
+            valor = _normalizar_coluna(_valor_coluna_scope(proc, scope, slug_coluna))
+            if not valor:
+                continue
+            if valor not in valores:
+                return False
+        return True
+
+    def _normalizar_coluna(valor: object) -> str:
+        if valor is None:
+            return "(vazio)"
+        texto = str(valor).strip()
+        if not texto:
+            return "(vazio)"
+        return normalizar_chave(texto).lower()
+
+    def _numero_display(proc: Processo) -> str:
+        sufixo = ((proc.dados_extra or {}).get("sufixo") if isinstance(proc.dados_extra, dict) else "") or ""
+        return f"{proc.numero_sei_base or ''}{sufixo}".strip() or proc.numero_sei or "-"
+
+    def _valor_por_slug(proc: Processo, slug: str) -> str:
+        dados_extra = _normalizar_dados_extra(getattr(proc, "dados_extra", None))
+        if slug == "numero_sei":
+            return _numero_display(proc)
+        if slug == "data_de_entrada":
+            return proc.data_entrada.strftime("%d/%m/%Y") if proc.data_entrada else "-"
+        if slug == "interessado":
+            return proc.interessado or "-"
+        if slug == "concessionaria":
+            return proc.concessionaria or "-"
+        if slug == "gerencia":
+            return proc.gerencia or "-"
+        if slug == "assunto":
+            return proc.assunto or "-"
+        if slug == "status":
+            return proc.status or "-"
+        if slug == "prazo":
+            return proc.prazo.strftime("%d/%m/%Y") if proc.prazo else "Sem prazo"
+        if slug == "responsavel_adm":
+            return proc.responsavel_adm or "-"
+        if slug == "classificacao_institucional":
+            return proc.classificacao_institucional or "-"
+        if slug in {"data_de_entrada_na_gerencia", "data_entrada_gabinete"}:
+            ref = "GABINETE" if slug == "data_entrada_gabinete" else gerencia_alvo
+            dt = data_entrada_na_gerencia(proc, ref)
+            return dt.strftime("%d/%m/%Y") if dt else "-"
+        if slug == "descricao_melhorada":
+            return proc.descricao_melhorada or "-"
+        if slug == "coordenadoria":
+            return proc.coordenadoria or "-"
+        if slug in {"equipe_area", "equipe_area_"}:
+            return proc.equipe_area or "-"
+        if slug == "responsavel_equipe":
+            return proc.responsavel_equipe or "-"
+        if slug == "tipo_de_processo":
+            return proc.tipo_processo or "-"
+        if slug == "palavras_chave":
+            return proc.palavras_chave or "-"
+        if slug == "status_equipe":
+            return proc.status or "-"
+        if slug == "prazo_equipe":
+            return proc.prazo_equipe.strftime("%d/%m/%Y") if proc.prazo_equipe else "Sem prazo"
+        if slug == "observacoes_complementares":
+            return proc.observacoes_complementares or proc.observacao or "-"
+        if slug == "finalizado_em":
+            return proc.finalizado_em.strftime("%d/%m/%Y") if proc.finalizado_em else "-"
+        if slug == "gerencia_de_origem":
+            return obter_origem_saida(proc) or "-"
+        if slug == "origem_da_devolucao":
+            return limpar_texto(dados_extra.get("origem_devolucao"), "") or "-"
+        if slug == "motivo_da_devolucao":
+            return limpar_texto(dados_extra.get("motivo_devolucao"), "") or "-"
+        return ""
+
+    def _proc_atende_cf(proc: Processo) -> bool:
+        for slug_coluna, valores in filtros_coluna.items():
+            valor = _normalizar_coluna(_valor_por_slug(proc, slug_coluna))
+            if not valor:
+                continue
+            if valor not in valores:
+                return False
+        return True
+
+    if scope == "interacoes":
+        consulta = Processo.query.options(joinedload(Processo.assigned_to)).filter(
+            Processo.gerencia == gerencia_alvo, Processo.finalizado_em.is_(None)
+        )
+        if gerencia_alvo == "GABINETE":
+            consulta = aplicar_filtro_devolvidos_gabinete(consulta)
+        lista = aplicar_filtros_processo(consulta).order_by(Processo.atualizado_em.desc()).all()
+    elif scope == "devolvidos":
+        consulta = Processo.query.options(joinedload(Processo.assigned_to)).filter(
+            Processo.gerencia == "GABINETE", Processo.finalizado_em.is_(None)
+        )
+        consulta = aplicar_filtro_somente_devolvidos_gabinete(consulta)
+        consulta = aplicar_filtros_processo(consulta)
+        lista = consulta.order_by(Processo.atualizado_em.desc()).all()
+    else:
+        consulta_finalizados = Processo.query.options(joinedload(Processo.assigned_to)).filter(
+            Processo.gerencia == gerencia_alvo, Processo.finalizado_em.isnot(None)
+        )
+        if gerencia_alvo == "GABINETE":
+            consulta_finalizados = aplicar_filtro_devolvidos_gabinete(consulta_finalizados)
+        consulta_finalizados = aplicar_filtros_processo(consulta_finalizados)
+        lista = consulta_finalizados.order_by(Processo.finalizado_em.desc()).all()
+        if gerencia_alvo != "SAIDA":
+            ids_saida = [
+                pid
+                for (pid,) in db.session.query(Movimentacao.processo_id)
+                .filter(
+                    Movimentacao.de_gerencia == gerencia_alvo,
+                    Movimentacao.para_gerencia == "SAIDA",
+                )
+                .all()
+            ]
+            if ids_saida:
+                ids_saida = [
+                    pid
+                    for (pid,) in Processo.query.filter(
+                        Processo.id.in_(ids_saida), Processo.gerencia == "SAIDA"
+                    )
+                    .with_entities(Processo.id)
+                    .all()
+                ]
+            ids_finalizacao = [
+                pid
+                for (pid,) in db.session.query(Movimentacao.processo_id)
+                .filter(
+                    Movimentacao.de_gerencia == gerencia_alvo,
+                    Movimentacao.tipo == "finalizacao_gerencia",
+                )
+                .all()
+            ]
+            ids_devolvidos = [
+                pid
+                for (pid,) in db.session.query(Movimentacao.processo_id)
+                .filter(
+                    Movimentacao.de_gerencia == "SAIDA",
+                    Movimentacao.para_gerencia != "SAIDA",
+                    Movimentacao.tipo == "movimentacao",
+                )
+                .all()
+            ]
+            if ids_devolvidos:
+                ids_devolvidos = set(
+                    pid
+                    for (pid,) in Processo.query.filter(
+                        Processo.id.in_(ids_devolvidos),
+                        Processo.gerencia != "SAIDA",
+                        Processo.finalizado_em.is_(None),
+                    )
+                    .with_entities(Processo.id)
+                    .all()
+                )
+            else:
+                ids_devolvidos = set()
+            ids_extras = {pid for pid in ids_saida + ids_finalizacao if pid not in ids_devolvidos}
+            if ids_extras:
+                extras = (
+                    aplicar_filtros_processo(Processo.query.filter(Processo.id.in_(ids_extras)))
+                    .order_by(Processo.atualizado_em.desc())
+                    .all()
+                )
+                lista = list({p.id: p for p in (lista + extras)}.values())
+
+    lista = [proc for proc in lista if _proc_atende_cf(proc)]
+    unicos: Dict[str, str] = {}
+    for proc in lista:
+        bruto = _valor_por_slug(proc, col_slug) or "(Vazio)"
+        chave = _normalizar_coluna(bruto)
+        if chave not in unicos:
+            unicos[chave] = bruto
+    valores = sorted(unicos.values(), key=lambda txt: normalizar_chave(txt).lower())
+    return jsonify({"ok": True, "values": valores})
 
 
 @app.route("/gerencia/<string:nome_gerencia>/exportar", methods=["POST"])
@@ -6467,6 +7282,36 @@ def verificar_dados():
     numero_sei = limpar_texto(request.args.get("numero_sei"), "")
     data_inicio_str = (request.args.get("data_inicio") or "").strip()
     data_fim_str = (request.args.get("data_fim") or "").strip()
+    filtros_coluna_raw = (request.args.get("cf") or "").strip()
+    filtros_coluna: Dict[str, List[str]] = {}
+    ordem_coluna = ""
+    ordem_direcao = ""
+    if filtros_coluna_raw:
+        try:
+            parsed_cf = json.loads(filtros_coluna_raw)
+            if isinstance(parsed_cf, dict):
+                for k, vals in parsed_cf.items():
+                    if not isinstance(vals, list):
+                        continue
+                    chave = str(k or "").strip()
+                    if not chave:
+                        continue
+                    chave_limpa = re.sub(r"[^a-z0-9_]+", "", chave.strip().lower())
+                    if chave_limpa == "__sort_col":
+                        if vals:
+                            ordem_coluna = re.sub(
+                                r"[^a-z0-9_]+", "", str(vals[0] or "").strip().lower()
+                            )
+                        continue
+                    if chave_limpa == "__sort_dir":
+                        if vals:
+                            direcao = str(vals[0] or "").strip().lower()
+                            if direcao in {"asc", "desc"}:
+                                ordem_direcao = direcao
+                        continue
+                    filtros_coluna[chave] = [str(v or "").strip() for v in vals if str(v or "").strip()]
+        except Exception:
+            filtros_coluna = {}
 
     data_inicio = parse_date(data_inicio_str) if data_inicio_str else None
     data_fim = parse_date(data_fim_str) if data_fim_str else None
@@ -6513,11 +7358,142 @@ def verificar_dados():
             )
         return True
 
+    def _normalizar_cf_texto(valor: object) -> str:
+        txt = (valor or "").strip() if isinstance(valor, str) else str(valor or "").strip()
+        txt = unicodedata.normalize("NFD", txt)
+        txt = "".join(c for c in txt if unicodedata.category(c) != "Mn")
+        return txt.lower()
+
+    def _cf_parse_data(valor: str) -> Optional[date]:
+        val = (valor or "").strip()
+        if not val:
+            return None
+        if "/" in val:
+            try:
+                return datetime.strptime(val, "%d/%m/%Y").date()
+            except Exception:
+                pass
+        return parse_date(val)
+
+    def _aplicar_filtros_coluna_consulta(consulta_base):
+        if not filtros_coluna:
+            return consulta_base
+
+        mapa = {
+            "numero_sei": "numero_sei",
+            "data_de_entrada": "data_entrada",
+            "data_da_finalizacao": "finalizado_em",
+            "interessado": "interessado",
+            "concessionaria": "concessionaria",
+            "gerencia": "gerencia",
+            "gerencias_envolvidas": "gerencias_envolvidas",
+            "assunto": "assunto",
+            "prazo": "prazo",
+            "responsavel_equipe": "responsavel_equipe",
+            "responsavel_adm": "responsavel_adm",
+            "status": "status",
+        }
+
+        consulta_filtrada = consulta_base
+        for chave_raw, valores_raw in filtros_coluna.items():
+            slug = mapa.get(_normalizar_cf_texto(chave_raw), _normalizar_cf_texto(chave_raw))
+            valores = [v for v in valores_raw if v]
+            if not valores:
+                continue
+            valores_norm = [_normalizar_cf_texto(v) for v in valores]
+            inclui_vazio = any(v in {"(vazio)", "-", ""} for v in valores_norm)
+            valores_sem_vazio = [v for v in valores_norm if v not in {"(vazio)", "-", ""}]
+
+            if slug == "numero_sei":
+                conds = [Processo.numero_sei.ilike(f"%{v}%") for v in valores if v]
+                if conds:
+                    consulta_filtrada = consulta_filtrada.filter(or_(*conds))
+                continue
+
+            if slug == "data_entrada":
+                datas = [_cf_parse_data(v) for v in valores]
+                datas = [d for d in datas if d]
+                conds = []
+                if datas:
+                    conds.append(func.date(Processo.data_entrada).in_([d.isoformat() for d in datas]))
+                if inclui_vazio:
+                    conds.append(or_(Processo.data_entrada.is_(None), func.trim(func.ifnull(Processo.data_entrada, "")) == ""))
+                if conds:
+                    consulta_filtrada = consulta_filtrada.filter(or_(*conds))
+                continue
+
+            if slug == "finalizado_em":
+                datas = [_cf_parse_data(v) for v in valores]
+                datas = [d for d in datas if d]
+                conds = []
+                if datas:
+                    conds.append(func.date(Processo.finalizado_em).in_([d.isoformat() for d in datas]))
+                if inclui_vazio:
+                    conds.append(Processo.finalizado_em.is_(None))
+                if conds:
+                    consulta_filtrada = consulta_filtrada.filter(or_(*conds))
+                continue
+
+            if slug in {"gerencia", "gerencias_envolvidas"}:
+                conds = []
+                for v in valores_sem_vazio:
+                    conds.append(
+                        or_(
+                            func.lower(Processo.gerencia) == v,
+                            Processo.movimentacoes.any(
+                                or_(
+                                    func.lower(Movimentacao.de_gerencia) == v,
+                                    func.lower(Movimentacao.para_gerencia) == v,
+                                )
+                            ),
+                        )
+                    )
+                if inclui_vazio:
+                    conds.append(or_(Processo.gerencia.is_(None), func.trim(func.ifnull(Processo.gerencia, "")) == ""))
+                if conds:
+                    consulta_filtrada = consulta_filtrada.filter(or_(*conds))
+                continue
+
+            if slug == "prazo":
+                datas = [_cf_parse_data(v) for v in valores]
+                datas = [d for d in datas if d]
+                conds = []
+                if any(v in {"sem prazo", "semprazo"} for v in valores_norm):
+                    conds.append(Processo.prazo.is_(None))
+                if datas:
+                    conds.append(func.date(Processo.prazo).in_([d.isoformat() for d in datas]))
+                if inclui_vazio:
+                    conds.append(Processo.prazo.is_(None))
+                if conds:
+                    consulta_filtrada = consulta_filtrada.filter(or_(*conds))
+                continue
+
+            coluna_por_slug = {
+                "interessado": Processo.interessado,
+                "concessionaria": Processo.concessionaria,
+                "assunto": Processo.assunto,
+                "responsavel_equipe": Processo.responsavel_equipe,
+                "responsavel_adm": Processo.responsavel_adm,
+                "status": Processo.status,
+            }
+            coluna = coluna_por_slug.get(slug)
+            if coluna is None:
+                continue
+            conds = []
+            for v in valores_sem_vazio:
+                conds.append(func.lower(func.trim(func.ifnull(coluna, ""))) == v)
+            if inclui_vazio:
+                conds.append(or_(coluna.is_(None), func.trim(func.ifnull(coluna, "")) == "", func.trim(func.ifnull(coluna, "")) == "-"))
+            if conds:
+                consulta_filtrada = consulta_filtrada.filter(or_(*conds))
+
+        return consulta_filtrada
+
     processos = []
     processos_data = []
     paginacao_processos = None
     pagina = request.args.get("page", type=int, default=1)
-    por_pagina = 50
+    por_pagina = 10
     metricas_base = {"andamento": 0, "finalizados": 0, "tempo_medio_dias": None}
     total_andamento = 0
     metricas_demandas = {
@@ -6583,6 +7559,8 @@ def verificar_dados():
                 Processo.data_saida <= data_fim,
             )
 
+        consulta = _aplicar_filtros_coluna_consulta(consulta)
+
         total_finalizados_consulta = consulta.count()
         processos_metricas = (
             consulta.enable_eagerloads(False)
@@ -6647,9 +7625,46 @@ def verificar_dados():
             or 0
         )
         total_demandas_indicador = int(total_movimentos_demandas) + int(total_fallback_demandas)
-        consulta_ordenada = consulta.order_by(
-            Processo.finalizado_em.desc(), Processo.atualizado_em.desc()
-        )
+        mapa_ordem = {
+            "numero_sei": Processo.numero_sei,
+            "data_de_entrada": Processo.data_entrada,
+            "interessado": Processo.interessado,
+            "concessionaria": Processo.concessionaria,
+            "gerencia": Processo.gerencia,
+            "gerencias_envolvidas": Processo.gerencia,
+            "assunto": Processo.assunto,
+            "prazo": Processo.prazo,
+            "responsavel_equipe": Processo.responsavel_equipe,
+            "responsavel_adm": Processo.responsavel_adm,
+            "status": Processo.status,
+            "data_da_finalizacao": Processo.finalizado_em,
+        }
+        colunas_texto = {
+            "numero_sei",
+            "interessado",
+            "concessionaria",
+            "gerencia",
+            "gerencias_envolvidas",
+            "assunto",
+            "responsavel_equipe",
+            "responsavel_adm",
+            "status",
+        }
+        coluna_ordem = mapa_ordem.get(ordem_coluna)
+        if coluna_ordem is not None:
+            ordem_base = (
+                func.lower(func.ifnull(coluna_ordem, ""))
+                if ordem_coluna in colunas_texto
+                else coluna_ordem
+            )
+            consulta_ordenada = consulta.order_by(
+                ordem_base.desc() if ordem_direcao == "desc" else ordem_base.asc(),
+                Processo.atualizado_em.desc(),
+            )
+        else:
+            consulta_ordenada = consulta.order_by(
+                Processo.finalizado_em.desc(), Processo.atualizado_em.desc()
+            )
         paginacao_processos = consulta_ordenada.paginate(
             page=pagina, per_page=por_pagina, error_out=False
         )
@@ -6680,11 +7695,14 @@ def verificar_dados():
 
         processos = []
         vistos_processos: Set[tuple] = set()
-        for proc in sorted(
-            processos_raw,
-            key=lambda p: (p.finalizado_em or datetime.min, p.atualizado_em or datetime.min),
-            reverse=True,
-        ):
+        iter_processos = processos_raw
+        if not coluna_ordem:
+            iter_processos = sorted(
+                processos_raw,
+                key=lambda p: (p.finalizado_em or datetime.min, p.atualizado_em or datetime.min),
+                reverse=True,
+            )
+        for proc in iter_processos:
             chave = _chave_exata(proc)
             if chave in vistos_processos:
                 continue
@@ -7619,6 +8637,7 @@ def verificar_dados():
         campos_extra_saida=campos_extra_saida,
         trilhas_gerencias=trilhas_gerencias,
         paginacao_processos=paginacao_processos,
+        filtros_colunas_cf=filtros_coluna_raw,
     )
 
 

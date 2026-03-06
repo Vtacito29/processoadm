@@ -19,6 +19,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1">
  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
  <link href="{{ url_for('static', filename='css/global.css') }}" rel="stylesheet">
+ <link href="{{ url_for('static', filename='css/table_column_filter.css') }}" rel="stylesheet">
  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
  <link href="{{ url_for('static', filename='css/pg_inicial.css') }}" rel="stylesheet">
 </head>
@@ -205,6 +206,8 @@
  <section class="table-container">
  <div id="tabelaProcessos"></div>
  <form class="row g-3 align-items-end mb-4" method="get" id="filtros" action="{{ url_for('index') }}#filtros">
+ <input type="hidden" name="resp_eq_vazio" id="respEqVazioInput" value="{{ '1' if filtro_resp_eq_vazio else '' }}">
+ <input type="hidden" name="cf" id="colFiltersInput" value="{{ filtro_colunas_cf or '' }}">
  <div class="col-12 col-md-4 col-xl-3">
  <label class="form-label">Filtrar por Gerência</label>
  <select class="form-select" name="gerencia">
@@ -279,7 +282,7 @@
  <th>Gerência</th>
  <th>Assunto</th>
  <th>Prazo</th>
- <th>Responsável Adm</th>
+<th>Responsável Equipe</th>
  </tr>
  </thead>
  <tbody>
@@ -325,15 +328,15 @@
  </div>
  </td>
  <td>
- {% set planilhador = processo.responsavel_adm
+{% set planilhador = processo.responsavel_equipe
  or (processo.assigned_to.nome if processo.assigned_to else None)
  or (processo.assigned_to.username if processo.assigned_to else None)
  %}
- <div class="process-chip ghost">
- <div class="chip-avatar muted">{{ (planilhador or '?')[0]|upper }}</div>
+ <div class="process-chip ghost {% if not planilhador %}d-none{% endif %}">
+<div class="chip-avatar muted">{{ (planilhador or '')[:1]|upper }}</div>
  <div class="chip-body">
- <div class="chip-title">{{ planilhador or "Não informado" }}</div>
- <div class="chip-sub">Responsável Adm</div>
+ <div class="chip-title">{{ planilhador or "" }}</div>
+<div class="chip-sub">Responsável Equipe</div>
  </div>
  </div>
  </td>
@@ -417,8 +420,8 @@
  </div>
  <div class="col-md-6 col-lg-4">
  <div class="resumo-box">
- <span class="resumo-label">Responsável Adm</span>
- <span class="resumo-value">{{ processo.responsavel_adm or "-" }}</span>
+<span class="resumo-label">Responsável Equipe</span>
+ <span class="resumo-value">{{ processo.responsavel_equipe or (processo.assigned_to.nome if processo.assigned_to else None) or (processo.assigned_to.username if processo.assigned_to else None) or "-" }}</span>
  </div>
  </div>
  <div class="col-12">
@@ -444,20 +447,28 @@
 
  <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
  <div>
- {% if paginacao.total %}
- <small class="text-muted">Exibindo {{ processos|length }} de {{ paginacao.total }} processos</small>
- {% endif %}
+{% if paginacao.total %}
+<small class="text-muted">Exibindo {{ processos|length }} de {{ paginacao.total }} processos</small><br>
+<small class="text-muted">Página {{ paginacao.page }} de {{ paginacao.pages or 1 }}</small><br>
+<small class="text-muted d-none" id="activeColumnFiltersHome"></small>
+{% endif %}
  </div>
  <nav>
  <ul class="pagination pagination-sm mb-0">
- <li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
- <a class="page-link" href="{{ url_for('index', page=paginacao.prev_num, gerencia=filtro_gerencia, sei=filtro_sei, prazo=filtro_prazo) }}#filtros">Anterior</a>
+<li class="page-item {% if paginacao.page <= 1 %}disabled{% endif %}">
+<a class="page-link" href="{{ url_for('index', page=1, gerencia=filtro_gerencia, sei=filtro_sei, prazo=filtro_prazo, resp_eq_vazio=('1' if filtro_resp_eq_vazio else None), cf=(filtro_colunas_cf or None)) }}#filtros">Primeira</a>
+</li>
+<li class="page-item {% if not paginacao.has_prev %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('index', page=paginacao.prev_num, gerencia=filtro_gerencia, sei=filtro_sei, prazo=filtro_prazo, resp_eq_vazio=('1' if filtro_resp_eq_vazio else None), cf=(filtro_colunas_cf or None)) }}#filtros">Anterior</a>
  </li>
  <li class="page-item active">
  <span class="page-link">{{ paginacao.page }}</span>
  </li>
  <li class="page-item {% if not paginacao.has_next %}disabled{% endif %}">
- <a class="page-link" href="{{ url_for('index', page=paginacao.next_num, gerencia=filtro_gerencia, sei=filtro_sei, prazo=filtro_prazo) }}#filtros">Próxima</a>
+ <a class="page-link" href="{{ url_for('index', page=paginacao.next_num, gerencia=filtro_gerencia, sei=filtro_sei, prazo=filtro_prazo, resp_eq_vazio=('1' if filtro_resp_eq_vazio else None), cf=(filtro_colunas_cf or None)) }}#filtros">Próxima</a>
+ </li>
+ <li class="page-item {% if (paginacao.pages or 1) <= paginacao.page %}disabled{% endif %}">
+ <a class="page-link" href="{{ url_for('index', page=(paginacao.pages or 1), gerencia=filtro_gerencia, sei=filtro_sei, prazo=filtro_prazo, resp_eq_vazio=('1' if filtro_resp_eq_vazio else None), cf=(filtro_colunas_cf or None)) }}#filtros">Última</a>
  </li>
  </ul>
  </nav>
@@ -574,7 +585,7 @@
 </div>
 {% endif %}
 
-{% include "_assistente_global.html" %}
+{# Assistente global desativado temporariamente #}
 
 <footer class="text-center text-muted py-3">
  &copy; {{ current_year }} SUROD - Controle de Processos.
@@ -583,11 +594,18 @@
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/table_column_filter.js') }}"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+ const urlHistoricoFinalizados = "{{ url_for('verificar_dados') }}#tabelaProcessos";
  // Scroll da hero para a tabela
  document.querySelectorAll(".hero-metric-btn").forEach(function (btn) {
  btn.addEventListener("click", function () {
+ const filtro = (btn.dataset.filtro || "").toLowerCase();
+ if (filtro === "finalizados") {
+ window.location.href = urlHistoricoFinalizados;
+ return;
+ }
  const alvo = document.querySelector(btn.dataset.anchor || "#tabelaProcessos");
  if (alvo) {
  alvo.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -633,6 +651,15 @@ document.addEventListener("DOMContentLoaded", function () {
  });
  };
 
+ const organizarLinhasProcessoHome = (procId) => {
+ const principal = document.querySelector(`.process-row-home[data-proc-id="${procId}"]`);
+ const ficha = document.querySelector(`.ficha-home-row[data-proc-id="${procId}"]`);
+ if (!principal || !ficha || !principal.parentElement) return;
+ const tbody = principal.parentElement;
+ tbody.insertBefore(principal, ficha);
+ tbody.insertBefore(ficha, principal.nextSibling);
+ };
+
  const alternarFichaHome = (alvoId, procId) => {
  const linha = document.getElementById(alvoId);
  if (!linha) return;
@@ -643,6 +670,7 @@ document.addEventListener("DOMContentLoaded", function () {
  return;
  }
  filtrarParaProcessoHome(procId);
+ organizarLinhasProcessoHome(procId);
  linha.classList.remove("d-none");
  const botaoAtual = document.querySelector(`[data-ficha-target="${alvoId}"]`);
  if (botaoAtual) botaoAtual.setAttribute("aria-expanded", "true");
