@@ -71,6 +71,7 @@ IMPORT_CACHE: Dict[str, Dict[str, object]] = {}
 OPENPYXL_MIN_VERSION = "3.1.5"
 MAX_IMPORT_FILE_SIZE_MB = 50
 IMPORT_COMMIT_BATCH_DEFAULT = 250
+IMPORT_TEMP_DB_MAX_MB = 2
 
 
 def _env_int(nome: str, padrao: int) -> int:
@@ -183,6 +184,7 @@ AUTO_CORRIGIR_DADOS_ON_START = (
 )
 MAX_IMPORT_FILE_SIZE_BYTES = max(1, _env_int("MAX_IMPORT_FILE_SIZE_MB", MAX_IMPORT_FILE_SIZE_MB)) * 1024 * 1024
 IMPORT_COMMIT_BATCH_SIZE = max(1, _env_int("IMPORT_COMMIT_BATCH_SIZE", IMPORT_COMMIT_BATCH_DEFAULT))
+IMPORT_TEMP_DB_MAX_BYTES = max(0, _env_int("IMPORT_TEMP_DB_MAX_MB", IMPORT_TEMP_DB_MAX_MB)) * 1024 * 1024
 
 ILUSTRACAO_FORMATOS_SUPORTADOS = (".png", ".jpg", ".jpeg", ".webp", ".svg", ".gif")
 CAMPO_EXTRA_TIPOS = {
@@ -2909,16 +2911,23 @@ def _registrar_importacao_temp(arquivo) -> Optional[str]:
     _limpar_cache_importacao()
     ext = os.path.splitext(arquivo.filename)[1] or ".xlsx"
     token = secrets.token_urlsafe(16)
+    tamanho_upload = _tamanho_upload_bytes(arquivo)
+    # Evita pico de memoria no upload quando o arquivo e grande.
+    persistir_no_banco = (
+        IMPORT_TEMP_DB_MAX_BYTES > 0
+        and (not tamanho_upload or tamanho_upload <= IMPORT_TEMP_DB_MAX_BYTES)
+    )
     conteudo_bytes = b""
-    try:
-        stream = getattr(arquivo, "stream", None)
-        if stream is not None:
-            posicao = stream.tell()
-            stream.seek(0, os.SEEK_SET)
-            conteudo_bytes = stream.read() or b""
-            stream.seek(posicao, os.SEEK_SET)
-    except Exception:
-        conteudo_bytes = b""
+    if persistir_no_banco:
+        try:
+            stream = getattr(arquivo, "stream", None)
+            if stream is not None:
+                posicao = stream.tell()
+                stream.seek(0, os.SEEK_SET)
+                conteudo_bytes = stream.read() or b""
+                stream.seek(posicao, os.SEEK_SET)
+        except Exception:
+            conteudo_bytes = b""
 
     if conteudo_bytes:
         try:
