@@ -9,6 +9,7 @@ Aplicacao Flask para controlar o ciclo de vida de processos entre gerencias.
 - Inicializacao do app/banco e filtros de template
 """
 
+import ast
 import json
 import logging
 import os
@@ -3671,17 +3672,51 @@ def coletar_gerencias_envolvidas(processo: Processo) -> List[str]:
     vistos = set()
     trilha: List[str] = []
 
+    def iterar_gerencias(valor: Optional[object]) -> List[str]:
+        """Normaliza formatos legados (lista serializada/texto) para codigos de gerencia."""
+        if valor is None:
+            return []
+
+        candidatos: List[str] = []
+        if isinstance(valor, (list, tuple, set)):
+            candidatos = [limpar_texto(item, "") for item in valor if limpar_texto(item, "")]
+        else:
+            bruto = limpar_texto(valor, "")
+            if not bruto:
+                return []
+
+            if bruto.startswith("[") and bruto.endswith("]"):
+                parsed = None
+                try:
+                    parsed = json.loads(bruto)
+                except Exception:
+                    try:
+                        parsed = ast.literal_eval(bruto)
+                    except Exception:
+                        parsed = None
+                if isinstance(parsed, (list, tuple, set)):
+                    candidatos = [limpar_texto(item, "") for item in parsed if limpar_texto(item, "")]
+                elif parsed is not None:
+                    candidatos = [limpar_texto(parsed, "")]
+            if not candidatos:
+                texto_limpo = re.sub(r"[\"'\[\]\(\)\{\}]", " ", bruto)
+                partes = [parte.strip() for parte in re.split(r"[;,|]+", texto_limpo) if parte.strip()]
+                candidatos = partes if partes else [bruto]
+
+        normalizadas: List[str] = []
+        for item in candidatos:
+            ger = normalizar_gerencia(item, permitir_entrada=True)
+            if ger:
+                normalizadas.append(ger)
+        return normalizadas
+
     def registrar(nome: Optional[str]) -> None:
-        if not nome:
-            return
-        texto = str(nome).strip()
-        if not texto:
-            return
-        slug = texto.upper()
-        if slug in {"FINALIZADO", "SAIDA", "ENTRADA", "CADASTRO"} or slug in vistos:
-            return
-        vistos.add(slug)
-        trilha.append(texto)
+        for texto in iterar_gerencias(nome):
+            slug = texto.upper()
+            if slug in {"FINALIZADO", "SAIDA", "ENTRADA", "CADASTRO"} or slug in vistos:
+                continue
+            vistos.add(slug)
+            trilha.append(texto)
 
     movimentacoes = sorted(
         processo.movimentacoes,

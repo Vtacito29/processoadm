@@ -435,36 +435,44 @@ body.col-resizing {
     gap: 0.35rem;
     flex-wrap: wrap;
     text-align: left;
-}
-.pill.gerencias-pill.trilhas {
-    display: block;
     padding: 0;
     border: 0;
     background: transparent;
-    min-width: max-content;
-    width: max-content;
-    max-width: none;
-    white-space: nowrap;
+}
+.pill.gerencias-pill.trilhas {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    min-width: 0;
+    width: auto;
+    max-width: 100%;
+    white-space: normal;
     text-align: left;
 }
 .pill.gerencias-pill.trilhas .gerencia-chip {
-    display: block;
+    display: inline-flex;
 }
 .pill.gerencias-pill.trilhas .gerencia-chip + .gerencia-chip {
-    margin-top: 0.2rem;
+    margin-top: 0;
 }
 
 .gerencia-chip {
     display: inline-flex;
     align-items: center;
-    padding: 0;
-    border-radius: 0;
-    font-size: 0.72rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.79rem;
     font-weight: 700;
-    background: transparent;
+    background: #ffffff;
     color: #0f172a;
-    border: 0;
+    border: 1px solid rgba(79, 70, 229, 0.45);
     line-height: 1.35;
+    white-space: nowrap;
 }
 .gerencia-chip .gerencia-part {
     color: inherit;
@@ -478,8 +486,9 @@ body.col-resizing {
     font-weight: 600;
 }
 .gerencia-chip.aberta {
-    background: transparent;
+    background: #fef2f2;
     color: #b91c1c;
+    border-color: rgba(185, 28, 28, 0.45);
     cursor: help;
 }
 
@@ -907,6 +916,10 @@ body.col-resizing {
 #conteudo-interacoes .process-table td:nth-child(6) { width: 150px; min-width: 150px; }
 #conteudo-interacoes .process-table th:nth-child(7),
 #conteudo-interacoes .process-table td:nth-child(7) { width: 300px; min-width: 300px; }
+#conteudo-interacoes .process-table td:nth-child(7) {
+    word-break: normal;
+    overflow-wrap: normal;
+}
 #conteudo-interacoes .process-table th:nth-child(8),
 #conteudo-interacoes .process-table td:nth-child(8),
 #conteudo-interacoes .process-table th:nth-child(9),
