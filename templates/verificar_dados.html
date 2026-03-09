@@ -615,17 +615,19 @@
  </ul>
  </div>
 {% endif %}
- <div class="mt-4 d-none" id="historicoWrapper">
- <div class="d-flex align-items-center gap-2 mb-2">
- <h3 class="h6 mb-0 fw-semibold" id="historicoTitulo">Histórico do processo</h3>
- <span class="badge bg-light text-muted border">Somente leitura</span>
- </div>
- <div id="historicoMensagem" class="text-muted small">
- Selecione um processo para ver o histórico.
- </div>
- <div id="historicoLista" class="list-group list-group-flush d-none"></div>
- </div>
- </div>
+  <div id="historicoHost">
+  <div class="mt-4 d-none" id="historicoWrapper">
+  <div class="d-flex align-items-center gap-2 mb-2">
+  <h3 class="h6 mb-0 fw-semibold" id="historicoTitulo">Histórico do processo</h3>
+  <span class="badge bg-light text-muted border">Somente leitura</span>
+  </div>
+  <div id="historicoMensagem" class="text-muted small">
+  Selecione um processo para ver o histórico.
+  </div>
+  <div id="historicoLista" class="list-group list-group-flush d-none"></div>
+  </div>
+  </div>
+  </div>
 </main>
 
 {% endif %}
@@ -742,6 +744,7 @@
   historicoLista: document.getElementById("historicoLista"),
   historicoMensagem: document.getElementById("historicoMensagem"),
   historicoTitulo: document.getElementById("historicoTitulo"),
+  historicoHost: document.getElementById("historicoHost"),
   historicoWrapper: document.getElementById("historicoWrapper"),
  btnMaisProcessos: document.getElementById("btnMaisProcessos"),
  btnMaisDemandas: document.getElementById("btnMaisDemandas"),
@@ -776,8 +779,11 @@ let fichaAberta = false;
  renderizarHistorico(processoHistorico);
  }
  historicoAberto = true;
- if (refs.btnVerHistorico) refs.btnVerHistorico.textContent = "Ocultar histórico";
- };
+  if (demandaSelecionada) {
+  aplicarFiltroSelecao(demandaSelecionada.numero_sei || "");
+  }
+  if (refs.btnVerHistorico) refs.btnVerHistorico.textContent = "Ocultar histórico";
+  };
 
  const possuiValor = (valor) => valor !== null && valor !== undefined && valor !== "";
 
@@ -1398,11 +1404,14 @@ const removerFichaTecnica = () => {
  };
 
  const fecharFicha = () => {
- removerFichaTecnica();
- removerFichaTecnicaDemanda();
- fichaAberta = false;
- if (refs.btnVerFicha) refs.btnVerFicha.textContent = "Ver ficha";
- };
+  removerFichaTecnica();
+  removerFichaTecnicaDemanda();
+  fichaAberta = false;
+  if (demandaSelecionada) {
+  aplicarFiltroSelecao(demandaSelecionada.numero_sei || "");
+  }
+  if (refs.btnVerFicha) refs.btnVerFicha.textContent = "Ver ficha";
+  };
 
  const abrirFicha = () => {
  if (!demandaSelecionada && !processoSelecionado) return;
@@ -1413,9 +1422,12 @@ const removerFichaTecnica = () => {
  } else if (processoSelecionado) {
  inserirFichaTecnicaNaTabela(processoSelecionado);
  }
- fichaAberta = true;
- if (refs.btnVerFicha) refs.btnVerFicha.textContent = "Ocultar ficha";
- };
+  fichaAberta = true;
+  if (demandaSelecionada) {
+  aplicarFiltroSelecao(demandaSelecionada.numero_sei || "");
+  }
+  if (refs.btnVerFicha) refs.btnVerFicha.textContent = "Ocultar ficha";
+  };
 
 
  
@@ -2088,20 +2100,79 @@ const inserirFichaTecnicaNaTabela = (processo) => {
   refs.visaoPainelResumo.checked = usandoResumo;
   refs.visaoPainelDemanda.checked = !usandoResumo;
   }
+  if (usandoResumo) {
+  restaurarHistoricoNoHost();
+  }
   atualizarMetricasPainel(usandoResumo);
+  };
+
+  const restaurarHistoricoNoHost = () => {
+  if (!refs.historicoWrapper) return;
+  refs.tabelaDemandas?.querySelectorAll("tbody tr.historico-inline-row").forEach((linha) => linha.remove());
+  refs.historicoWrapper.classList.remove("mt-2", "mb-2");
+  refs.historicoWrapper.classList.add("mt-4");
+  if (refs.historicoHost && refs.historicoWrapper.parentElement !== refs.historicoHost) {
+  refs.historicoHost.appendChild(refs.historicoWrapper);
+  }
+  };
+
+  const posicionarHistoricoNaDemandaSelecionada = () => {
+  if (!refs.historicoWrapper || !refs.tabelaDemandas) return;
+  const corpo = refs.tabelaDemandas.querySelector("tbody");
+  if (!corpo) return;
+  const linhaAtiva = corpo.querySelector("tr.table-active:not(.ficha-tecnica-row):not(.historico-inline-row)");
+  if (!linhaAtiva) return;
+  refs.tabelaDemandas.querySelectorAll("tbody tr.historico-inline-row").forEach((linha) => linha.remove());
+  const linhaFicha =
+  linhaAtiva.nextElementSibling &&
+  linhaAtiva.nextElementSibling.classList.contains("ficha-tecnica-row")
+  ? linhaAtiva.nextElementSibling
+  : null;
+  const ancora = linhaFicha || linhaAtiva;
+  const linhaHistorico = document.createElement("tr");
+  linhaHistorico.className = "ficha-tecnica-row historico-inline-row";
+  linhaHistorico.setAttribute("data-processo", linhaAtiva.getAttribute("data-processo") || "");
+  const celulaHistorico = document.createElement("td");
+  celulaHistorico.setAttribute(
+  "colspan",
+  String(linhaAtiva.children.length || refs.tabelaDemandas.querySelectorAll("thead th").length || 8),
+  );
+  celulaHistorico.className = "pt-2 pb-2";
+  linhaHistorico.appendChild(celulaHistorico);
+  ancora.insertAdjacentElement("afterend", linhaHistorico);
+  celulaHistorico.appendChild(refs.historicoWrapper);
+  refs.historicoWrapper.classList.remove("mt-4");
+  refs.historicoWrapper.classList.add("mt-2", "mb-2");
   };
 
   const aplicarFiltroSelecao = (numeroSei) => {
   const alvo = chaveSelecaoSei(numeroSei);
+  const focoDemandaAtivo =
+  Boolean(demandaSelecionada) &&
+  Boolean(refs.visaoTabelaDemanda?.checked) &&
+  (fichaAberta || historicoAberto);
+  const idxDemandaSelecionada =
+  demandaSelecionadaIdx === null || demandaSelecionadaIdx === undefined
+  ? ""
+  : String(demandaSelecionadaIdx);
+  const numeroDemandaSelecionada = normalizarSei(demandaSelecionada?.numero_sei || "");
   const filtrar = (tabela) => {
   if (!tabela) return;
  tabela.querySelectorAll("tbody tr").forEach((linha) => {
  if (linha.classList.contains("ficha-tecnica-row")) return;
  const linhaSei = chaveSelecaoSei(linha.getAttribute("data-processo"));
- const esconder = Boolean(alvo) && linhaSei !== alvo;
+ const isTabelaDemandas = tabela.id === "tabelaDemandas";
+ const linhaSeiExata = normalizarSei(linha.getAttribute("data-processo"));
+ const linhaIdx = String(linha.getAttribute("data-demanda-idx") || "");
+ let esconder = Boolean(alvo) && linhaSei !== alvo;
+ if (isTabelaDemandas && focoDemandaAtivo) {
+ const manterPorIdx = idxDemandaSelecionada && linhaIdx === idxDemandaSelecionada;
+ const manterPorNumero = !idxDemandaSelecionada && numeroDemandaSelecionada && linhaSeiExata === numeroDemandaSelecionada;
+ esconder = esconder || !(manterPorIdx || manterPorNumero);
+ }
  linha.classList.toggle("d-none", esconder);
  });
- };
+  };
   filtrar(refs.tabelaProcessos);
   filtrar(refs.tabelaDemandas);
   refs.btnLimparSelecao?.classList.toggle("d-none", !alvo);
@@ -2112,9 +2183,10 @@ const inserirFichaTecnicaNaTabela = (processo) => {
  const limparFiltroSelecao = () => aplicarFiltroSelecao("");
 
  const ocultarHistorico = () => {
- if (refs.historicoLista) {
- refs.historicoLista.innerHTML = "";
- refs.historicoLista.classList.add("d-none");
+  restaurarHistoricoNoHost();
+  if (refs.historicoLista) {
+  refs.historicoLista.innerHTML = "";
+  refs.historicoLista.classList.add("d-none");
  }
  if (refs.historicoTitulo) {
  refs.historicoTitulo.textContent = "Histórico do processo";
@@ -2122,12 +2194,15 @@ const inserirFichaTecnicaNaTabela = (processo) => {
  if (refs.historicoMensagem) {
  refs.historicoMensagem.textContent = "Selecione um processo para ver o histórico.";
  }
- refs.historicoMensagem?.classList.remove("d-none");
- refs.historicoWrapper?.classList.add("d-none");
- historicoAberto = false;
- if (refs.btnVerHistorico) {
- refs.btnVerHistorico.textContent = "Ver histórico";
- }
+  refs.historicoMensagem?.classList.remove("d-none");
+  refs.historicoWrapper?.classList.add("d-none");
+  historicoAberto = false;
+  if (demandaSelecionada) {
+  aplicarFiltroSelecao(demandaSelecionada.numero_sei || "");
+  }
+  if (refs.btnVerHistorico) {
+  refs.btnVerHistorico.textContent = "Ver histórico";
+  }
  };
 
 const limparResultados = () => {
@@ -2726,7 +2801,7 @@ return [...eventosUnicos].sort((a, b) => {
  return prioridadeHistorico(b) - prioridadeHistorico(a);
 });
 };
-const renderizarHistorico = (processo, opcoes = {}) => {
+ const renderizarHistorico = (processo, opcoes = {}) => {
  if (!refs.historicoLista || !refs.historicoMensagem) return;
  refs.historicoLista.innerHTML = "";
  const eventos = construirHistorico(processo, opcoes);
@@ -2763,11 +2838,12 @@ const eventosVisual = [...eventos].sort(
  },
  )
  .join("");
- refs.historicoLista.innerHTML = itens;
- refs.historicoLista.classList.remove("d-none");
- refs.historicoMensagem.classList.add("d-none");
- refs.historicoWrapper?.classList.remove("d-none");
- historicoAberto = true;
+  refs.historicoLista.innerHTML = itens;
+  refs.historicoLista.classList.remove("d-none");
+  refs.historicoMensagem.classList.add("d-none");
+  restaurarHistoricoNoHost();
+  refs.historicoWrapper?.classList.remove("d-none");
+  historicoAberto = true;
  if (refs.btnVerHistorico) {
  refs.btnVerHistorico.textContent = "Ocultar histórico";
  }

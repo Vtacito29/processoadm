@@ -438,6 +438,9 @@ body.col-resizing {
     padding: 0;
     border: 0;
     background: transparent;
+    border-radius: 0;
+    overflow: visible;
+    text-overflow: clip;
 }
 .pill.gerencias-pill.trilhas {
     display: inline-flex;
@@ -473,6 +476,8 @@ body.col-resizing {
     border: 1px solid rgba(79, 70, 229, 0.45);
     line-height: 1.35;
     white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
 }
 .gerencia-chip .gerencia-part {
     color: inherit;
@@ -915,7 +920,7 @@ body.col-resizing {
 #conteudo-interacoes .process-table th:nth-child(6),
 #conteudo-interacoes .process-table td:nth-child(6) { width: 150px; min-width: 150px; }
 #conteudo-interacoes .process-table th:nth-child(7),
-#conteudo-interacoes .process-table td:nth-child(7) { width: 300px; min-width: 300px; }
+#conteudo-interacoes .process-table td:nth-child(7) { width: 340px; min-width: 340px; }
 #conteudo-interacoes .process-table td:nth-child(7) {
     word-break: normal;
     overflow-wrap: normal;

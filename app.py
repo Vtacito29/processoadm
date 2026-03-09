@@ -7700,10 +7700,77 @@ def verificar_dados():
             consulta_ordenada = consulta.order_by(
                 Processo.finalizado_em.desc(), Processo.atualizado_em.desc()
             )
-        paginacao_processos = consulta_ordenada.paginate(
-            page=pagina, per_page=por_pagina, error_out=False
-        )
-        processos_raw = paginacao_processos.items
+        def _chave_base_consolidada(proc: Processo) -> str:
+            base = limpar_texto(getattr(proc, "numero_sei_base", None), "")
+            if not base:
+                base = extrair_numero_base_sei(getattr(proc, "numero_sei", "") or "")
+            return (base or f"id:{getattr(proc, 'id', '')}").strip().lower()
+
+        if any([coordenadoria, equipe, interessado, data_inicio, data_fim]):
+            paginacao_processos = consulta_ordenada.paginate(
+                page=pagina, per_page=por_pagina, error_out=False
+            )
+            processos_raw = paginacao_processos.items
+        else:
+            processos_raw_all = consulta_ordenada.all()
+            grupos_por_base: Dict[str, List[Processo]] = defaultdict(list)
+            ordem_bases: List[str] = []
+            bases_vistas: Set[str] = set()
+            for proc in processos_raw_all:
+                chave_base = _chave_base_consolidada(proc)
+                grupos_por_base[chave_base].append(proc)
+                if chave_base not in bases_vistas:
+                    bases_vistas.add(chave_base)
+                    ordem_bases.append(chave_base)
+
+            total_bases = len(ordem_bases)
+            total_paginas = max(1, (total_bases + por_pagina - 1) // por_pagina)
+            pagina = max(1, min(pagina, total_paginas))
+            inicio = (pagina - 1) * por_pagina
+            fim = inicio + por_pagina
+            bases_pagina = ordem_bases[inicio:fim]
+
+            processos_raw = []
+            for chave_base in bases_pagina:
+                grupo = sorted(
+                    grupos_por_base.get(chave_base, []),
+                    key=lambda p: (
+                        p.finalizado_em or datetime.min,
+                        p.atualizado_em or datetime.min,
+                    ),
+                    reverse=True,
+                )
+                processos_raw.extend(grupo)
+
+            class _PaginacaoConsolidada:
+                def __init__(self, page: int, per_page: int, total: int, pages: int):
+                    self.page = page
+                    self.per_page = per_page
+                    self.total = total
+                    self.pages = pages
+
+                @property
+                def has_prev(self) -> bool:
+                    return self.page > 1
+
+                @property
+                def has_next(self) -> bool:
+                    return self.page < self.pages
+
+                @property
+                def prev_num(self) -> int:
+                    return max(1, self.page - 1)
+
+                @property
+                def next_num(self) -> int:
+                    return min(self.pages, self.page + 1)
+
+            paginacao_processos = _PaginacaoConsolidada(
+                page=pagina,
+                per_page=por_pagina,
+                total=total_bases,
+                pages=total_paginas,
+            )
         def _chave_exata(proc: Processo) -> tuple:
             """Suprime apenas linhas 100% idênticas; mantém variações."""
             return (
