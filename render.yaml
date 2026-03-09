@@ -3,7 +3,7 @@ services:
   - type: web
     name: controle-de-processos
     env: python
-    plan: free
+    plan: starter
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn "app:create_app()" --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 240 --graceful-timeout 30
     autoDeploy: true
@@ -25,4 +25,4 @@ services:
 
 databases:
   - name: controle-de-processos-db
-    plan: free
+    plan: basic-256mb
