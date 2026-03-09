@@ -4714,7 +4714,7 @@ def index():
             coluna_ordem = mapa_ordem.get(ordem_coluna)
             if coluna_ordem is not None:
                 ordem_base = (
-                    func.lower(func.coalesce(coluna_ordem, ""))
+                    func.lower(func.coalesce(cast(coluna_ordem, db.Text), ""))
                     if ordem_coluna in colunas_texto
                     else coluna_ordem
                 )
@@ -7452,7 +7452,12 @@ def verificar_dados():
                 if datas:
                     conds.append(func.date(Processo.data_entrada).in_([d.isoformat() for d in datas]))
                 if inclui_vazio:
-                    conds.append(or_(Processo.data_entrada.is_(None), func.trim(func.coalesce(Processo.data_entrada, "")) == ""))
+                    conds.append(
+                        or_(
+                            Processo.data_entrada.is_(None),
+                            func.trim(func.coalesce(cast(Processo.data_entrada, db.Text), "")) == "",
+                        )
+                    )
                 if conds:
                     consulta_filtrada = consulta_filtrada.filter(or_(*conds))
                 continue
@@ -7484,7 +7489,12 @@ def verificar_dados():
                         )
                     )
                 if inclui_vazio:
-                    conds.append(or_(Processo.gerencia.is_(None), func.trim(func.coalesce(Processo.gerencia, "")) == ""))
+                    conds.append(
+                        or_(
+                            Processo.gerencia.is_(None),
+                            func.trim(func.coalesce(cast(Processo.gerencia, db.Text), "")) == "",
+                        )
+                    )
                 if conds:
                     consulta_filtrada = consulta_filtrada.filter(or_(*conds))
                 continue
@@ -7516,9 +7526,15 @@ def verificar_dados():
                 continue
             conds = []
             for v in valores_sem_vazio:
-                conds.append(func.lower(func.trim(func.coalesce(coluna, ""))) == v)
+                conds.append(func.lower(func.trim(func.coalesce(cast(coluna, db.Text), ""))) == v)
             if inclui_vazio:
-                conds.append(or_(coluna.is_(None), func.trim(func.coalesce(coluna, "")) == "", func.trim(func.coalesce(coluna, "")) == "-"))
+                conds.append(
+                    or_(
+                        coluna.is_(None),
+                        func.trim(func.coalesce(cast(coluna, db.Text), "")) == "",
+                        func.trim(func.coalesce(cast(coluna, db.Text), "")) == "-",
+                    )
+                )
             if conds:
                 consulta_filtrada = consulta_filtrada.filter(or_(*conds))
 
@@ -7688,7 +7704,7 @@ def verificar_dados():
         coluna_ordem = mapa_ordem.get(ordem_coluna)
         if coluna_ordem is not None:
             ordem_base = (
-                func.lower(func.coalesce(coluna_ordem, ""))
+                func.lower(func.coalesce(cast(coluna_ordem, db.Text), ""))
                 if ordem_coluna in colunas_texto
                 else coluna_ordem
             )
