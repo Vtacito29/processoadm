@@ -1714,7 +1714,7 @@
  {% for usuario in usuarios_disponiveis %}
 
 
- <option value="{{ usuario.id }}" data-gerencia="{{ usuario.gerencia_padrao or '' }}" data-coordenadoria="{{ usuario.coordenadoria or '' }}" data-equipe="{{ usuario.equipe_area or '' }}" data-nome="{{ usuario.nome or usuario.username }}" data-username="{{ usuario.username }}">{{ usuario.nome }} ({{ usuario.username }})</option>
+ <option value="{{ usuario.id }}" data-gerencia="{{ usuario.gerencia_padrao or '' }}" data-coordenadoria="{{ usuario.coordenadoria or '' }}" data-equipe="{{ usuario.equipe_area or '' }}" data-nome="{{ usuario.nome or usuario.username }}" data-username="{{ usuario.username }}" data-vinculo="{{ usuario.nome_vinculo_atribuido or '' }}">{{ usuario.nome }} ({{ usuario.username }})</option>
 
 
  {% endfor %}
@@ -2215,11 +2215,12 @@ document.addEventListener("DOMContentLoaded", function () {
  const optGer = normalizarTexto(opt.dataset.gerencia || "");
  const optNome = normalizarTexto(opt.dataset.nome || "");
  const optUser = normalizarTexto(opt.dataset.username || "");
- const optCoord = normalizarTexto(opt.dataset.coordenadoria || "");
- const optEquipe = normalizarTexto(opt.dataset.equipe || "");
+  const optCoord = normalizarTexto(opt.dataset.coordenadoria || "");
+  const optEquipe = normalizarTexto(opt.dataset.equipe || "");
+  const optVinculo = normalizarTexto(opt.dataset.vinculo || "");
  const correspondeGerencia = !gerenciaNorm || optGer === gerenciaNorm;
  const usuarioSomenteGerencia = correspondeGerencia && !optCoord && !optEquipe;
- const correspondeLista = !aplicarFiltro || setPermitidos.has(optNome) || setPermitidos.has(optUser);
+  const correspondeLista = !aplicarFiltro || setPermitidos.has(optNome) || setPermitidos.has(optUser) || setPermitidos.has(optVinculo);
  const correspondeContexto =
  correspondeGerencia
  && (
@@ -2239,8 +2240,9 @@ document.addEventListener("DOMContentLoaded", function () {
  const existentes = new Set();
  Array.from(destinatarioSelect.options).forEach((opt) => {
  if (!opt.value || opt.hidden) return;
- existentes.add(normalizarTexto(opt.dataset.nome || ""));
- existentes.add(normalizarTexto(opt.dataset.username || ""));
+  existentes.add(normalizarTexto(opt.dataset.nome || ""));
+  existentes.add(normalizarTexto(opt.dataset.username || ""));
+  existentes.add(normalizarTexto(opt.dataset.vinculo || ""));
  });
  const nomesExtras = aplicarFiltro ? (nomesPermitidos || []) : responsaveisGerencia;
  (nomesExtras || []).forEach((nome) => {
