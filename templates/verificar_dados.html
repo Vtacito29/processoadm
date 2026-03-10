@@ -1020,11 +1020,22 @@ let fichaAberta = false;
 
  const valorDentroFaixaData = (valorBruto, selecionados) => {
  const { de, ate } = extrairFaixaDataFiltro(selecionados);
- const atual = dataBrParaIso(valorBruto || "");
+ const texto = String(valorBruto || "");
+ const datas = texto.match(/\b\d{2}\/\d{2}\/\d{4}\b/g) || [];
+ if (!datas.length) {
+ const atualUnica = dataBrParaIso(texto);
+ if (!atualUnica) return false;
+ if (de && atualUnica < de) return false;
+ if (ate && atualUnica > ate) return false;
+ return true;
+ }
+ return datas.some((item) => {
+ const atual = dataBrParaIso(item);
  if (!atual) return false;
  if (de && atual < de) return false;
  if (ate && atual > ate) return false;
  return true;
+ });
  };
 
 const configurarFiltrosTabela = (tabela, botaoLimpar = null) => {

@@ -6600,6 +6600,7 @@ def gerencia(nome_gerencia):
         hoje=hoje,
         historico_finalizados=historico_finalizados,
         usuarios_disponiveis=usuarios_disponiveis,
+        meus_processos_total_usuario=meus_processos_total_usuario,
         opcoes_coordenadorias=opcoes_coordenadorias,
         opcoes_equipes=opcoes_equipes,
         opcoes_equipes_por_coordenadoria=opcoes_equipes_por_coordenadoria,
@@ -7831,7 +7832,7 @@ def verificar_dados():
                 base = extrair_numero_base_sei(getattr(proc, "numero_sei", "") or "")
             return (base or f"id:{getattr(proc, 'id', '')}").strip().lower()
 
-        if any([coordenadoria, equipe, interessado, data_inicio, data_fim]):
+        if any([coordenadoria, equipe, interessado, data_inicio, data_fim]) and not filtros_coluna:
             paginacao_processos = consulta_ordenada.paginate(
                 page=pagina, per_page=por_pagina, error_out=False
             )
@@ -7853,7 +7854,7 @@ def verificar_dados():
             pagina = max(1, min(pagina, total_paginas))
             inicio = (pagina - 1) * por_pagina
             fim = inicio + por_pagina
-            bases_pagina = ordem_bases[inicio:fim]
+            bases_pagina = ordem_bases if filtros_coluna else ordem_bases[inicio:fim]
 
             processos_raw = []
             for chave_base in bases_pagina:
@@ -8365,10 +8366,166 @@ def verificar_dados():
 
                 processos.append(principal)
 
+        def _valores_coluna_processo_finalizado(
+            registro: Dict[str, object], slug_coluna: str
+        ) -> List[str]:
+            if slug_coluna == "numero_sei":
+                dados_extra_reg = (
+                    registro.get("dados_extra")
+                    if isinstance(registro.get("dados_extra"), dict)
+                    else {}
+                )
+                sufixo_reg = (dados_extra_reg or {}).get("sufixo") or ""
+                numero_base_reg = limpar_texto(
+                    registro.get("numero_sei_base"), ""
+                ) or limpar_texto(registro.get("numero_sei"), "")
+                return [f"{numero_base_reg}{sufixo_reg}".strip() or "-"]
+            if slug_coluna == "data_de_entrada":
+                pares = registro.get("pares_datas") or []
+                valores = [
+                    limpar_texto(item.get("entrada_str"), "")
+                    for item in pares
+                    if isinstance(item, dict)
+                    and limpar_texto(item.get("entrada_str"), "")
+                ]
+                return valores or [limpar_texto(registro.get("data_entrada_display"), "") or "-"]
+            if slug_coluna in {"data_da_finalizacao", "finalizado_em"}:
+                pares = registro.get("pares_datas") or []
+                valores = [
+                    limpar_texto(item.get("finalizacao_str"), "")
+                    for item in pares
+                    if isinstance(item, dict)
+                    and limpar_texto(item.get("finalizacao_str"), "")
+                ]
+                if valores:
+                    return valores
+                data_item = registro.get("finalizado_em")
+                if isinstance(data_item, datetime):
+                    return [data_item.strftime("%d/%m/%Y")]
+                return ["-"]
+            if slug_coluna in {"gerencia", "gerencias_envolvidas"}:
+                valor = limpar_texto(registro.get("gerencia"), "") or "-"
+                partes = [p.strip() for p in valor.split("->") if p.strip()]
+                return partes or [valor]
+            if slug_coluna == "interessado":
+                return [limpar_texto(registro.get("interessado"), "") or "-"]
+            if slug_coluna == "concessionaria":
+                return [limpar_texto(registro.get("concessionaria"), "") or "-"]
+            if slug_coluna == "assunto":
+                return [limpar_texto(registro.get("assunto"), "") or "-"]
+            if slug_coluna == "prazo":
+                prazo_item = registro.get("prazo")
+                return [
+                    prazo_item.strftime("%d/%m/%Y")
+                    if isinstance(prazo_item, date)
+                    else "Sem prazo"
+                ]
+            if slug_coluna == "responsavel_equipe":
+                return [limpar_texto(registro.get("responsavel_equipe"), "") or "-"]
+            if slug_coluna == "responsavel_adm":
+                return [
+                    limpar_texto(registro.get("planilhador"), "")
+                    or limpar_texto(registro.get("responsavel_adm"), "")
+                    or "-"
+                ]
+            if slug_coluna == "status":
+                return [limpar_texto(registro.get("status"), "") or "Finalizado"]
+            if slug_coluna == "data_de_entrada_na_gerencia":
+                data_item = registro.get("data_entrada_gerencia")
+                return [
+                    data_item.strftime("%d/%m/%Y")
+                    if isinstance(data_item, date)
+                    else "-"
+                ]
+            if slug_coluna == "prazo_equipe":
+                data_item = registro.get("prazo_equipe")
+                return [
+                    data_item.strftime("%d/%m/%Y")
+                    if isinstance(data_item, date)
+                    else "Sem prazo"
+                ]
+            return [limpar_texto(registro.get(slug_coluna), "") or "-"]
+
+        def _processo_finalizado_atende_cf(registro: Dict[str, object]) -> bool:
+            if not filtros_coluna:
+                return True
+            for chave_raw, valores_raw in filtros_coluna.items():
+                slug = _normalizar_cf_texto(chave_raw)
+                valores = {str(v or "").strip() for v in valores_raw if str(v or "").strip()}
+                if not valores:
+                    continue
+                data_inicio_cf, data_fim_cf, valores_texto = extrair_intervalo_filtro_datas(
+                    valores
+                )
+                valores_coluna = _valores_coluna_processo_finalizado(registro, slug)
+                if slug in DATE_FILTER_SLUGS and (data_inicio_cf or data_fim_cf):
+                    if not any(
+                        valor_data_em_intervalo(valor_item, data_inicio_cf, data_fim_cf)
+                        for valor_item in valores_coluna
+                    ):
+                        return False
+                    if not valores_texto:
+                        continue
+                valores_norm_item = {
+                    _normalizar_cf_texto(valor_item)
+                    for valor_item in valores_coluna
+                    if limpar_texto(str(valor_item), "")
+                }
+                if not valores_norm_item.intersection(
+                    valores_texto or {_normalizar_cf_texto(v) for v in valores}
+                ):
+                    return False
+            return True
+
+        if filtros_coluna:
+            processos_filtrados = [
+                registro for registro in processos if _processo_finalizado_atende_cf(registro)
+            ]
+            total_filtrado = len(processos_filtrados)
+            total_paginas = max(1, (total_filtrado + por_pagina - 1) // por_pagina)
+            pagina = max(1, min(pagina, total_paginas))
+            inicio = (pagina - 1) * por_pagina
+            fim = inicio + por_pagina
+            processos = processos_filtrados[inicio:fim]
+
+            class _PaginacaoFiltrada:
+                def __init__(self, page: int, per_page: int, total: int, pages: int):
+                    self.page = page
+                    self.per_page = per_page
+                    self.total = total
+                    self.pages = pages
+
+                @property
+                def has_prev(self) -> bool:
+                    return self.page > 1
+
+                @property
+                def has_next(self) -> bool:
+                    return self.page < self.pages
+
+                @property
+                def prev_num(self) -> int:
+                    return max(1, self.page - 1)
+
+                @property
+                def next_num(self) -> int:
+                    return min(self.pages, self.page + 1)
+
+            paginacao_processos = _PaginacaoFiltrada(
+                page=pagina,
+                per_page=por_pagina,
+                total=total_filtrado,
+                pages=total_paginas,
+            )
+
         total_finalizados_indicador = (
-            int(total_finalizados_consulta)
-            if filtros_consolidado_ativos
-            else int(total_finalizados_consolidados or total_finalizados_consulta)
+            int(total_filtrado)
+            if filtros_coluna
+            else (
+                int(total_finalizados_consulta)
+                if filtros_consolidado_ativos
+                else int(total_finalizados_consolidados or total_finalizados_consulta)
+            )
         )
         ids_finalizados_gerencia = {
             reg.get("id")
