@@ -134,6 +134,20 @@ table th.col-filter-active .col-filter-icon {
   background: #fff;
 }
 
+.table-filter-date-input {
+  min-width: 0;
+  outline: 0;
+}
+
+.table-filter-date-input::placeholder {
+  color: #64748b;
+}
+
+.table-filter-date-input:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.15);
+}
+
 .table-filter-date-chip.is-filled {
   border-color: #93c5fd;
   color: #1e3a8a;

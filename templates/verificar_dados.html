@@ -994,7 +994,7 @@ let fichaAberta = false;
  return `${ano}-${mes}-${dia}`;
  };
 
- const extrairFaixaDataFiltro = (selecionados) => {
+const extrairFaixaDataFiltro = (selecionados) => {
  let de = "";
  let ate = "";
  (selecionados || new Set()).forEach((valor) => {
@@ -1047,6 +1047,13 @@ const sincronizaComBackend = tabela.id === "tabelaProcessos" || tabela.id === "t
 const estado = {
 filtros: {},
 sort: { col: null, dir: null },
+};
+
+const mascararDataDigitada = (valor) => {
+const digitos = (valor || "").toString().replace(/\D+/g, "").slice(0, 8);
+if (digitos.length <= 2) return digitos;
+if (digitos.length <= 4) return `${digitos.slice(0, 2)}/${digitos.slice(2)}`;
+return `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4)}`;
 };
 let painelAtivo = null;
 let limparListenersPainel = null;
@@ -1411,9 +1418,53 @@ window.requestAnimationFrame(posicionarPainel);
  const atualizarResumo = () => {
  if (!resumoEl) return;
  resumoEl.innerHTML = `
- <span class="excel-filter-date-chip ${faixaDe ? "is-filled" : ""}">De: ${faixaDe ? dataIsoParaBr(faixaDe) : "Inicio"}</span>
- <span class="excel-filter-date-chip ${faixaAte ? "is-filled" : ""}">Ate: ${faixaAte ? dataIsoParaBr(faixaAte) : "Fim"}</span>
+ <input
+ class="excel-filter-date-chip excel-filter-date-input ${faixaDe ? "is-filled" : ""}"
+ type="text"
+ data-date-input="from"
+ inputmode="numeric"
+ maxlength="10"
+ placeholder="De: dd/mm/aaaa"
+ value="${faixaDe ? dataIsoParaBr(faixaDe) : ""}"
+ >
+ <input
+ class="excel-filter-date-chip excel-filter-date-input ${faixaAte ? "is-filled" : ""}"
+ type="text"
+ data-date-input="to"
+ inputmode="numeric"
+ maxlength="10"
+ placeholder="Ate: dd/mm/aaaa"
+ value="${faixaAte ? dataIsoParaBr(faixaAte) : ""}"
+ >
  `;
+ resumoEl.querySelectorAll("[data-date-input]").forEach((campoData) => {
+ const aplicarValor = () => {
+ const tipoCampo = campoData.getAttribute("data-date-input");
+ const mascarado = mascararDataDigitada(campoData.value);
+ campoData.value = mascarado;
+ const iso = dataBrParaIso(mascarado);
+ if (tipoCampo === "from") {
+ faixaDe = iso || "";
+ if (faixaAte && faixaDe && faixaAte < faixaDe) faixaAte = "";
+ } else {
+ faixaAte = iso || "";
+ if (faixaDe && faixaAte && faixaAte < faixaDe) {
+ faixaDe = faixaAte;
+ faixaAte = "";
+ }
+ }
+ campoData.classList.toggle("is-filled", Boolean(iso));
+ renderizarCalendario();
+ };
+ campoData.addEventListener("input", aplicarValor);
+ campoData.addEventListener("blur", aplicarValor);
+ campoData.addEventListener("keydown", (evento) => {
+ if (evento.key === "Enter") {
+ evento.preventDefault();
+ aplicarValor();
+ }
+ });
+ });
  };
 
  const mesmaData = (a, b) =>

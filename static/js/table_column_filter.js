@@ -44,6 +44,13 @@
     return `${day}/${month}/${year}`;
   };
 
+  const maskPtBrDateInput = (value) => {
+    const digits = (value || "").toString().replace(/\D+/g, "").slice(0, 8);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+  };
+
   const DATE_FROM_TOKEN_PREFIX = "__date_from__:";
   const DATE_TO_TOKEN_PREFIX = "__date_to__:";
 
@@ -666,12 +673,54 @@
 
         const updateSummary = () => {
           if (!summaryEl) return;
-          const fromLabel = rangeFrom ? isoToPtBrDate(rangeFrom) : "Inicio";
-          const toLabel = rangeTo ? isoToPtBrDate(rangeTo) : "Fim";
           summaryEl.innerHTML = `
-            <span class="table-filter-date-chip ${rangeFrom ? "is-filled" : ""}">De: ${fromLabel}</span>
-            <span class="table-filter-date-chip ${rangeTo ? "is-filled" : ""}">Ate: ${toLabel}</span>
+            <input
+              type="text"
+              class="table-filter-date-chip table-filter-date-input ${rangeFrom ? "is-filled" : ""}"
+              data-date-input="from"
+              inputmode="numeric"
+              maxlength="10"
+              placeholder="De: dd/mm/aaaa"
+              value="${rangeFrom ? isoToPtBrDate(rangeFrom) : ""}"
+            >
+            <input
+              type="text"
+              class="table-filter-date-chip table-filter-date-input ${rangeTo ? "is-filled" : ""}"
+              data-date-input="to"
+              inputmode="numeric"
+              maxlength="10"
+              placeholder="Ate: dd/mm/aaaa"
+              value="${rangeTo ? isoToPtBrDate(rangeTo) : ""}"
+            >
           `;
+          summaryEl.querySelectorAll("[data-date-input]").forEach((inputEl) => {
+            const applyInputValue = () => {
+              const role = inputEl.getAttribute("data-date-input");
+              const masked = maskPtBrDateInput(inputEl.value);
+              inputEl.value = masked;
+              const iso = ptBrToIsoDate(masked);
+              if (role === "from") {
+                rangeFrom = iso || "";
+                if (rangeTo && rangeFrom && rangeTo < rangeFrom) rangeTo = "";
+              } else {
+                rangeTo = iso || "";
+                if (rangeFrom && rangeTo && rangeTo < rangeFrom) {
+                  rangeFrom = rangeTo;
+                  rangeTo = "";
+                }
+              }
+              inputEl.classList.toggle("is-filled", Boolean(iso));
+              renderCalendar();
+            };
+            inputEl.addEventListener("input", applyInputValue);
+            inputEl.addEventListener("blur", applyInputValue);
+            inputEl.addEventListener("keydown", (ev) => {
+              if (ev.key === "Enter") {
+                ev.preventDefault();
+                applyInputValue();
+              }
+            });
+          });
         };
 
         const renderCalendar = () => {
