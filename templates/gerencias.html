@@ -1714,7 +1714,7 @@
  {% for usuario in usuarios_disponiveis %}
 
 
- <option value="{{ usuario.id }}" data-gerencia="{{ usuario.gerencia_padrao or '' }}" data-coordenadoria="{{ usuario.coordenadoria or '' }}" data-equipe="{{ usuario.equipe_area or '' }}" data-nome="{{ usuario.nome or usuario.username }}" data-username="{{ usuario.username }}" data-vinculo="{{ usuario.nome_vinculo_atribuido or '' }}">{{ usuario.nome }} ({{ usuario.username }})</option>
+ <option value="{{ usuario.id }}" data-gerencia="{{ usuario.gerencia_padrao or '' }}" data-coordenadoria="{{ usuario.coordenadoria or '' }}" data-equipe="{{ usuario.equipe_area or '' }}" data-nome="{{ usuario.nome or usuario.username }}" data-username="{{ usuario.username }}" data-vinculo="{{ usuario.nome_vinculo_atribuido or '' }}">{{ usuario.nome_vinculo_atribuido or usuario.nome or usuario.username }}</option>
 
 
  {% endfor %}
@@ -2221,13 +2221,13 @@ document.addEventListener("DOMContentLoaded", function () {
  const correspondeGerencia = !gerenciaNorm || optGer === gerenciaNorm;
  const usuarioSomenteGerencia = correspondeGerencia && !optCoord && !optEquipe;
   const correspondeLista = !aplicarFiltro || setPermitidos.has(optNome) || setPermitidos.has(optUser) || setPermitidos.has(optVinculo);
- const correspondeContexto =
- correspondeGerencia
- && (
- (!coordNorm && !equipeNorm)
- || (equipeNorm && optEquipe === equipeNorm)
- || (coordNorm && optCoord === coordNorm)
- );
+  const correspondeContexto =
+  correspondeGerencia
+  && (
+  (!coordNorm && !equipeNorm)
+  || (equipeNorm && optEquipe === equipeNorm)
+  || (!equipeNorm && coordNorm && optCoord === coordNorm)
+  );
  const corresponde = isExtra
  ? correspondeLista
  : (

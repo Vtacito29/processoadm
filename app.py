@@ -1813,7 +1813,11 @@ def usuario_permitido_para_atribuicao(
         return True
     coord_ok = coord_proc and _normalizar_nome_usuario(coord_usuario) == _normalizar_nome_usuario(coord_proc)
     equipe_ok = equipe_proc and _normalizar_nome_usuario(equipe_usuario) == _normalizar_nome_usuario(equipe_proc)
-    return bool(coord_ok or equipe_ok)
+    if equipe_proc:
+        return bool(equipe_ok)
+    if coord_proc:
+        return bool(coord_ok)
+    return True
 
 
 def listar_responsaveis_por_contexto(processo: "Processo") -> List[str]:
