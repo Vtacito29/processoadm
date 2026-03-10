@@ -411,78 +411,78 @@
  <th class="col-check col-acoes"><div class="resizable">Ações</div></th>
 
 
- <th><div class="resizable">Número SEI</div></th>
+ <th data-col-key="numero_sei"><div class="resizable">Número SEI</div></th>
 
 
- <th><div class="resizable">Data de entrada</div></th>
+ <th data-col-key="data_de_entrada"><div class="resizable">Data de entrada</div></th>
 
 
 
 
- <th><div class="resizable">Interessado</div></th>
+ <th data-col-key="interessado"><div class="resizable">Interessado</div></th>
 
 
- <th><div class="resizable">Concessionária</div></th>
+ <th data-col-key="concessionaria"><div class="resizable">Concessionária</div></th>
 
 
- <th><div class="resizable">{{ 'Gerencias envolvidas' if gerencia == 'SAIDA' else 'Gerencia' }}</div></th>
+ <th data-col-key="{{ 'gerencias_envolvidas' if gerencia == 'SAIDA' else 'gerencia' }}"><div class="resizable">{{ 'Gerencias envolvidas' if gerencia == 'SAIDA' else 'Gerencia' }}</div></th>
 
 
- <th><div class="resizable">Assunto</div></th>
+ <th data-col-key="assunto"><div class="resizable">Assunto</div></th>
 
 
- <th><div class="resizable">Status</div></th>
+ <th data-col-key="status"><div class="resizable">Status</div></th>
 
 
- <th><div class="resizable">Prazo</div></th>
+ <th data-col-key="prazo"><div class="resizable">Prazo</div></th>
 
 
- <th><div class="resizable">Responsável Adm</div></th>
+ <th data-col-key="responsavel_adm"><div class="resizable">Responsável Adm</div></th>
 
 
- <th><div class="resizable">Classificacao institucional</div></th>
+ <th data-col-key="classificacao_institucional"><div class="resizable">Classificacao institucional</div></th>
 
 
  {% if gerencia == 'SAIDA' %}
 
 
- <th><div class="resizable">Data de entrada na gerência</div></th>
+ <th data-col-key="data_de_entrada_na_gerencia"><div class="resizable">Data de entrada na gerência</div></th>
 
 
  {% else %}
 
 
- <th><div class="resizable">Data de entrada no GABINETE</div></th>
+ <th data-col-key="entrada_gabinete"><div class="resizable">Data de entrada no GABINETE</div></th>
 
 
  {% endif %}
 
 
- <th><div class="resizable">Descrição melhorada</div></th>
+ <th data-col-key="descricao_melhorada"><div class="resizable">Descrição melhorada</div></th>
 
 
- <th><div class="resizable">Coordenadoria</div></th>
+ <th data-col-key="coordenadoria"><div class="resizable">Coordenadoria</div></th>
 
 
- <th><div class="resizable">Equipe / Área</div></th>
+ <th data-col-key="equipe_area"><div class="resizable">Equipe / Área</div></th>
 
 
- <th><div class="resizable">Responsável (Equipe)</div></th>
+ <th data-col-key="responsavel_equipe"><div class="resizable">Responsável (Equipe)</div></th>
 
 
- <th><div class="resizable">Tipo de processo</div></th>
+ <th data-col-key="tipo_de_processo"><div class="resizable">Tipo de processo</div></th>
 
 
- <th><div class="resizable">Palavras-chave</div></th>
+ <th data-col-key="palavras_chave"><div class="resizable">Palavras-chave</div></th>
 
 
- <th><div class="resizable">Status (Equipe)</div></th>
+ <th data-col-key="status_equipe"><div class="resizable">Status (Equipe)</div></th>
 
 
- <th><div class="resizable">Prazo equipe</div></th>
+ <th data-col-key="prazo_equipe"><div class="resizable">Prazo equipe</div></th>
 
 
- <th><div class="resizable">Observações complementares</div></th>
+ <th data-col-key="observacoes_complementares"><div class="resizable">Observações complementares</div></th>
 
 
  {% for campo in campos_extra %}
@@ -1406,12 +1406,12 @@
  <table class="table process-table align-middle" data-filter-scope="devolvidos">
  <thead>
  <tr>
- <th>Número SEI</th>
- <th>Data de entrada</th>
- <th>Assunto</th>
- <th>Interessado</th>
- <th>Origem da devolução</th>
- <th>Motivo da devolução</th>
+ <th data-col-key="numero_sei">Número SEI</th>
+ <th data-col-key="data_de_entrada">Data de entrada</th>
+ <th data-col-key="assunto">Assunto</th>
+ <th data-col-key="interessado">Interessado</th>
+ <th data-col-key="origem_da_devolucao">Origem da devolução</th>
+ <th data-col-key="motivo_da_devolucao">Motivo da devolução</th>
  <th>Acoes</th>
  </tr>
  </thead>

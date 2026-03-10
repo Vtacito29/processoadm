@@ -858,6 +858,119 @@ body {
     background: #e2e8f0;
 }
 
+.excel-filter-date-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.excel-filter-date-summary {
+    display: flex;
+    gap: 0.45rem;
+}
+
+.excel-filter-date-chip {
+    flex: 1;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.74rem;
+    color: #64748b;
+    background: #fff;
+}
+
+.excel-filter-date-chip.is-filled {
+    border-color: #93c5fd;
+    color: #1e3a8a;
+    background: #dbeafe;
+}
+
+.excel-filter-calendar {
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.8rem;
+    padding: 0.7rem;
+}
+
+.excel-filter-calendar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.55rem;
+}
+
+.excel-filter-calendar-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #0f172a;
+    text-transform: capitalize;
+}
+
+.excel-filter-calendar-nav {
+    width: 1.9rem;
+    height: 1.9rem;
+    border: 0;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.excel-filter-calendar-nav:hover {
+    background: #dbeafe;
+}
+
+.excel-filter-calendar-weekdays,
+.excel-filter-calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.18rem;
+}
+
+.excel-filter-calendar-weekdays {
+    margin-bottom: 0.3rem;
+}
+
+.excel-filter-calendar-weekdays span {
+    text-align: center;
+    font-size: 0.68rem;
+    color: #64748b;
+    padding: 0.2rem 0;
+}
+
+.excel-filter-calendar-day {
+    min-height: 2.3rem;
+    border: 0;
+    border-radius: 0.7rem;
+    background: transparent;
+    color: #0f172a;
+    font-size: 0.78rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.excel-filter-calendar-day:hover {
+    background: #e2e8f0;
+}
+
+.excel-filter-calendar-day.is-in-range {
+    background: #dbeafe;
+    border-radius: 0;
+}
+
+.excel-filter-calendar-day.is-start,
+.excel-filter-calendar-day.is-end {
+    background: #3b82f6;
+    color: #fff;
+}
+
+.excel-filter-calendar-day.is-empty {
+    min-height: 2.3rem;
+}
+
 .excel-filter-item {
     display: flex;
     align-items: center;

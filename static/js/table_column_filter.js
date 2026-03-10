@@ -28,6 +28,131 @@
     return (cell?.innerText || "").replace(/\s+/g, " ").trim();
   };
 
+  const DATE_PT_BR_RE = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/;
+
+  const ptBrToIsoDate = (value) => {
+    const raw = (value || "").toString().trim();
+    if (!DATE_PT_BR_RE.test(raw)) return "";
+    const [day, month, year] = raw.split("/");
+    return `${year}-${month}-${day}`;
+  };
+
+  const isoToPtBrDate = (value) => {
+    const raw = (value || "").toString().trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return "";
+    const [year, month, day] = raw.split("-");
+    return `${day}/${month}/${year}`;
+  };
+
+  const DATE_FROM_TOKEN_PREFIX = "__date_from__:";
+  const DATE_TO_TOKEN_PREFIX = "__date_to__:";
+
+  const getDateRangeFromSelected = (selected) => {
+    let from = "";
+    let to = "";
+    (selected || new Set()).forEach((value) => {
+      if ((value || "").startsWith(DATE_FROM_TOKEN_PREFIX)) {
+        from = value.slice(DATE_FROM_TOKEN_PREFIX.length);
+      } else if ((value || "").startsWith(DATE_TO_TOKEN_PREFIX)) {
+        to = value.slice(DATE_TO_TOKEN_PREFIX.length);
+      } else if (DATE_PT_BR_RE.test(value || "")) {
+        const iso = ptBrToIsoDate(value);
+        if (iso) {
+          from = iso;
+          to = iso;
+        }
+      }
+    });
+    return { from, to };
+  };
+
+  const buildDateRangeTokens = (from, to) => {
+    const tokens = new Set();
+    if (from) tokens.add(`${DATE_FROM_TOKEN_PREFIX}${from}`);
+    if (to) tokens.add(`${DATE_TO_TOKEN_PREFIX}${to}`);
+    return tokens;
+  };
+
+  const hasDateRangeTokens = (selected) =>
+    Boolean(
+      [...(selected || [])].some(
+        (value) =>
+          (value || "").startsWith(DATE_FROM_TOKEN_PREFIX) ||
+          (value || "").startsWith(DATE_TO_TOKEN_PREFIX),
+      ),
+    );
+
+  const matchesDateRange = (rawValue, selected) => {
+    const { from, to } = getDateRangeFromSelected(selected);
+    const iso = ptBrToIsoDate(rawValue);
+    if (!iso) return false;
+    if (from && iso < from) return false;
+    if (to && iso > to) return false;
+    return true;
+  };
+
+  const CALENDAR_MONTHS_PT = [
+    "janeiro",
+    "fevereiro",
+    "marco",
+    "abril",
+    "maio",
+    "junho",
+    "julho",
+    "agosto",
+    "setembro",
+    "outubro",
+    "novembro",
+    "dezembro",
+  ];
+  const CALENDAR_WEEKDAYS_PT = ["D", "S", "T", "Q", "Q", "S", "S"];
+  const DATE_COLUMN_SLUGS = new Set([
+    "data_entrada",
+    "data_de_entrada",
+    "data_de_entrada_no_gabinete",
+    "prazo",
+    "data_de_entrada_na_gerencia",
+    "entrada_gabinete",
+    "data_entrada_gabinete",
+    "prazo_equipe",
+    "finalizado_em",
+    "data_da_finalizacao",
+  ]);
+
+  const isoToDate = (value) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return null;
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  };
+
+  const dateToIso = (value) => {
+    if (!(value instanceof Date) || Number.isNaN(value.getTime())) return "";
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const addMonths = (value, amount) => {
+    const base = value instanceof Date ? new Date(value.getFullYear(), value.getMonth(), 1) : new Date();
+    return new Date(base.getFullYear(), base.getMonth() + amount, 1);
+  };
+
+  const sameDate = (left, right) =>
+    left instanceof Date &&
+    right instanceof Date &&
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate();
+
+  const betweenDates = (value, start, end) => {
+    if (!(value instanceof Date) || !(start instanceof Date) || !(end instanceof Date)) return false;
+    const current = dateToIso(value);
+    const from = dateToIso(start);
+    const to = dateToIso(end);
+    return Boolean(current && from && to && current >= from && current <= to);
+  };
+
   const makePersistKey = (headers) => {
     const headerSig = headers
       .map((th) => normalize((th.textContent || "").replace(/\s+/g, " ")))
@@ -48,6 +173,7 @@
     };
     const persistKey = makePersistKey(headers);
     let activeMenu = null;
+    let activeMenuCol = null;
     let cleanupMenuListeners = null;
     const isHomeDashboard = window.location.pathname === "/";
     const responsavelEquipeIdxByText = headers.findIndex((th, idx) => {
@@ -93,9 +219,18 @@
       return (th.childNodes[0]?.textContent || th.textContent || "").replace(/\s+/g, " ").trim();
     };
     const getHeaderSlug = (idx) =>
-      normalize(getHeaderLabel(idx))
-        .replace(/[^a-z0-9]+/g, "_")
-        .replace(/^_+|_+$/g, "");
+      (() => {
+        const th = headers[idx];
+        const dataKey = (th?.dataset?.colKey || "").trim();
+        if (dataKey) {
+          return normalize(dataKey)
+            .replace(/[^a-z0-9]+/g, "_")
+            .replace(/^_+|_+$/g, "");
+        }
+        return normalize(getHeaderLabel(idx))
+          .replace(/[^a-z0-9]+/g, "_")
+          .replace(/^_+|_+$/g, "");
+      })();
 
     const getCellComparableText = (row, colIdx) => {
       const cell = row.children[colIdx];
@@ -329,6 +464,7 @@
       if (!activeMenu) return;
       activeMenu.remove();
       activeMenu = null;
+      activeMenuCol = null;
     };
 
     const rowMatchesFilters = (row, ignoreCol = null) => {
@@ -337,8 +473,13 @@
         if (!ok) return;
         const col = Number(colStr);
         if (ignoreCol !== null && col === ignoreCol) return;
-        const value = normalize(getCellComparableText(row, col) || "(vazio)");
+        const rawValue = getCellComparableText(row, col) || "(Vazio)";
+        const value = normalize(rawValue || "(vazio)");
         if (!selected || !selected.size) return;
+        if (hasDateRangeTokens(selected)) {
+          if (!matchesDateRange(rawValue, selected)) ok = false;
+          return;
+        }
         if (!selected.has(value)) ok = false;
       });
       return ok;
@@ -405,6 +546,10 @@
     };
 
     const openMenu = async (colIdx, btn) => {
+      if (activeMenu && activeMenuCol === colIdx) {
+        closeMenu();
+        return;
+      }
       closeMenu();
 
       const rows = getBaseRows(table);
@@ -421,17 +566,54 @@
       if (remoteValues && remoteValues.length) {
         values = remoteValues;
       }
+      const nonEmptyValues = values
+        .map(([, label]) => (label || "").toString().trim())
+        .filter((label) => label && label !== "(Vazio)" && label !== "-");
+      const currentSlug = getHeaderSlug(colIdx);
+      const isDateColumn =
+        DATE_COLUMN_SLUGS.has(currentSlug) ||
+        (nonEmptyValues.some((label) => DATE_PT_BR_RE.test(label)) &&
+          nonEmptyValues.every(
+            (label) => DATE_PT_BR_RE.test(label) || normalize(label) === "sem prazo",
+          ));
 
       const selectedNow = state.filters[colIdx] ? new Set(state.filters[colIdx]) : new Set(values.map(([k]) => k));
       let selectedTemp = new Set(selectedNow);
 
       const menu = document.createElement("div");
       menu.className = "table-col-filter-menu";
-      menu.innerHTML = `
+      menu.innerHTML = isDateColumn
+        ? `
         <div class="table-filter-actions">
           <button type="button" class="table-filter-action-btn" data-sort="asc"><i class="bi bi-sort-alpha-down" aria-hidden="true"></i> Ordem crescente</button>
           <button type="button" class="table-filter-action-btn" data-sort="desc"><i class="bi bi-sort-alpha-up" aria-hidden="true"></i> Ordem decrescente</button>
-          <button type="button" class="table-filter-action-btn" data-sort="clear"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Limpar ordenação</button>
+          <button type="button" class="table-filter-action-btn" data-sort="clear"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Limpar ordenacao</button>
+        </div>
+        <div class="table-filter-date-wrap">
+          <div class="table-filter-date-summary" data-date-summary></div>
+          <div class="table-filter-calendar" data-calendar>
+            <div class="table-filter-calendar-header">
+              <button type="button" class="table-filter-calendar-nav" data-cal-nav="-1" aria-label="Mes anterior">&lsaquo;</button>
+              <div class="table-filter-calendar-title" data-cal-title></div>
+              <button type="button" class="table-filter-calendar-nav" data-cal-nav="1" aria-label="Proximo mes">&rsaquo;</button>
+            </div>
+            <div class="table-filter-calendar-weekdays">
+              ${CALENDAR_WEEKDAYS_PT.map((label) => `<span>${label}</span>`).join("")}
+            </div>
+            <div class="table-filter-calendar-grid" data-cal-grid></div>
+          </div>
+        </div>
+        <div class="table-filter-footer">
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-clear>Limpar filtro</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-cancel>Cancelar</button>
+          <button type="button" class="btn btn-primary btn-sm" data-ok>OK</button>
+        </div>
+      `
+        : `
+        <div class="table-filter-actions">
+          <button type="button" class="table-filter-action-btn" data-sort="asc"><i class="bi bi-sort-alpha-down" aria-hidden="true"></i> Ordem crescente</button>
+          <button type="button" class="table-filter-action-btn" data-sort="desc"><i class="bi bi-sort-alpha-up" aria-hidden="true"></i> Ordem decrescente</button>
+          <button type="button" class="table-filter-action-btn" data-sort="clear"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Limpar ordenacao</button>
         </div>
         <input type="search" class="form-control form-control-sm table-filter-search" placeholder="Pesquisar">
         <div class="table-filter-list"></div>
@@ -442,6 +624,7 @@
       `;
       document.body.appendChild(menu);
       activeMenu = menu;
+      activeMenuCol = colIdx;
 
       const positionMenu = () => {
         const rect = btn.getBoundingClientRect();
@@ -469,50 +652,140 @@
       };
       window.requestAnimationFrame(positionMenu);
 
-      const listEl = menu.querySelector(".table-filter-list");
-      const searchEl = menu.querySelector(".table-filter-search");
-      const renderList = () => {
-        const term = normalize(searchEl.value);
-        const filtered = values.filter(([, label]) => normalize(label).includes(term));
-        const allChecked = filtered.length > 0 && filtered.every(([k]) => selectedTemp.has(k));
-        listEl.innerHTML = `
-          <label class="table-filter-item">
-            <input type="checkbox" data-select-all ${allChecked ? "checked" : ""}> <span>(Selecionar Tudo)</span>
-          </label>
-          ${filtered
-            .map(
-              ([k, label]) => `
-            <label class="table-filter-item">
-              <input type="checkbox" data-value="${k.replace(/"/g, "&quot;")}" ${selectedTemp.has(k) ? "checked" : ""}>
-              <span>${label}</span>
-            </label>`,
-            )
-            .join("")}
-        `;
-      };
-      renderList();
+      let rangeFrom = "";
+      let rangeTo = "";
+      if (isDateColumn) {
+        const summaryEl = menu.querySelector("[data-date-summary]");
+        const titleEl = menu.querySelector("[data-cal-title]");
+        const gridEl = menu.querySelector("[data-cal-grid]");
+        const parsedRange = getDateRangeFromSelected(selectedTemp);
+        rangeFrom = parsedRange.from;
+        rangeTo = parsedRange.to;
+        let viewMonth = new Date();
+        viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1);
 
-      searchEl.addEventListener("input", renderList);
-      listEl.addEventListener("change", (ev) => {
-        const target = ev.target;
-        if (!(target instanceof HTMLInputElement)) return;
-        if (target.dataset.selectAll !== undefined) {
+        const updateSummary = () => {
+          if (!summaryEl) return;
+          const fromLabel = rangeFrom ? isoToPtBrDate(rangeFrom) : "Inicio";
+          const toLabel = rangeTo ? isoToPtBrDate(rangeTo) : "Fim";
+          summaryEl.innerHTML = `
+            <span class="table-filter-date-chip ${rangeFrom ? "is-filled" : ""}">De: ${fromLabel}</span>
+            <span class="table-filter-date-chip ${rangeTo ? "is-filled" : ""}">Ate: ${toLabel}</span>
+          `;
+        };
+
+        const renderCalendar = () => {
+          if (!gridEl || !titleEl) return;
+          const monthStart = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1);
+          const monthEnd = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0);
+          titleEl.textContent = `${CALENDAR_MONTHS_PT[monthStart.getMonth()]} ${monthStart.getFullYear()}`;
+          const leadingDays = monthStart.getDay();
+          const cells = [];
+          for (let i = 0; i < leadingDays; i += 1) {
+            cells.push('<span class="table-filter-calendar-day is-empty"></span>');
+          }
+          const fromDate = isoToDate(rangeFrom);
+          const toDate = isoToDate(rangeTo);
+          for (let day = 1; day <= monthEnd.getDate(); day += 1) {
+            const current = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), day);
+            const iso = dateToIso(current);
+            const isStart = sameDate(current, fromDate);
+            const isEnd = sameDate(current, toDate);
+            const isInRange =
+              !isStart && !isEnd && fromDate && toDate && betweenDates(current, fromDate, toDate);
+            cells.push(`
+              <button type="button" class="table-filter-calendar-day ${isStart ? "is-start" : ""} ${isEnd ? "is-end" : ""} ${isInRange ? "is-in-range" : ""}" data-date-value="${iso}">
+                <span>${day}</span>
+              </button>
+            `);
+          }
+          gridEl.innerHTML = cells.join("");
+        };
+
+        const applyDateClick = (iso) => {
+          if (!rangeFrom || (rangeFrom && rangeTo)) {
+            rangeFrom = iso;
+            rangeTo = "";
+          } else if (iso < rangeFrom) {
+            rangeTo = rangeFrom;
+            rangeFrom = iso;
+          } else {
+            rangeTo = iso;
+          }
+          updateSummary();
+          renderCalendar();
+        };
+
+        updateSummary();
+        renderCalendar();
+        menu.querySelectorAll("[data-cal-nav]").forEach((navBtn) => {
+          navBtn.addEventListener("click", () => {
+            const delta = Number(navBtn.getAttribute("data-cal-nav") || "0");
+            viewMonth = addMonths(viewMonth, delta);
+            renderCalendar();
+          });
+        });
+        gridEl?.addEventListener("click", (ev) => {
+          const target = ev.target instanceof Element ? ev.target.closest("[data-date-value]") : null;
+          if (!target) return;
+          const iso = target.getAttribute("data-date-value") || "";
+          if (!iso) return;
+          applyDateClick(iso);
+        });
+        window.setTimeout(() => {
+          menu.querySelector(".table-filter-calendar-nav")?.focus();
+        }, 0);
+        menu.querySelector("[data-clear]")?.addEventListener("click", () => {
+          delete state.filters[colIdx];
+          applyState({ syncServer: true });
+          closeMenu();
+        });
+      } else {
+        const listEl = menu.querySelector(".table-filter-list");
+        const searchEl = menu.querySelector(".table-filter-search");
+        const renderList = () => {
           const term = normalize(searchEl.value);
-          values
-            .filter(([, label]) => normalize(label).includes(term))
-            .forEach(([k]) => {
-              if (target.checked) selectedTemp.add(k);
-              else selectedTemp.delete(k);
-            });
-          renderList();
-          return;
-        }
-        const key = target.dataset.value || "";
-        if (!key) return;
-        if (target.checked) selectedTemp.add(key);
-        else selectedTemp.delete(key);
+          const filtered = values.filter(([, label]) => normalize(label).includes(term));
+          const allChecked = filtered.length > 0 && filtered.every(([k]) => selectedTemp.has(k));
+          listEl.innerHTML = `
+            <label class="table-filter-item">
+              <input type="checkbox" data-select-all ${allChecked ? "checked" : ""}> <span>(Selecionar Tudo)</span>
+            </label>
+            ${filtered
+              .map(
+                ([k, label]) => `
+              <label class="table-filter-item">
+                <input type="checkbox" data-value="${k.replace(/"/g, "&quot;")}" ${selectedTemp.has(k) ? "checked" : ""}>
+                <span>${label}</span>
+              </label>`,
+              )
+              .join("")}
+          `;
+        };
         renderList();
-      });
+
+        searchEl.addEventListener("input", renderList);
+        listEl.addEventListener("change", (ev) => {
+          const target = ev.target;
+          if (!(target instanceof HTMLInputElement)) return;
+          if (target.dataset.selectAll !== undefined) {
+            const term = normalize(searchEl.value);
+            values
+              .filter(([, label]) => normalize(label).includes(term))
+              .forEach(([k]) => {
+                if (target.checked) selectedTemp.add(k);
+                else selectedTemp.delete(k);
+              });
+            renderList();
+            return;
+          }
+          const key = target.dataset.value || "";
+          if (!key) return;
+          if (target.checked) selectedTemp.add(key);
+          else selectedTemp.delete(key);
+          renderList();
+        });
+      }
 
       Array.from(menu.querySelectorAll("[data-sort]")).forEach((sortBtn) => {
         sortBtn.addEventListener("click", () => {
@@ -526,19 +799,35 @@
 
       menu.querySelector("[data-cancel]")?.addEventListener("click", () => closeMenu());
       menu.querySelector("[data-ok]")?.addEventListener("click", () => {
-        const all = new Set(values.map(([k]) => k));
-        const isAll = selectedTemp.size === all.size && [...all].every((k) => selectedTemp.has(k));
-        if (isAll) delete state.filters[colIdx];
-        else state.filters[colIdx] = new Set(selectedTemp);
+        if (isDateColumn) {
+          let from = rangeFrom || "";
+          let to = rangeTo || "";
+          if (from && to && from > to) {
+            [from, to] = [to, from];
+          }
+          const tokens = buildDateRangeTokens(from, to);
+          if (!tokens.size) delete state.filters[colIdx];
+          else state.filters[colIdx] = tokens;
+        } else {
+          const all = new Set(values.map(([k]) => k));
+          const isAll = selectedTemp.size === all.size && [...all].every((k) => selectedTemp.has(k));
+          if (isAll) delete state.filters[colIdx];
+          else state.filters[colIdx] = new Set(selectedTemp);
+        }
         applyState({ syncServer: true });
         closeMenu();
+      });
+      menu.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape") {
+          ev.preventDefault();
+          closeMenu();
+        }
       });
     };
 
     headers.forEach((th, idx) => {
       if (th.querySelector(".col-filter-trigger")) return;
       if (shouldSkipColumn(th, idx)) return;
-      if (getComputedStyle(th).display === "none") return;
       th.style.position = th.style.position || "relative";
       th.classList.add("has-col-filter-trigger");
       const btn = document.createElement("button");
@@ -555,7 +844,7 @@
       th.appendChild(btn);
     });
 
-    document.addEventListener("click", (ev) => {
+    document.addEventListener("pointerdown", (ev) => {
       if (!activeMenu) return;
       const target = ev.target;
       if (!(target instanceof Node)) return;

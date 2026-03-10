@@ -116,30 +116,30 @@
  {% endfor %}
  </select>
  </div>
- <div class="col-12 col-md-6 col-xl-3">
- <label class="form-label">Coordenadoria</label>
- <select class="form-select" name="coordenadoria">
- <option value="">Todas</option>
- {% for item in opcoes.coordenadorias %}
- <option value="{{ item }}" {% if filtros.coordenadoria == item %}selected{% endif %}>{{ item }}</option>
+  <div class="col-12 col-md-6 col-xl-3">
+  <label class="form-label">Coordenadoria</label>
+  <select class="form-select" id="filtroCoordenadoriaSelect" name="coordenadoria">
+  <option value="">Todas</option>
+  {% for item in opcoes.coordenadorias %}
+  <option value="{{ item }}" {% if filtros.coordenadoria == item %}selected{% endif %}>{{ item }}</option>
  {% endfor %}
  </select>
  </div>
- <div class="col-12 col-md-6 col-xl-3">
- <label class="form-label">Equipe</label>
- <select class="form-select" name="equipe">
- <option value="">Todas</option>
- {% for item in opcoes.equipes %}
- <option value="{{ item }}" {% if filtros.equipe == item %}selected{% endif %}>{{ item }}</option>
+  <div class="col-12 col-md-6 col-xl-3">
+  <label class="form-label">Equipe</label>
+  <select class="form-select" id="filtroEquipeSelect" name="equipe">
+  <option value="">Todas</option>
+  {% for item in opcoes.equipes %}
+  <option value="{{ item }}" {% if filtros.equipe == item %}selected{% endif %}>{{ item }}</option>
  {% endfor %}
  </select>
  </div>
- <div class="col-12 col-md-6 col-xl-3">
- <label class="form-label">Interessado</label>
- <select class="form-select" name="interessado">
- <option value="">Todos</option>
- {% for item in opcoes.interessados %}
- <option value="{{ item }}" {% if filtros.interessado == item %}selected{% endif %}>{{ item }}</option>
+  <div class="col-12 col-md-6 col-xl-3">
+  <label class="form-label">Interessado</label>
+  <select class="form-select" id="filtroInteressadoSelect" name="interessado">
+  <option value="">Todos</option>
+  {% for item in opcoes.interessados %}
+  <option value="{{ item }}" {% if filtros.interessado == item %}selected{% endif %}>{{ item }}</option>
  {% endfor %}
  </select>
  </div>
@@ -231,19 +231,19 @@
  <table class="table process-table align-middle lista-processos historico-compactando" id="tabelaProcessos">
  <thead>
  <tr>
- <th>Número SEI</th>
- <th>Data de entrada</th>
- <th>Data da finalização</th>
- <th>Interessado</th>
- <th>Concessionária</th>
- <th>Gerências envolvidas</th>
+ <th data-col-key="numero_sei">Número SEI</th>
+ <th data-col-key="data_de_entrada">Data de entrada</th>
+ <th data-col-key="data_da_finalizacao">Data da finalização</th>
+ <th data-col-key="interessado">Interessado</th>
+ <th data-col-key="concessionaria">Concessionária</th>
+ <th data-col-key="gerencias_envolvidas">Gerências envolvidas</th>
  <th>Destino saída</th>
  <th>Assunto</th>
  <th>Status</th>
- <th>Prazo</th>
+ <th data-col-key="prazo">Prazo</th>
  <th>Responsável Adm</th>
  <th>Classificacao institucional</th>
- <th>Data de entrada na gerência</th>
+ <th data-col-key="data_de_entrada_na_gerencia">Data de entrada na gerência</th>
  <th>Descricao melhorada</th>
  <th>Coordenadoria</th>
  <th>Equipe / Área</th>
@@ -251,7 +251,7 @@
  <th>Tipo de processo</th>
  <th>Palavras-chave</th>
  <th>Status (Equipe)</th>
- <th>Prazo equipe</th>
+ <th data-col-key="prazo_equipe">Prazo equipe</th>
  <th>Observações complementares</th>
  {% for campo in campos_extra_saida %}
  <th>{{ campo.label }}</th>
@@ -439,19 +439,19 @@
  <table class="table process-table align-middle historico-compactando" id="tabelaDemandas">
  <thead>
  <tr>
- <th>Número SEI</th>
- <th>Data de entrada</th>
- <th>Data da finalização</th>
- <th>Interessado</th>
- <th>Concessionária</th>
- <th>Gerência</th>
+ <th data-col-key="numero_sei">Número SEI</th>
+ <th data-col-key="data_de_entrada">Data de entrada</th>
+ <th data-col-key="data_da_finalizacao">Data da finalização</th>
+ <th data-col-key="interessado">Interessado</th>
+ <th data-col-key="concessionaria">Concessionária</th>
+ <th data-col-key="gerencia">Gerência</th>
  <th>Destino saída</th>
  <th>Assunto</th>
  <th>Status</th>
- <th>Prazo</th>
+ <th data-col-key="prazo">Prazo</th>
  <th>Responsável Adm</th>
  <th>Classificacao institucional</th>
- <th>Data de entrada na gerência</th>
+ <th data-col-key="data_de_entrada_na_gerencia">Data de entrada na gerência</th>
  <th>Descricao melhorada</th>
  <th>Coordenadoria</th>
  <th>Equipe / Área</th>
@@ -459,7 +459,7 @@
  <th>Tipo de processo</th>
  <th>Palavras-chave</th>
  <th>Status (Equipe)</th>
- <th>Prazo equipe</th>
+ <th data-col-key="prazo_equipe">Prazo equipe</th>
  <th>Observações complementares</th>
  {% for campo in campos_extra_saida %}
  <th>{{ campo.label }}</th>
@@ -709,15 +709,20 @@
  const processosData = {{ processos_data|tojson }};
  const demandasData = {{ demandas|tojson }};
  const camposExtraLabels = {{ campos_extra_labels|tojson }};
- const listaProcessos = Array.isArray(processosData) ? processosData : [];
- const listaDemandas = Array.isArray(demandasData) ? demandasData : [];
- const urlLimparFiltros = "{{ url_for('verificar_dados') }}";
+ const coordenadoriasPorGerencia = {{ (opcoes.coordenadorias_por_gerencia or {})|tojson }};
+ const equipesPorCoordenadoria = {{ (opcoes.equipes_por_coordenadoria or {})|tojson }};
+  const listaProcessos = Array.isArray(processosData) ? processosData : [];
+  const listaDemandas = Array.isArray(demandasData) ? demandasData : [];
+  const urlLimparFiltros = "{{ url_for('verificar_dados') }}";
 
  const refs = {
  formFiltros: document.querySelector(".hero-filters"),
  filtroGerencia: document.getElementById("filtroGerenciaSelect"),
- quickGerencias: document.querySelectorAll(".quick-gerencia"),
- buscaSei: document.getElementById("buscaSei"),
+ filtroCoordenadoria: document.getElementById("filtroCoordenadoriaSelect"),
+ filtroEquipe: document.getElementById("filtroEquipeSelect"),
+ filtroInteressado: document.getElementById("filtroInteressadoSelect"),
+  quickGerencias: document.querySelectorAll(".quick-gerencia"),
+  buscaSei: document.getElementById("buscaSei"),
  btnBuscar: document.getElementById("btnBuscar"),
  btnLimparFiltros: document.getElementById("btnLimparFiltros"),
  alertaBusca: document.getElementById("alertaBusca"),
@@ -762,6 +767,93 @@ let fichaAberta = false;
  const LIMITE_PASSO = 10;
  let limiteProcessos = LIMITE_PASSO;
  let limiteDemandas = LIMITE_PASSO;
+
+ const normalizarValorFiltroPrincipal = (valor) =>
+ (valor || "")
+ .toString()
+ .trim()
+ .toLowerCase()
+ .normalize("NFD")
+ .replace(/[\u0300-\u036f]/g, "");
+
+ const registrosFiltrosPrincipais = (() => {
+ const origem = [...listaProcessos, ...listaDemandas];
+ return origem.map((item) => ({
+ coordenadoria: (item.coordenadoria || "").toString().trim(),
+ equipe: (item.equipe_area || "").toString().trim(),
+ interessado: (item.interessado || "").toString().trim(),
+ }));
+ })();
+
+ const ordenarOpcoesFiltroPrincipal = (valores) =>
+ [...valores].sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
+
+ const preencherSelectFiltroPrincipal = (selectEl, valores, placeholderLabel) => {
+ if (!selectEl) return;
+ const valorAtual = selectEl.value || "";
+ const ordenados = ordenarOpcoesFiltroPrincipal(valores);
+ selectEl.innerHTML = "";
+ const optionPadrao = document.createElement("option");
+ optionPadrao.value = "";
+ optionPadrao.textContent = placeholderLabel;
+ selectEl.appendChild(optionPadrao);
+ ordenados.forEach((item) => {
+ const option = document.createElement("option");
+ option.value = item;
+ option.textContent = item;
+ selectEl.appendChild(option);
+ });
+ selectEl.value = ordenados.includes(valorAtual) ? valorAtual : "";
+ };
+
+ const atualizarFiltrosPrincipaisEncadeados = () => {
+ const gerenciaSelecionada = normalizarValorFiltroPrincipal(refs.filtroGerencia?.value || "");
+ const gerenciaSelecionadaBruta = refs.filtroGerencia?.value || "";
+
+ const baseGerencia = gerenciaSelecionadaBruta
+ ? (coordenadoriasPorGerencia[gerenciaSelecionadaBruta] || [])
+ : Object.values(coordenadoriasPorGerencia || {}).flat();
+
+ const coordenadorias = new Set(
+  baseGerencia
+ .map((item) => (item || "").toString().trim())
+ .filter(Boolean),
+ );
+ preencherSelectFiltroPrincipal(refs.filtroCoordenadoria, coordenadorias, "Todas");
+
+ const coordenadoriaAplicada = normalizarValorFiltroPrincipal(refs.filtroCoordenadoria?.value || "");
+ const coordenadoriaAtualBruta =
+ [...coordenadorias].find((item) => normalizarValorFiltroPrincipal(item) === coordenadoriaAplicada) || "";
+
+ const equipesBase = coordenadoriaAtualBruta
+ ? (equipesPorCoordenadoria[coordenadoriaAtualBruta] || [])
+ : [...coordenadorias].flatMap((coord) => equipesPorCoordenadoria[coord] || []);
+
+ const equipes = new Set(
+ equipesBase
+ .map((item) => (item || "").toString().trim())
+ .filter(Boolean),
+ );
+ preencherSelectFiltroPrincipal(refs.filtroEquipe, equipes, "Todas");
+
+ const equipeAplicada = normalizarValorFiltroPrincipal(refs.filtroEquipe?.value || "");
+ const baseEquipe = registrosFiltrosPrincipais.filter((registro) => {
+ if (coordenadoriaAtualBruta && normalizarValorFiltroPrincipal(registro.coordenadoria) !== normalizarValorFiltroPrincipal(coordenadoriaAtualBruta)) {
+ return false;
+ }
+ if (equipeAplicada && normalizarValorFiltroPrincipal(registro.equipe) !== equipeAplicada) {
+ return false;
+ }
+ return true;
+ });
+
+ const interessados = new Set(
+ baseEquipe
+ .map((registro) => registro.interessado)
+ .filter(Boolean),
+ );
+ preencherSelectFiltroPrincipal(refs.filtroInteressado, interessados, "Todos");
+ };
 
  const abrirHistoricoSelecionado = () => {
  if (!demandaSelecionada && !processoSelecionado) return;
@@ -859,6 +951,82 @@ let fichaAberta = false;
  .replace(/[\u0300-\u036f]/g, "")
  .trim();
 
+ const DATA_FILTRO_RE = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/;
+ const DATA_FILTRO_DE = "__date_from__:";
+ const DATA_FILTRO_ATE = "__date_to__:";
+ const COLUNAS_DATA_FILTRO = new Set([
+ "data_entrada",
+ "data_de_entrada",
+ "data_da_finalizacao",
+ "prazo",
+ "data_de_entrada_na_gerencia",
+ "entrada_gabinete",
+ "data_entrada_gabinete",
+ "prazo_equipe",
+ "finalizado_em",
+ ]);
+ const MESES_CALENDARIO = ["janeiro","fevereiro","marco","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+ const DIAS_CALENDARIO = ["D","S","T","Q","Q","S","S"];
+
+ const dataBrParaIso = (valor) => {
+ if (!DATA_FILTRO_RE.test((valor || "").trim())) return "";
+ const [dia, mes, ano] = String(valor).trim().split("/");
+ return `${ano}-${mes}-${dia}`;
+ };
+
+ const dataIsoParaBr = (valor) => {
+ if (!/^\d{4}-\d{2}-\d{2}$/.test((valor || "").trim())) return "";
+ const [ano, mes, dia] = String(valor).trim().split("-");
+ return `${dia}/${mes}/${ano}`;
+ };
+
+ const dataIsoParaDate = (valor) => {
+ if (!/^\d{4}-\d{2}-\d{2}$/.test((valor || "").trim())) return null;
+ const [ano, mes, dia] = String(valor).trim().split("-").map(Number);
+ return new Date(ano, mes - 1, dia);
+ };
+
+ const dataDateParaIso = (valor) => {
+ if (!(valor instanceof Date) || Number.isNaN(valor.getTime())) return "";
+ const ano = valor.getFullYear();
+ const mes = String(valor.getMonth() + 1).padStart(2, "0");
+ const dia = String(valor.getDate()).padStart(2, "0");
+ return `${ano}-${mes}-${dia}`;
+ };
+
+ const extrairFaixaDataFiltro = (selecionados) => {
+ let de = "";
+ let ate = "";
+ (selecionados || new Set()).forEach((valor) => {
+ const item = String(valor || "");
+ if (item.startsWith(DATA_FILTRO_DE)) de = item.slice(DATA_FILTRO_DE.length);
+ else if (item.startsWith(DATA_FILTRO_ATE)) ate = item.slice(DATA_FILTRO_ATE.length);
+ else if (DATA_FILTRO_RE.test(item)) {
+ const iso = dataBrParaIso(item);
+ if (iso) {
+ de = iso;
+ ate = iso;
+ }
+ }
+ });
+ return { de, ate };
+ };
+
+ const possuiFaixaDataFiltro = (selecionados) =>
+ [...(selecionados || [])].some((valor) => {
+ const item = String(valor || "");
+ return item.startsWith(DATA_FILTRO_DE) || item.startsWith(DATA_FILTRO_ATE);
+ });
+
+ const valorDentroFaixaData = (valorBruto, selecionados) => {
+ const { de, ate } = extrairFaixaDataFiltro(selecionados);
+ const atual = dataBrParaIso(valorBruto || "");
+ if (!atual) return false;
+ if (de && atual < de) return false;
+ if (ate && atual > ate) return false;
+ return true;
+ };
+
 const configurarFiltrosTabela = (tabela, botaoLimpar = null) => {
 if (!tabela) return;
 const titulos = Array.from(tabela.querySelectorAll("thead tr:first-child th"));
@@ -871,6 +1039,8 @@ sort: { col: null, dir: null },
 };
 let painelAtivo = null;
 let limparListenersPainel = null;
+let sequenciaPainel = 0;
+let colunaPainelAtiva = null;
 
 const obterLinhasBase = () =>
 Array.from(tabela.querySelectorAll("tbody tr")).filter(
@@ -890,6 +1060,10 @@ return (celula?.innerText || "").replace(/\s+/g, " ").trim();
 
 const slugCabecalho = (idx) => {
 const th = titulos[idx];
+ const dataKey = (th?.dataset?.colKey || "").trim();
+ if (dataKey) {
+ return normalizarFiltroTabela(dataKey).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+ }
 const txt = (th?.textContent || "").replace(/\s+/g, " ").trim();
 return normalizarFiltroTabela(txt).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 };
@@ -904,6 +1078,64 @@ return parsed;
 } catch (_err) {
 return {};
 }
+};
+
+const coletarValoresUnicosLocais = (idx) => {
+const linhas = obterLinhasBase();
+const linhasContexto = linhas.filter((linha) => linhaPassaFiltros(linha, idx));
+const valoresUnicosMap = new Map();
+const slugAtual = slugCabecalho(idx);
+linhasContexto.forEach((linha) => {
+const bruto = obterValorColuna(linha, idx) || "(Vazio)";
+extrairValoresFiltroTexto(bruto, slugAtual).forEach((item) => {
+const chave = normalizarFiltroTabela(item || "(vazio)");
+if (!valoresUnicosMap.has(chave)) valoresUnicosMap.set(chave, item);
+});
+});
+return [...valoresUnicosMap.entries()].sort((a, b) =>
+a[1].localeCompare(b[1], "pt-BR", { numeric: true }),
+);
+};
+
+const obterValoresUnicosColuna = async (idx) => {
+const slugAtual = slugCabecalho(idx);
+const colunaData = COLUNAS_DATA_FILTRO.has(slugAtual);
+const valoresLocais = coletarValoresUnicosLocais(idx);
+if (!sincronizaComBackend || !slugAtual || colunaData) {
+return { valoresUnicos: valoresLocais, slugAtual, colunaData };
+}
+try {
+const url = new URL("/api/verificar-dados-column-options", window.location.origin);
+const paramsAtual = new URLSearchParams(window.location.search);
+paramsAtual.forEach((valor, chave) => {
+if (chave === "page") return;
+url.searchParams.set(chave, valor);
+});
+url.searchParams.set("table", tabela.id === "tabelaDemandas" ? "demandas" : "processos");
+url.searchParams.set("col", slugAtual);
+const resposta = await fetch(url.toString(), {
+headers: { Accept: "application/json" },
+credentials: "same-origin",
+});
+if (!resposta.ok) throw new Error(`HTTP ${resposta.status}`);
+const payload = await resposta.json();
+if (!payload || payload.ok !== true || !Array.isArray(payload.values)) {
+throw new Error("payload invalido");
+}
+const valoresUnicos = payload.values
+.map((item) => {
+const label = String(item?.label || "").trim() || "(Vazio)";
+const keyBruta = String(item?.key || "").trim();
+const key = keyBruta || normalizarFiltroTabela(label || "(vazio)");
+return [key, label];
+})
+.filter(([key]) => Boolean(key));
+if (valoresUnicos.length) {
+return { valoresUnicos, slugAtual, colunaData };
+}
+} catch (_err) {
+}
+return { valoresUnicos: valoresLocais, slugAtual, colunaData };
 };
 
 const syncServerFromState = () => {
@@ -938,15 +1170,41 @@ window.location.href = url.toString();
 return true;
 };
 
+const extrairValoresFiltroTexto = (bruto, slug) => {
+const texto = String(bruto || "").replace(/\s+/g, " ").trim();
+if (slug === "gerencias_envolvidas" || slug === "gerencia") {
+const partes = texto
+.split("->")
+.map((item) => item.trim())
+.filter(Boolean);
+const valores = [];
+const vistos = new Set();
+partes.forEach((item) => {
+const chave = normalizarFiltroTabela(item);
+if (!chave || vistos.has(chave)) return;
+vistos.add(chave);
+valores.push(item);
+});
+return valores.length ? valores : ["(Vazio)"];
+}
+return [texto || "(Vazio)"];
+};
+
 const linhaPassaFiltros = (linha, ignorarColuna = null) => {
 let ok = true;
 Object.entries(estado.filtros).forEach(([colStr, selecionados]) => {
 if (!ok) return;
 const col = Number(colStr);
 if (ignorarColuna !== null && col === ignorarColuna) return;
-const valor = normalizarFiltroTabela(obterValorColuna(linha, col) || "(vazio)");
-if (!selecionados || !selecionados.size) return;
-if (!selecionados.has(valor)) ok = false;
+ const bruto = obterValorColuna(linha, col) || "(Vazio)";
+  const slug = slugCabecalho(col);
+  if (!selecionados || !selecionados.size) return;
+  if (COLUNAS_DATA_FILTRO.has(slug) && possuiFaixaDataFiltro(selecionados)) {
+  if (!valorDentroFaixaData(bruto, selecionados)) ok = false;
+  return;
+  }
+ const valoresLinha = extrairValoresFiltroTexto(bruto, slug).map((item) => normalizarFiltroTabela(item));
+ if (!valoresLinha.some((valor) => selecionados.has(valor))) ok = false;
 });
 return ok;
 };
@@ -959,6 +1217,7 @@ limparListenersPainel = null;
 if (!painelAtivo) return;
 painelAtivo.remove();
 painelAtivo = null;
+colunaPainelAtiva = null;
 };
 
  const aplicarEstadoTabela = () => {
@@ -1024,7 +1283,13 @@ if (cfInicial && typeof cfInicial === "object") {
  if (!slug || slug === "__sort_col" || slug === "__sort_dir") return;
  const vals = cfInicial[slug];
  if (!Array.isArray(vals) || !vals.length) return;
- estado.filtros[idx] = new Set(vals.map((v) => normalizarFiltroTabela(v)));
+ estado.filtros[idx] = new Set(
+ vals.map((v) => {
+ const item = String(v || "");
+ if (item.startsWith(DATA_FILTRO_DE) || item.startsWith(DATA_FILTRO_ATE)) return item;
+ return normalizarFiltroTabela(item);
+ }),
+ );
  });
  if (sortColRaw && (sortDirRaw === "asc" || sortDirRaw === "desc")) {
  const sortIdx = titulos.findIndex((_, idx) => slugCabecalho(idx) === sortColRaw);
@@ -1034,25 +1299,43 @@ if (cfInicial && typeof cfInicial === "object") {
  }
 }
 
-const abrirPainelColuna = (idx, btn) => {
+const abrirPainelColuna = async (idx, btn) => {
+const seqAtual = ++sequenciaPainel;
+if (painelAtivo && colunaPainelAtiva === idx) {
 fecharPainel();
-const linhas = obterLinhasBase();
-const linhasContexto = linhas.filter((linha) => linhaPassaFiltros(linha, idx));
-const valoresUnicosMap = new Map();
-linhasContexto.forEach((linha) => {
-const bruto = obterValorColuna(linha, idx) || "(Vazio)";
-const chave = normalizarFiltroTabela(bruto || "(vazio)");
-if (!valoresUnicosMap.has(chave)) valoresUnicosMap.set(chave, bruto);
-});
- const valoresUnicos = [...valoresUnicosMap.entries()].sort((a, b) =>
- a[1].localeCompare(b[1], "pt-BR", { numeric: true }),
- );
+return;
+}
+fecharPainel();
+ const { valoresUnicos, slugAtual, colunaData } = await obterValoresUnicosColuna(idx);
+ if (seqAtual !== sequenciaPainel) return;
  const selecionadosAtuais = estado.filtros[idx] ? new Set(estado.filtros[idx]) : new Set(valoresUnicos.map(([k]) => k));
  let selecionadosTemp = new Set(selecionadosAtuais);
 
 const painel = document.createElement("div");
 painel.className = "excel-filter-menu";
- painel.innerHTML = `
+ painel.innerHTML = colunaData ? `
+ <div class="excel-filter-actions">
+   <button type="button" class="excel-filter-action-btn" data-sort="asc"><i class="bi bi-sort-alpha-down" aria-hidden="true"></i> Ordem crescente</button>
+   <button type="button" class="excel-filter-action-btn" data-sort="desc"><i class="bi bi-sort-alpha-up" aria-hidden="true"></i> Ordem decrescente</button>
+   <button type="button" class="excel-filter-action-btn" data-sort="clear"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Limpar ordenação</button>
+ </div>
+ <div class="excel-filter-date-wrap">
+   <div class="excel-filter-date-summary" data-date-summary></div>
+   <div class="excel-filter-calendar">
+     <div class="excel-filter-calendar-header">
+       <button type="button" class="excel-filter-calendar-nav" data-cal-nav="-1" aria-label="Mes anterior">&lsaquo;</button>
+       <div class="excel-filter-calendar-title" data-cal-title></div>
+       <button type="button" class="excel-filter-calendar-nav" data-cal-nav="1" aria-label="Proximo mes">&rsaquo;</button>
+     </div>
+     <div class="excel-filter-calendar-weekdays">${DIAS_CALENDARIO.map((label) => `<span>${label}</span>`).join("")}</div>
+     <div class="excel-filter-calendar-grid" data-cal-grid></div>
+   </div>
+ </div>
+  <div class="excel-filter-footer">
+    <button type="button" class="btn btn-outline-secondary btn-sm" data-clear>Limpar filtro</button>
+    <button type="button" class="btn btn-outline-secondary btn-sm" data-cancel>Cancelar</button>
+    <button type="button" class="btn btn-primary btn-sm" data-ok>OK</button>
+  </div>` : `
 <div class="excel-filter-actions">
   <button type="button" class="excel-filter-action-btn" data-sort="asc"><i class="bi bi-sort-alpha-down" aria-hidden="true"></i> Ordem crescente</button>
   <button type="button" class="excel-filter-action-btn" data-sort="desc"><i class="bi bi-sort-alpha-up" aria-hidden="true"></i> Ordem decrescente</button>
@@ -1063,9 +1346,12 @@ painel.className = "excel-filter-menu";
  <div class="excel-filter-footer">
    <button type="button" class="btn btn-outline-secondary btn-sm" data-cancel>Cancelar</button>
    <button type="button" class="btn btn-primary btn-sm" data-ok>OK</button>
- </div>`;
+  </div>`;
 document.body.appendChild(painel);
 painelAtivo = painel;
+colunaPainelAtiva = idx;
+painel.addEventListener("click", (ev) => ev.stopPropagation());
+painel.addEventListener("pointerdown", (ev) => ev.stopPropagation());
 
 const posicionarPainel = () => {
 const rect = btn.getBoundingClientRect();
@@ -1099,6 +1385,100 @@ window.removeEventListener("resize", aoReposicionar);
 };
 window.requestAnimationFrame(posicionarPainel);
 
+ let faixaDe = "";
+ let faixaAte = "";
+ if (colunaData) {
+ const resumoEl = painel.querySelector("[data-date-summary]");
+ const tituloEl = painel.querySelector("[data-cal-title]");
+ const gradeEl = painel.querySelector("[data-cal-grid]");
+ const faixaInicial = extrairFaixaDataFiltro(selecionadosTemp);
+ faixaDe = faixaInicial.de;
+ faixaAte = faixaInicial.ate;
+ let mesVisivel = new Date();
+ mesVisivel = new Date(mesVisivel.getFullYear(), mesVisivel.getMonth(), 1);
+
+ const atualizarResumo = () => {
+ if (!resumoEl) return;
+ resumoEl.innerHTML = `
+ <span class="excel-filter-date-chip ${faixaDe ? "is-filled" : ""}">De: ${faixaDe ? dataIsoParaBr(faixaDe) : "Inicio"}</span>
+ <span class="excel-filter-date-chip ${faixaAte ? "is-filled" : ""}">Ate: ${faixaAte ? dataIsoParaBr(faixaAte) : "Fim"}</span>
+ `;
+ };
+
+ const mesmaData = (a, b) =>
+ a instanceof Date && b instanceof Date &&
+ a.getFullYear() === b.getFullYear() &&
+ a.getMonth() === b.getMonth() &&
+ a.getDate() === b.getDate();
+
+ const entreDatas = (valor, inicio, fim) => {
+ if (!(valor instanceof Date) || !(inicio instanceof Date) || !(fim instanceof Date)) return false;
+ const atual = dataDateParaIso(valor);
+ const de = dataDateParaIso(inicio);
+ const ate = dataDateParaIso(fim);
+ return Boolean(atual && de && ate && atual >= de && atual <= ate);
+ };
+
+ const somarMeses = (base, delta) => new Date(base.getFullYear(), base.getMonth() + delta, 1);
+
+ const renderizarCalendario = () => {
+ if (!gradeEl || !tituloEl) return;
+ const inicioMes = new Date(mesVisivel.getFullYear(), mesVisivel.getMonth(), 1);
+ const fimMes = new Date(mesVisivel.getFullYear(), mesVisivel.getMonth() + 1, 0);
+ tituloEl.textContent = `${MESES_CALENDARIO[inicioMes.getMonth()]} ${inicioMes.getFullYear()}`;
+ const vazios = inicioMes.getDay();
+ const partes = [];
+ for (let i = 0; i < vazios; i += 1) partes.push('<span class="excel-filter-calendar-day is-empty"></span>');
+ const deDate = dataIsoParaDate(faixaDe);
+ const ateDate = dataIsoParaDate(faixaAte);
+ for (let dia = 1; dia <= fimMes.getDate(); dia += 1) {
+ const atual = new Date(mesVisivel.getFullYear(), mesVisivel.getMonth(), dia);
+ const iso = dataDateParaIso(atual);
+ const inicio = mesmaData(atual, deDate);
+ const fim = mesmaData(atual, ateDate);
+ const noIntervalo = !inicio && !fim && deDate && ateDate && entreDatas(atual, deDate, ateDate);
+ partes.push(`<button type="button" class="excel-filter-calendar-day ${inicio ? "is-start" : ""} ${fim ? "is-end" : ""} ${noIntervalo ? "is-in-range" : ""}" data-date-value="${iso}"><span>${dia}</span></button>`);
+ }
+ gradeEl.innerHTML = partes.join("");
+ };
+
+ const selecionarData = (iso) => {
+ if (!faixaDe || (faixaDe && faixaAte)) {
+ faixaDe = iso;
+ faixaAte = "";
+ } else if (iso < faixaDe) {
+ faixaAte = faixaDe;
+ faixaDe = iso;
+ } else {
+ faixaAte = iso;
+ }
+ atualizarResumo();
+ renderizarCalendario();
+ };
+
+ atualizarResumo();
+ renderizarCalendario();
+ painel.querySelectorAll("[data-cal-nav]").forEach((botaoNav) => {
+ botaoNav.addEventListener("click", () => {
+ const delta = Number(botaoNav.getAttribute("data-cal-nav") || "0");
+ mesVisivel = somarMeses(mesVisivel, delta);
+ renderizarCalendario();
+ });
+ });
+ gradeEl?.addEventListener("click", (ev) => {
+ const alvo = ev.target instanceof Element ? ev.target.closest("[data-date-value]") : null;
+ if (!alvo) return;
+ const iso = alvo.getAttribute("data-date-value") || "";
+ if (!iso) return;
+ selecionarData(iso);
+ });
+ painel.querySelector("[data-clear]")?.addEventListener("click", () => {
+ delete estado.filtros[idx];
+ if (syncServerFromState()) return;
+ aplicarEstadoTabela();
+ fecharPainel();
+ });
+ } else {
  const listEl = painel.querySelector(".excel-filter-list");
  const searchEl = painel.querySelector(".excel-filter-search");
  const renderLista = () => {
@@ -1141,6 +1521,7 @@ window.requestAnimationFrame(posicionarPainel);
  else selecionadosTemp.delete(chave);
  renderLista();
  });
+ }
 
  Array.from(painel.querySelectorAll("[data-sort]")).forEach((botaoSort) => {
  botaoSort.addEventListener("click", () => {
@@ -1158,6 +1539,18 @@ window.requestAnimationFrame(posicionarPainel);
 
  painel.querySelector("[data-cancel]")?.addEventListener("click", () => fecharPainel());
  painel.querySelector("[data-ok]")?.addEventListener("click", () => {
+ if (colunaData) {
+ let de = faixaDe || "";
+ let ate = faixaAte || "";
+ if (de && ate && de > ate) {
+ [de, ate] = [ate, de];
+ }
+ const tokens = new Set();
+ if (de) tokens.add(`${DATA_FILTRO_DE}${de}`);
+ if (ate) tokens.add(`${DATA_FILTRO_ATE}${ate}`);
+ if (!tokens.size) delete estado.filtros[idx];
+ else estado.filtros[idx] = tokens;
+ } else {
  const todos = new Set(valoresUnicos.map(([k]) => k));
  const igualTodos = selecionadosTemp.size === todos.size && [...todos].every((k) => selecionadosTemp.has(k));
  if (igualTodos) {
@@ -1165,11 +1558,18 @@ window.requestAnimationFrame(posicionarPainel);
  } else {
  estado.filtros[idx] = new Set(selecionadosTemp);
  }
+ }
  if (syncServerFromState()) return;
  aplicarEstadoTabela();
  fecharPainel();
  });
- };
+ painel.addEventListener("keydown", (ev) => {
+ if (ev.key === "Escape") {
+ ev.preventDefault();
+ fecharPainel();
+ }
+ });
+};
 
  titulos.forEach((th, idx) => {
  if (idx === 0) return;
@@ -1179,20 +1579,21 @@ window.requestAnimationFrame(posicionarPainel);
  btn.className = "col-filter-trigger";
  btn.innerHTML = '<i class="bi bi-search col-filter-icon" aria-hidden="true"></i>';
  btn.addEventListener("click", (ev) => {
+ ev.preventDefault();
  ev.stopPropagation();
  abrirPainelColuna(idx, btn);
  });
  th.appendChild(btn);
  });
 
- document.addEventListener("click", (ev) => {
- if (!painelAtivo) return;
- const target = ev.target;
- if (!(target instanceof Node)) return;
- if (painelAtivo.contains(target)) return;
- if (target instanceof Element && target.closest(".col-filter-trigger")) return;
- fecharPainel();
- });
+document.addEventListener("pointerdown", (ev) => {
+if (!painelAtivo) return;
+const target = ev.target;
+if (!(target instanceof Node)) return;
+if (painelAtivo.contains(target)) return;
+if (target instanceof Element && target.closest(".col-filter-trigger")) return;
+fecharPainel();
+});
 
  if (botaoLimpar) {
  botaoLimpar.addEventListener("click", () => {
@@ -2523,7 +2924,7 @@ const limparResultados = () => {
  <th>Gerencia</th>
  <th>Tipo</th>
  <th>Usuario</th>
- <th>Data</th>
+  <th data-col-key="data">Data</th>
  <th>Status</th>
  <th>Coordenadoria</th>
  <th>Equipe / Área</th>
@@ -2952,6 +3353,7 @@ const eventosVisual = [...eventos].sort(
  const destino = botao.getAttribute("data-gerencia") || "";
  if (refs.filtroGerencia) {
  refs.filtroGerencia.value = destino;
+ atualizarFiltrosPrincipaisEncadeados();
  }
  // destaca botao selecionado
  refs.quickGerencias.forEach((b) => b.classList.remove("active"));
@@ -2962,6 +3364,24 @@ const eventosVisual = [...eventos].sort(
  botao.classList.add("active");
  }
  });
+
+ refs.filtroGerencia?.addEventListener("change", () => {
+ atualizarFiltrosPrincipaisEncadeados();
+ refs.quickGerencias.forEach((botao) => {
+ const ativo = (botao.getAttribute("data-gerencia") || "") === (refs.filtroGerencia?.value || "");
+ botao.classList.toggle("active", ativo);
+ });
+ });
+
+ refs.filtroCoordenadoria?.addEventListener("change", () => {
+ atualizarFiltrosPrincipaisEncadeados();
+ });
+
+ refs.filtroEquipe?.addEventListener("change", () => {
+ atualizarFiltrosPrincipaisEncadeados();
+ });
+
+ atualizarFiltrosPrincipaisEncadeados();
 
  refs.btnBuscar?.addEventListener("click", () => {
  selecionarProcesso(refs.buscaSei?.value.trim());
