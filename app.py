@@ -88,24 +88,24 @@ IMPORT_FIELDS = [
     ("numero_sei", "Número SEI"),
     ("assunto", "Assunto"),
     ("interessado", "Interessado"),
-    ("concessionaria", "Concessionaria"),
+    ("concessionaria", "Concessionária"),
     ("gerencia", "Gerência"),
     ("data_entrada", "Data de entrada"),
     ("prazo", "Prazo"),
-    ("responsavel_adm", "Responsavel ADM"),
-    ("observacao", "Observacao"),
-    ("observacoes_complementares", "Observacoes complementares"),
+    ("responsavel_adm", "Responsável ADM"),
+    ("observacao", "Observação"),
+    ("observacoes_complementares", "Observações complementares"),
     ("coordenadoria", "Coordenadoria"),
-    ("equipe_area", "Equipe / Area"),
-    ("responsavel_equipe", "Responsavel equipe"),
+    ("equipe_area", "Equipe / Área"),
+    ("responsavel_equipe", "Responsável da equipe"),
     ("tipo_processo", "Tipo de processo"),
     ("palavras_chave", "Palavras-chave"),
     ("status", "Status"),
     ("data_status", "Data status"),
     ("prazo_equipe", "Prazo equipe"),
     ("tramitado_para", "Tramitado para"),
-    ("classificacao_institucional", "Classificacao institucional"),
-    ("descricao_melhorada", "Descricao melhorada"),
+    ("classificacao_institucional", "Classificação institucional"),
+    ("descricao_melhorada", "Descrição melhorada"),
     ("finalizado_em", "Finalizado em"),
     ("finalizado_por", "Finalizado por"),
     ("data_saida", "Data de saída"),
@@ -159,7 +159,7 @@ GERENCIA_PADRAO = "GABINETE"
 GERENCIAS_REVISAO = ["SAIDA"]
 GERENCIAS = [ger for ger in GERENCIAS_CANONICAS if ger not in {"ENTRADA", "SAIDA"}]
 GERENCIAS_DESTINOS = GERENCIAS + GERENCIAS_REVISAO
-GERENCIA_ALIAS_GABINETE = "Acessoria Técnica"
+GERENCIA_ALIAS_GABINETE = "Assessoria Técnica"
 GERENCIAS_TRAMITE_EXIBICAO = (
     ["SAIDA"]
     + [ger for ger in GERENCIAS if ger != "GABINETE"]
@@ -2472,7 +2472,7 @@ def login():
                 usuario_id = 0
             usuario = db.session.get(Usuario, usuario_id) if usuario_id else None
             if not usuario:
-                flash("Usuario nao encontrado para edicao.", "warning")
+                flash("Usuário não encontrado para edição.", "warning")
                 return redirect(url_for("login", form_action="register"))
             if (
                 normalizar_chave(usuario.username or "") == normalizar_chave(DEFAULT_ADMIN_USER or "")
@@ -2518,7 +2518,7 @@ def login():
             if not nome:
                 erros.append("Nome")
             if not email:
-                erros.append("Email")
+                erros.append("E-mail")
             else:
                 email_existente = (
                     Usuario.query.filter(func.lower(Usuario.email) == email.lower())
@@ -2526,7 +2526,7 @@ def login():
                     .first()
                 )
                 if email_existente:
-                    erros.append("Email (ja utilizado)")
+                    erros.append("E-mail (já utilizado)")
             nome_existente = (
                 Usuario.query.filter(func.lower(Usuario.nome) == nome.lower())
                 .filter(Usuario.id != usuario.id)
@@ -2535,13 +2535,13 @@ def login():
                 else None
             )
             if nome_existente:
-                erros.append("Nome (ja utilizado)")
+                erros.append("Nome (já utilizado)")
             if not gerencias_liberadas:
-                erros.append("Gerencias liberadas")
+                erros.append("Gerências liberadas")
             if coord_bruto and not coord:
-                erros.append("Coordenadoria (invalida)")
+                erros.append("Coordenadoria (inválida)")
             if equipe_bruto and not equipe:
-                erros.append("Equipe/Setor (invalido)")
+                erros.append("Equipe/Setor (inválido)")
             if erros:
                 flash("Preencha corretamente: " + ", ".join(erros), "warning")
                 return redirect(url_for("login", form_action="register"))
@@ -2563,7 +2563,7 @@ def login():
             usuario.pode_exportar = permissoes["exportar"]
             usuario.pode_importar = permissoes["importar"]
             db.session.commit()
-            flash(f"Usuario {usuario.username} atualizado com sucesso.", "success")
+            flash(f"Usuário {usuario.username} atualizado com sucesso.", "success")
             return redirect(url_for("login", form_action="register"))
         elif acao == "reset_user_password":
             if not current_user.is_authenticated or not usuario_pode_excluir_usuarios():
@@ -2576,7 +2576,7 @@ def login():
                 usuario_id = 0
             usuario = db.session.get(Usuario, usuario_id) if usuario_id else None
             if not usuario:
-                flash("Usuario nao encontrado para redefinicao de senha.", "warning")
+                flash("Usuário não encontrado para redefinição de senha.", "warning")
                 return redirect(url_for("login", form_action="register"))
             if (
                 normalizar_chave(usuario.username or "") == normalizar_chave(DEFAULT_ADMIN_USER or "")
@@ -2595,7 +2595,7 @@ def login():
                 "email": usuario.email,
             }
             flash(
-                f"Senha de {usuario.username} redefinida com sucesso. Entregue a nova senha temporaria ao colaborador.",
+                    f"Senha de {usuario.username} redefinida com sucesso. Entregue a nova senha temporária ao colaborador.",
                 "success",
             )
         else:
@@ -2609,7 +2609,7 @@ def login():
                 if usuario.must_reset_password:
                     return redirect(url_for("trocar_senha"))
                 return redirect(destino or url_for("index"))
-            flash("Credenciais invalidas. Verifique login e senha.", "danger")
+            flash("Credenciais inválidas. Verifique login e senha.", "danger")
 
     pode_registrar = current_user.is_authenticated and usuario_pode_cadastrar_usuarios()
     perfis_disponiveis = (
@@ -2709,7 +2709,7 @@ def excluir_usuario(usuario_id: int):
     if not usuario:
         abort(404)
     if usuario.id == current_user.id:
-        flash("Voce nao pode excluir o proprio usuario.", "warning")
+        flash("Você não pode excluir o próprio usuário.", "warning")
         return redirect(url_for("login", form_action="register"))
     if (
         normalizar_chave(usuario.username or "") == normalizar_chave(DEFAULT_ADMIN_USER or "")
@@ -2732,7 +2732,7 @@ def excluir_usuario(usuario_id: int):
     Notificacao.query.filter_by(user_id=usuario.id).delete()
     db.session.delete(usuario)
     db.session.commit()
-    flash(f"Usuario {usuario.username} excluido com sucesso.", "success")
+    flash(f"Usuário {usuario.username} excluído com sucesso.", "success")
     return redirect(url_for("login", form_action="register"))
 
 
@@ -3864,18 +3864,18 @@ def descrever_mudancas_historico(
     """Retorna lista textual de mudancas para auditoria no historico."""
     labels = {
         "prazo": "Prazo SUROD",
-        "concessionaria": "Concessionaria",
+        "concessionaria": "Concessionária",
         "responsavel_adm": "Responsavel ADM",
         "observacao": "Observacao",
-        "descricao_melhorada": "Descricao melhorada",
+        "descricao_melhorada": "Descrição melhorada",
         "coordenadoria": "Coordenadoria",
         "equipe_area": "Equipe/Area",
-        "responsavel_equipe": "Responsavel equipe",
+        "responsavel_equipe": "Responsável da equipe",
         "tipo_processo": "Tipo de processo",
         "palavras_chave": "Palavras-chave",
         "status": "Status",
         "prazo_equipe": "Prazo equipe",
-        "observacoes_complementares": "Observacoes complementares",
+        "observacoes_complementares": "Observações complementares",
         "tramitado_para": "Tramitado para",
         "classificacao_institucional": "Classificacao institucional",
         "dados_extra": "Campos extras",
@@ -5148,20 +5148,20 @@ def exportar_geral():
         "numero_sei": ("Número SEI", lambda p: p.numero_sei_base),
         "assunto": ("Assunto", lambda p: p.assunto),
         "interessado": ("Interessado", lambda p: p.interessado),
-        "concessionaria": ("Concessionaria", lambda p: p.concessionaria),
+        "concessionaria": ("Concessionária", lambda p: p.concessionaria),
         "gerencia": ("Gerência", lambda p: p.gerencia),
         "data_entrada": ("Data entrada", lambda p: p.data_entrada.strftime("%d/%m/%Y") if p.data_entrada else ""),
         "prazo": ("Prazo SUROD", lambda p: p.prazo.strftime("%d/%m/%Y") if p.prazo else ""),
         "status": ("Status", lambda p: p.status),
         "prazo_equipe": ("Prazo equipe", lambda p: p.prazo_equipe.strftime("%d/%m/%Y") if p.prazo_equipe else ""),
-        "responsavel_adm": ("Responsavel Adm", lambda p: p.responsavel_adm),
+        "responsavel_adm": ("Responsável Adm", lambda p: p.responsavel_adm),
         "coordenadoria": ("Coordenadoria", lambda p: p.coordenadoria),
         "equipe_area": ("Equipe / Area", lambda p: p.equipe_area),
         "responsavel_equipe": ("Responsavel (Equipe)", lambda p: p.responsavel_equipe),
         "tipo_processo": ("Tipo de processo", lambda p: p.tipo_processo),
         "palavras_chave": ("Palavras-chave", lambda p: p.palavras_chave),
         "observacoes_complementares": (
-            "Observacoes complementares",
+            "Observações complementares",
             lambda p: p.observacoes_complementares,
         ),
         "data_saida": (
@@ -7013,7 +7013,7 @@ def exportar_gerencia(nome_gerencia: str):
         "tipo_processo": ("Tipo de processo", lambda p: p.tipo_processo),
         "palavras_chave": ("Palavras-chave", lambda p: p.palavras_chave),
         "observacoes_complementares": (
-            "Observacoes complementares",
+            "Observações complementares",
             lambda p: p.observacoes_complementares,
         ),
         "data_saida": (
@@ -7094,7 +7094,7 @@ def gerencia_campos(nome_gerencia):
     """Permite que gerentes/assessoria configurem campos extras."""
     gerencia_alvo = normalizar_gerencia(nome_gerencia, permitir_entrada=True)
     if not gerencia_alvo or gerencia_alvo == "ENTRADA":
-        flash("Gerencia invalida para configuracao.", "warning")
+        flash("Gerência inválida para configuração.", "warning")
         return redirect(url_for("index"))
     if not usuario_pode_configurar_campos(gerencia_alvo):
         abort(403)
@@ -7220,8 +7220,8 @@ def novo_processo():
         prazo = obter_data("prazo", "Prazo SUROD", obrigatorio=False)
         assunto = obter_texto("assunto", "Assunto")
         interessado = obter_texto("interessado", "Interessado")
-        concessionaria = obter_texto("concessionaria", "Concessionaria")
-        responsavel_adm = obter_texto("responsavel_adm", "Responsavel Adm")
+        concessionaria = obter_texto("concessionaria", "Concessionária")
+        responsavel_adm = obter_texto("responsavel_adm", "Responsável Adm")
         observacao = obter_texto_opcional("observacao")
         if concessionaria:
             mapa_concessionarias = {
@@ -7230,7 +7230,7 @@ def novo_processo():
             concessionaria_norm = normalizar_chave(concessionaria)
             concessionaria_ok = mapa_concessionarias.get(concessionaria_norm)
             if not concessionaria_ok:
-                erros_invalidos.append("Concessionaria")
+                erros_invalidos.append("Concessionária")
                 campos_invalidos.append("concessionaria")
             else:
                 concessionaria = concessionaria_ok
@@ -7248,7 +7248,7 @@ def novo_processo():
                 g for g in gerencias_normalizadas if g not in gerencias_permitidas
             ]
             if gerencias_invalidas:
-                erros.append("Gerencia(s)")
+                erros.append("Gerência(s)")
                 campos_invalidos.append("gerencias")
                 mensagens.append(
                     (
@@ -7260,7 +7260,7 @@ def novo_processo():
                 g for g in gerencias_normalizadas if g in gerencias_permitidas
             ]
         if not gerencias_normalizadas:
-            erros.append("Gerencia(s)")
+            erros.append("Gerência(s)")
             campos_invalidos.append("gerencias")
 
         gerencias_ativas_numero = set(analise_numero.get("ativos_gerencias") or [])
@@ -7269,7 +7269,7 @@ def novo_processo():
         ]
         if gerencias_bloqueadas:
             lista = ", ".join(gerencias_bloqueadas)
-            erros.append("Gerencia(s)")
+            erros.append("Gerência(s)")
             campos_invalidos.append("gerencias")
             mensagens.append(
                 (
@@ -7347,7 +7347,7 @@ def novo_processo():
             if interessado.strip() != interessado_ref:
                 campos_propagados.append("Interessado")
             if concessionaria.strip() != concessionaria_ref:
-                campos_propagados.append("Concessionaria")
+                campos_propagados.append("Concessionária")
 
         if relacionados_mesmo_numero and campos_propagados:
             for item in relacionados_mesmo_numero:
@@ -7467,7 +7467,7 @@ def inspecionar_numero_processo():
 
 @app.route("/verificar-dados")
 def verificar_dados():
-    """Exibe painel com processos finalizados e filtros dinamicos."""
+    """Exibe painel com processos finalizados e filtros dinâmicos."""
     filtro_gerencia = normalizar_gerencia(request.args.get("gerencia"), permitir_entrada=True)
     coordenadoria = limpar_texto(request.args.get("coordenadoria"), "")
     equipe = limpar_texto(request.args.get("equipe"), "")
@@ -11366,7 +11366,7 @@ def _resumo_processo_assistente(processo: Processo) -> str:
     """Monta um resumo curto para o assistente responder."""
     partes = [
         f"Numero SEI: {processo.numero_sei_base}",
-        f"Gerencia: {processo.gerencia}",
+        f"Gerência: {processo.gerencia}",
     ]
     if processo.assigned_to:
         partes.append(f"Atribuido para: {processo.assigned_to.nome or processo.assigned_to.username}")
@@ -11691,7 +11691,7 @@ def _responder_pergunta_geral_assistente(pergunta: str) -> Optional[str]:
         if gerencia:
             partes.append(f"na gerencia {gerencia}")
         partes.append(_label_periodo())
-        filtros = ["Data de entrada", "Responsavel Adm", "Gerencia"]
+        filtros = ["Data de entrada", "Responsável Adm", "Gerência"]
         return " ".join([p for p in partes if p]).strip() + "." + _montar_passos_confirmacao(
             "cadastros", filtros
         )
@@ -11709,7 +11709,7 @@ def _responder_pergunta_geral_assistente(pergunta: str) -> Optional[str]:
         if gerencia:
             partes.append(f"na gerencia {gerencia}")
         partes.append(_label_periodo())
-        filtros = ["Finalizado em", "Gerencia"]
+        filtros = ["Finalizado em", "Gerência"]
         return " ".join([p for p in partes if p]).strip() + "." + _montar_passos_confirmacao(
             "finalizados", filtros
         )
@@ -11750,7 +11750,7 @@ def _responder_pergunta_geral_assistente(pergunta: str) -> Optional[str]:
         )
         partes = [f"Encontrei {total} processo(s) que passaram por {gerencia}"]
         partes.append(_label_periodo())
-        filtros = ["Gerencia", "Data de entrada"]
+        filtros = ["Gerência", "Data de entrada"]
         return " ".join([p for p in partes if p]).strip() + "." + _montar_passos_confirmacao(
             "movimentacoes", filtros
         )
@@ -11782,7 +11782,7 @@ def _responder_pergunta_geral_assistente(pergunta: str) -> Optional[str]:
         if gerencia:
             partes.append(f"na gerencia {gerencia}")
         partes.append(_label_periodo())
-        filtros = ["Gerencia", "Data de entrada"]
+        filtros = ["Gerência", "Data de entrada"]
         return " ".join([p for p in partes if p]).strip() + "." + _montar_passos_confirmacao(
             "ativos", filtros
         )
@@ -11796,7 +11796,7 @@ def _responder_pergunta_geral_assistente(pergunta: str) -> Optional[str]:
         total = consulta.count()
         partes = [f"Encontrei {total} processo(s) na gerencia {gerencia}"]
         partes.append(_label_periodo())
-        filtros = ["Gerencia", "Data de entrada"]
+        filtros = ["Gerência", "Data de entrada"]
         return " ".join([p for p in partes if p]).strip() + "." + _montar_passos_confirmacao(
             "gerencia", filtros
         )
@@ -12044,7 +12044,7 @@ def _gerar_resposta_assistente(pergunta: str, processo: Optional[Processo]) -> s
 
     if "concessionaria" in texto:
         valor = processo.concessionaria or "nao informada"
-        return f"Concessionaria: {valor}. {resumo}"
+        return f"Concessionária: {valor}. {resumo}"
 
     if "classific" in texto:
         valor = processo.classificacao_institucional or processo.descricao or "nao informada"
@@ -12052,7 +12052,7 @@ def _gerar_resposta_assistente(pergunta: str, processo: Optional[Processo]) -> s
 
     if "descricao melhorada" in texto:
         valor = processo.descricao_melhorada or processo.descricao or "nao informada"
-        return f"Descricao melhorada: {valor}. {resumo}"
+        return f"Descrição melhorada: {valor}. {resumo}"
 
     if "descricao" in texto:
         valor = processo.descricao or "nao informada"
@@ -12078,7 +12078,7 @@ def _gerar_resposta_assistente(pergunta: str, processo: Optional[Processo]) -> s
             )
         if processo.responsavel_equipe:
             return f"Responsavel da equipe: {processo.responsavel_equipe}. {resumo}"
-        return f"O processo nao esta atribuido. {resumo}"
+        return f"O processo não está atribuído. {resumo}"
 
     if "area" in texto or "coorden" in texto or "equipe" in texto:
         partes = []

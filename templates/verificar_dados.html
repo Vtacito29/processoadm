@@ -71,7 +71,7 @@
 {% if SITE_EM_CONFIGURACAO %}
 <main class="my-5 verify-container">
  <div class="card border-0 shadow-sm p-5 text-center">
- <h1 class="h4 mb-3">Painel em preparacao</h1>
+ <h1 class="h4 mb-3">Painel em preparação</h1>
  <p class="text-muted mb-0">
  Os relatórios e históricos de processos estarão disponíveis assim que o novo banco de dados for carregado.
  </p>
@@ -85,7 +85,7 @@
  <div class="hero-headline">
  <div>
  <h1 class="hero-title mb-2">Monitoramento dos processos finalizados</h1>
- <p class="hero-subtitle mb-0">Use filtros dinamicos e explore os detalhes de cada processo nas abas ao lado.</p>
+ <p class="hero-subtitle mb-0">Use filtros dinâmicos e explore os detalhes de cada processo nas abas ao lado.</p>
  </div>
  <div class="hero-tabs btn-group" role="group" aria-label="Painel processos e demandas">
  <input type="radio" class="btn-check" name="visaoFinalizados" id="visaoResumo" value="resumo" autocomplete="off" checked>
@@ -180,7 +180,7 @@
  <aside class="hero-summary">
  <div class="summary-header">
  <span class="summary-kicker">Informações</span>
- <h2 class="summary-title">Indicadores do periodo</h2>
+ <h2 class="summary-title">Indicadores do período</h2>
  <p class="summary-subtitle">Visao consolidada do fluxo de processos.</p>
  </div>
   <div class="hero-metrics">
@@ -197,7 +197,7 @@
  <div class="metric-card">
  <span class="metric-label" data-label-finalizados="Finalizados" data-label-demandas="Demandas finalizadas">Finalizados</span>
  <span class="metric-value" data-valor-finalizados="{{ metricas.finalizados }}" data-valor-demandas="{{ metricas_demandas.finalizados }}">{{ metricas.finalizados }}</span>
- <span class="metric-foot" data-foot-finalizados="Encerrados no periodo" data-foot-demandas="Encerradas no periodo">Encerrados no periodo</span>
+ <span class="metric-foot" data-foot-finalizados="Encerrados no período" data-foot-demandas="Encerradas no período">Encerrados no período</span>
  </div>
  <div class="metric-card">
  <span class="metric-label" data-label-finalizados="Tempo medio" data-label-demandas="Tempo medio">Tempo medio</span>
@@ -255,10 +255,10 @@
  <th>Responsável Adm</th>
  <th>Classificacao institucional</th>
  <th data-col-key="data_de_entrada_na_gerencia">Data de entrada na gerência</th>
- <th>Descricao melhorada</th>
+ <th>Descrição melhorada</th>
  <th>Coordenadoria</th>
  <th>Equipe / Área</th>
- <th>Responsavel (Equipe)</th>
+ <th>Responsável (Equipe)</th>
  <th>Tipo de processo</th>
  <th>Palavras-chave</th>
  <th>Status (Equipe)</th>
@@ -463,10 +463,10 @@
  <th>Responsável Adm</th>
  <th>Classificacao institucional</th>
  <th data-col-key="data_de_entrada_na_gerencia">Data de entrada na gerência</th>
- <th>Descricao melhorada</th>
+ <th>Descrição melhorada</th>
  <th>Coordenadoria</th>
  <th>Equipe / Área</th>
- <th>Responsavel (Equipe)</th>
+ <th>Responsável (Equipe)</th>
  <th>Tipo de processo</th>
  <th>Palavras-chave</th>
  <th>Status (Equipe)</th>
@@ -914,7 +914,7 @@ let fichaAberta = false;
 
  const extrasLabelsFixos = {
  numero_sei_original: "Numero SEI original",
- gerencias_escolhidas: "Gerencias envolvidas",
+ gerencias_escolhidas: "Gerências envolvidas",
  };
  const labelExtra = (slug) =>
  extrasLabelsFixos[slug] || (camposExtraLabels && camposExtraLabels[slug]) || capitalizarSlug(slug);
@@ -1914,18 +1914,18 @@ const removerFichaTecnica = () => {
  const cards = demandas
  .map((item) => {
  const campos = [
- ["Numero SEI", numeroSeiBase(item)],
- ["Gerencia", item.gerencia],
+ ["Número SEI", numeroSeiBase(item)],
+ ["Gerência", item.gerencia],
  ["Status", item.status],
  ["Data de entrada", item.data_entrada ? formatarDataCurta(item.data_entrada) : "--"],
  ["Prazo", item.prazo ? formatarDataCurta(item.prazo) : "--"],
  ["Assunto", item.assunto],
  ["Interessado", item.interessado],
- ["Concessionaria", item.concessionaria],
+ ["Concessionária", item.concessionaria],
  ["Coordenadoria", item.coordenadoria],
  ["Equipe / Área", item.equipe_area],
- ["Responsavel Adm", item.responsavel_adm],
- ["Responsavel equipe", item.responsavel_equipe],
+ ["Responsável Adm", item.responsavel_adm],
+ ["Responsável da equipe", item.responsavel_equipe],
  ["Tipo de processo", item.tipo_processo],
  ["Palavras-chave", item.palavras_chave],
  ];
@@ -2164,16 +2164,16 @@ const removerFichaTecnica = () => {
  });
  return resultado;
  };
- const labelGerencia = modoDemanda ? "Gerencia" : "Gerencias envolvidas";
+ const labelGerencia = modoDemanda ? "Gerência" : "Gerências envolvidas";
  const labelDataEntrada = "Data de entrada";
  const labelPrazo = "Prazo";
  const labelAssunto = "Assunto";
  const labelInteressado = "Interessado";
- const labelConcessionaria = "Concessionaria";
+ const labelConcessionaria = "Concessionária";
  const labelCoordenadoria = modoDemanda ? "Coordenadoria" : "Coordenadorias";
  const labelEquipeArea = modoDemanda ? "Equipe / Área" : "Equipes / Áreas";
- const labelRespAdm = modoDemanda ? "Responsavel Adm" : "Responsaveis Adm";
- const labelRespEquipe = modoDemanda ? "Responsavel equipe" : "Responsaveis equipe";
+ const labelRespAdm = modoDemanda ? "Responsável Adm" : "Responsáveis Adm";
+ const labelRespEquipe = modoDemanda ? "Responsável da equipe" : "Responsáveis da equipe";
  const labelTipoProcesso = "Tipo de processo";
  const labelPalavrasChave = "Palavras-chave";
  const labelObservacoes = "Observação";
@@ -2367,7 +2367,7 @@ const inserirFichaTecnicaNaTabela = (processo) => {
  const campos = [
  ["coordenadoria", "Coordenadoria"],
  ["equipe_area", "Equipe / Área"],
- ["responsavel_equipe", "Responsavel equipe"],
+ ["responsavel_equipe", "Responsável da equipe"],
  ["tipo_processo", "Tipo de processo"],
  ["palavras_chave", "Palavras-chave"],
  ["status", "Status"],
@@ -2440,7 +2440,7 @@ const inserirFichaTecnicaNaTabela = (processo) => {
  return `
  <div class="col-12">
  <div class="resumo-box">
- <span class="resumo-label">Gerencia ${htmlEscape(gerencia)}</span>
+ <span class="resumo-label">Gerência ${htmlEscape(gerencia)}</span>
  <div class="mt-2">${conteudo}</div>
  </div>
  </div>
@@ -2994,14 +2994,14 @@ const limparResultados = () => {
  <thead class="table-light">
  <tr>
  <th class="text-muted small">#</th>
- <th>Gerencia</th>
+ <th>Gerência</th>
  <th>Tipo</th>
- <th>Usuario</th>
+ <th>Usuário</th>
   <th data-col-key="data">Data</th>
  <th>Status</th>
  <th>Coordenadoria</th>
  <th>Equipe / Área</th>
- <th>Responsavel equipe</th>
+ <th>Responsável da equipe</th>
  <th>Motivo</th>
  </tr>
  </thead>

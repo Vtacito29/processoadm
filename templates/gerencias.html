@@ -424,7 +424,7 @@
  <div class="col-12 col-md-6 col-lg-3">
 
 
- <label class="form-label">Responsavel atribuido</label>
+ <label class="form-label">Responsável atribuído</label>
 
 
  <div class="select-search">
@@ -498,7 +498,7 @@
  <th data-col-key="concessionaria"><div class="resizable">Concessionária</div></th>
 
 
- <th data-col-key="{{ 'gerencias_envolvidas' if gerencia == 'SAIDA' else 'gerencia' }}"><div class="resizable">{{ 'Gerencias envolvidas' if gerencia == 'SAIDA' else 'Gerencia' }}</div></th>
+<th data-col-key="{{ 'gerencias_envolvidas' if gerencia == 'SAIDA' else 'gerencia' }}"><div class="resizable">{{ 'Gerências envolvidas' if gerencia == 'SAIDA' else 'Gerência' }}</div></th>
 
 
  <th data-col-key="assunto"><div class="resizable">Assunto</div></th>
@@ -1217,7 +1217,7 @@
  </div>
  <div class="col-md-6 col-lg-4">
  <div class="resumo-box resumo-critico">
- <span class="resumo-label">Gerencia</span>
+ <span class="resumo-label">Gerência</span>
  <span class="resumo-value">
  {% if processo.gerencia == 'SAIDA' and gerencia != 'SAIDA' %}
  {{ gerencia }}
@@ -1609,7 +1609,7 @@
  <h5 class="offcanvas-title" id="painelNotificacoesLabel">Notificacoes</h5>
 
 
- <p class="text-muted small mb-0">Avisos enviados quando um processo e atribuido.</p>
+ <p class="text-muted small mb-0">Avisos enviados quando um processo é atribuído.</p>
 
 
  </div>
@@ -1966,7 +1966,7 @@
  {% set colunas_base = [
 
 
- ('numero_sei', 'Numero SEI'),
+ ('numero_sei', 'Número SEI'),
 
 
  ('assunto', 'Assunto'),
@@ -1975,10 +1975,10 @@
  ('interessado', 'Interessado'),
 
 
- ('concessionaria', 'Concessionaria'),
+ ('concessionaria', 'Concessionária'),
 
 
- ('gerencia', 'Gerencia'),
+ ('gerencia', 'Gerência'),
 
 
  ('data_entrada', 'Data de entrada'),
@@ -1993,7 +1993,7 @@
  ('prazo_equipe', 'Prazo equipe'),
 
 
- ('responsavel_adm', 'Responsavel Adm'),
+ ('responsavel_adm', 'Responsável Adm'),
 
 
  ('coordenadoria', 'Coordenadoria'),
@@ -2011,7 +2011,7 @@
  ('palavras_chave', 'Palavras-chave'),
 
 
- ('observacoes_complementares', 'Observacoes complementares'),
+ ('observacoes_complementares', 'Observações complementares'),
 
 
  ('data_saida', 'Data de saida'),
