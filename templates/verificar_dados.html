@@ -328,7 +328,7 @@
  {% set trilha_gerencias = (processo.gerencia or processo.gerencia_origem or "-").split('->') %}
  <div class="gerencia-trilha" title="{{ processo.gerencia or processo.gerencia_origem or '-' }}">
  {% for ger in trilha_gerencias %}
- <span class="gerencia-node">{{ ger|trim }}</span>
+ <span class="gerencia-node" data-gerencia="{{ ger|trim|upper }}">{{ ger|trim }}</span>
  {% endfor %}
  </div>
   </td>
