@@ -2238,6 +2238,8 @@ def contexto_global():
     notificacoes_recentes = []
     notificacoes_nao_lidas = 0
     notificacao_unread = None
+    meus_processos_novos = 0
+    gerencia_padrao_usuario = None
     if current_user.is_authenticated and not SITE_EM_CONFIGURACAO:
         notificacoes_recentes = (
             Notificacao.query.filter_by(user_id=current_user.id)
@@ -2247,6 +2249,33 @@ def contexto_global():
         )
         notificacoes_nao_lidas = sum(1 for n in notificacoes_recentes if not n.lida)
         notificacao_unread = next((n for n in notificacoes_recentes if not n.lida), None)
+        gerencias_usuario = [
+            g for g in obter_gerencias_liberadas_usuario(current_user) if g in GERENCIAS
+        ]
+        gerencia_padrao_usuario = (
+            gerencias_usuario[0]
+            if gerencias_usuario
+            else (
+                normalizar_gerencia(current_user.gerencia_padrao or "", permitir_entrada=True)
+                or "GABINETE"
+            )
+        )
+        filtro_meus_processos = [
+            Processo.finalizado_em.is_(None),
+            Processo.assigned_to_id == current_user.id,
+        ]
+        if gerencias_usuario:
+            filtro_meus_processos.append(Processo.gerencia.in_(gerencias_usuario))
+        else:
+            filtro_meus_processos.append(Processo.gerencia == gerencia_padrao_usuario)
+        meus_processos_total = (
+            aplicar_filtro_devolvidos_gabinete(
+                db.session.query(func.count(Processo.id)).filter(*filtro_meus_processos)
+            ).scalar()
+            or 0
+        )
+        vistos = session.get("meus_processos_visto", 0)
+        meus_processos_novos = max(meus_processos_total - vistos, 0)
 
     def formatar_data_hora_brasilia(valor: Optional[object]) -> str:
         """Converte datetimes UTC/naive para horario de Brasilia antes de exibir."""
@@ -2274,6 +2303,8 @@ def contexto_global():
         "notificacoes_recentes": notificacoes_recentes,
         "notificacoes_nao_lidas": notificacoes_nao_lidas,
         "notificacao_unread": notificacao_unread,
+        "meus_processos_novos": meus_processos_novos,
+        "gerencia_padrao_usuario": gerencia_padrao_usuario,
         # Helper para uso em templates: data de entrada na gerencia
         "calcular_data_entrada_na_gerencia": data_entrada_na_gerencia,
         "formatar_data_hora_brasilia": formatar_data_hora_brasilia,
@@ -5796,6 +5827,7 @@ def gerencia(nome_gerencia):
     trilhas_saida_map = {}
     usuarios_disponiveis = []
     meus_processos_total_usuario = 0
+    gerencia_padrao_usuario = None
 
     def aplicar_filtros_processo(consulta):
         """Aplica filtros basicos informados via query string."""
@@ -6355,14 +6387,29 @@ def gerencia(nome_gerencia):
             if bool(getattr(usuario, "aparece_atribuido_sei", False))
         ]
         if current_user.is_authenticated:
-            meus_processos_total_usuario = (
-                db.session.query(func.count(Processo.id))
-                .filter(
-                    Processo.finalizado_em.is_(None),
-                    Processo.assigned_to_id == current_user.id,
-                    Processo.gerencia == gerencia_alvo,
+            gerencias_usuario = [
+                g for g in obter_gerencias_liberadas_usuario(current_user) if g in GERENCIAS
+            ]
+            gerencia_padrao_usuario = (
+                gerencias_usuario[0]
+                if gerencias_usuario
+                else (
+                    normalizar_gerencia(current_user.gerencia_padrao or "", permitir_entrada=True)
+                    or "GABINETE"
                 )
-                .scalar()
+            )
+            filtro_meus_processos = [
+                Processo.finalizado_em.is_(None),
+                Processo.assigned_to_id == current_user.id,
+            ]
+            if gerencias_usuario:
+                filtro_meus_processos.append(Processo.gerencia.in_(gerencias_usuario))
+            else:
+                filtro_meus_processos.append(Processo.gerencia == gerencia_padrao_usuario)
+            meus_processos_total_usuario = (
+                aplicar_filtro_devolvidos_gabinete(
+                    db.session.query(func.count(Processo.id)).filter(*filtro_meus_processos)
+                ).scalar()
                 or 0
             )
             if request.args.get("ack_meus_processos"):
@@ -6601,6 +6648,7 @@ def gerencia(nome_gerencia):
         historico_finalizados=historico_finalizados,
         usuarios_disponiveis=usuarios_disponiveis,
         meus_processos_total_usuario=meus_processos_total_usuario,
+        gerencia_padrao_usuario=gerencia_padrao_usuario,
         opcoes_coordenadorias=opcoes_coordenadorias,
         opcoes_equipes=opcoes_equipes,
         opcoes_equipes_por_coordenadoria=opcoes_equipes_por_coordenadoria,
@@ -7832,71 +7880,65 @@ def verificar_dados():
                 base = extrair_numero_base_sei(getattr(proc, "numero_sei", "") or "")
             return (base or f"id:{getattr(proc, 'id', '')}").strip().lower()
 
-        if any([coordenadoria, equipe, interessado, data_inicio, data_fim]) and not filtros_coluna:
-            paginacao_processos = consulta_ordenada.paginate(
-                page=pagina, per_page=por_pagina, error_out=False
+        processos_raw_all = consulta_ordenada.all()
+        grupos_por_base: Dict[str, List[Processo]] = defaultdict(list)
+        ordem_bases: List[str] = []
+        bases_vistas: Set[str] = set()
+        for proc in processos_raw_all:
+            chave_base = _chave_base_consolidada(proc)
+            grupos_por_base[chave_base].append(proc)
+            if chave_base not in bases_vistas:
+                bases_vistas.add(chave_base)
+                ordem_bases.append(chave_base)
+
+        total_bases = len(ordem_bases)
+        total_paginas = max(1, (total_bases + por_pagina - 1) // por_pagina)
+        pagina = max(1, min(pagina, total_paginas))
+        inicio = (pagina - 1) * por_pagina
+        fim = inicio + por_pagina
+        bases_pagina = ordem_bases if filtros_coluna else ordem_bases[inicio:fim]
+
+        processos_raw = []
+        for chave_base in bases_pagina:
+            grupo = sorted(
+                grupos_por_base.get(chave_base, []),
+                key=lambda p: (
+                    p.finalizado_em or datetime.min,
+                    p.atualizado_em or datetime.min,
+                ),
+                reverse=True,
             )
-            processos_raw = paginacao_processos.items
-        else:
-            processos_raw_all = consulta_ordenada.all()
-            grupos_por_base: Dict[str, List[Processo]] = defaultdict(list)
-            ordem_bases: List[str] = []
-            bases_vistas: Set[str] = set()
-            for proc in processos_raw_all:
-                chave_base = _chave_base_consolidada(proc)
-                grupos_por_base[chave_base].append(proc)
-                if chave_base not in bases_vistas:
-                    bases_vistas.add(chave_base)
-                    ordem_bases.append(chave_base)
+            processos_raw.extend(grupo)
 
-            total_bases = len(ordem_bases)
-            total_paginas = max(1, (total_bases + por_pagina - 1) // por_pagina)
-            pagina = max(1, min(pagina, total_paginas))
-            inicio = (pagina - 1) * por_pagina
-            fim = inicio + por_pagina
-            bases_pagina = ordem_bases if filtros_coluna else ordem_bases[inicio:fim]
+        class _PaginacaoConsolidada:
+            def __init__(self, page: int, per_page: int, total: int, pages: int):
+                self.page = page
+                self.per_page = per_page
+                self.total = total
+                self.pages = pages
 
-            processos_raw = []
-            for chave_base in bases_pagina:
-                grupo = sorted(
-                    grupos_por_base.get(chave_base, []),
-                    key=lambda p: (
-                        p.finalizado_em or datetime.min,
-                        p.atualizado_em or datetime.min,
-                    ),
-                    reverse=True,
-                )
-                processos_raw.extend(grupo)
+            @property
+            def has_prev(self) -> bool:
+                return self.page > 1
 
-            class _PaginacaoConsolidada:
-                def __init__(self, page: int, per_page: int, total: int, pages: int):
-                    self.page = page
-                    self.per_page = per_page
-                    self.total = total
-                    self.pages = pages
+            @property
+            def has_next(self) -> bool:
+                return self.page < self.pages
 
-                @property
-                def has_prev(self) -> bool:
-                    return self.page > 1
+            @property
+            def prev_num(self) -> int:
+                return max(1, self.page - 1)
 
-                @property
-                def has_next(self) -> bool:
-                    return self.page < self.pages
+            @property
+            def next_num(self) -> int:
+                return min(self.pages, self.page + 1)
 
-                @property
-                def prev_num(self) -> int:
-                    return max(1, self.page - 1)
-
-                @property
-                def next_num(self) -> int:
-                    return min(self.pages, self.page + 1)
-
-            paginacao_processos = _PaginacaoConsolidada(
-                page=pagina,
-                per_page=por_pagina,
-                total=total_bases,
-                pages=total_paginas,
-            )
+        paginacao_processos = _PaginacaoConsolidada(
+            page=pagina,
+            per_page=por_pagina,
+            total=total_bases,
+            pages=total_paginas,
+        )
         def _chave_exata(proc: Processo) -> tuple:
             """Suprime apenas linhas 100% idênticas; mantém variações."""
             return (
@@ -8196,37 +8238,69 @@ def verificar_dados():
                 data_fim,
             ]
         )
+        # Processos finalizados: exibe todos os retornos juntos (lado a lado por numero base),
+        # mesmo quando os filtros do painel principal estao ativos.
+        processos_por_base: Dict[str, List[Dict[str, object]]] = defaultdict(list)
+        for registro in registros_finalizados_todos:
+            chave_base = (
+                (registro.get("numero_sei_base") or registro.get("numero_sei") or "").strip().lower()
+                or f"id:{registro.get('id')}"
+            )
+            processos_por_base[chave_base].append(registro)
 
-        if filtros_consolidado_ativos:
-            for registro in sorted(
-                registros_finalizados_todos,
-                key=_data_final_registro,
+        bases_ordenadas = sorted(
+            processos_por_base.keys(),
+            key=lambda base: max(
+                (_data_final_registro(r) for r in processos_por_base[base]),
+                default=datetime.min,
+            ),
+            reverse=True,
+        )
+        for base in bases_ordenadas:
+            grupo = sorted(processos_por_base[base], key=_data_final_registro, reverse=True)
+            grupo_total = len(grupo)
+            principal = dict(grupo[0]) if grupo else {}
+            principal["grupo_retorno"] = grupo_total > 1
+            principal["grupo_retorno_total"] = grupo_total
+
+            pares_datas: List[Dict[str, object]] = []
+            vistos_pares: Set[str] = set()
+            cores_pares = (
+                "pareado-1",
+                "pareado-2",
+                "pareado-3",
+                "pareado-4",
+                "pareado-5",
+                "pareado-6",
+            )
+            grupo_por_entrada = sorted(
+                grupo,
+                key=lambda r: (
+                    (r.get("data_entrada_gerencia") or r.get("data_entrada"))
+                    if isinstance((r.get("data_entrada_gerencia") or r.get("data_entrada")), date)
+                    else datetime.min.date()
+                ),
                 reverse=True,
-            ):
-                principal = dict(registro)
-                data_entrada_item = principal.get("data_entrada_gerencia") or principal.get("data_entrada")
+            )
+            for idx_par, item in enumerate(grupo_por_entrada):
+                data_entrada_item = item.get("data_entrada_gerencia") or item.get("data_entrada")
                 if isinstance(data_entrada_item, datetime):
                     data_entrada_item = data_entrada_item.date()
-                data_final_item = principal.get("finalizado_em")
+                data_final_item = item.get("finalizado_em")
                 if isinstance(data_final_item, str):
                     data_final_item = _parse_iso_datetime(data_final_item)
-                if isinstance(data_final_item, date) and not isinstance(
-                    data_final_item, datetime
-                ):
-                    data_final_item = datetime.combine(
-                        data_final_item, datetime.min.time()
-                    )
-                principal["grupo_retorno"] = False
-                principal["grupo_retorno_total"] = 1
-                principal["datas_entrada"] = (
-                    [data_entrada_item] if isinstance(data_entrada_item, date) else []
+                if isinstance(data_final_item, date) and not isinstance(data_final_item, datetime):
+                    data_final_item = datetime.combine(data_final_item, datetime.min.time())
+                chave_par = (
+                    f"{data_entrada_item.isoformat() if isinstance(data_entrada_item, date) else '-'}::"
+                    f"{data_final_item.isoformat() if isinstance(data_final_item, datetime) else '-'}::"
+                    f"{(item.get('gerencia_origem') or item.get('gerencia') or '').strip().lower()}"
                 )
-                principal["data_entrada_display"] = (
-                    data_entrada_item.strftime("%d/%m/%Y")
-                    if isinstance(data_entrada_item, date)
-                    else "-"
-                )
-                principal["pares_datas"] = [
+                if chave_par in vistos_pares:
+                    continue
+                vistos_pares.add(chave_par)
+                cor = cores_pares[idx_par % len(cores_pares)]
+                pares_datas.append(
                     {
                         "entrada": data_entrada_item,
                         "entrada_str": (
@@ -8240,131 +8314,49 @@ def verificar_dados():
                             if isinstance(data_final_item, datetime)
                             else "-"
                         ),
-                        "cor": "pareado-1",
+                        "cor": cor,
                     }
-                ]
-                processos.append(principal)
-        else:
-            # Processos finalizados: exibe todos os retornos juntos (lado a lado por numero base).
-            processos_por_base: Dict[str, List[Dict[str, object]]] = defaultdict(list)
-            for registro in registros_finalizados_todos:
-                chave_base = (
-                    (registro.get("numero_sei_base") or registro.get("numero_sei") or "").strip().lower()
-                    or f"id:{registro.get('id')}"
                 )
-                processos_por_base[chave_base].append(registro)
 
-            bases_ordenadas = sorted(
-                processos_por_base.keys(),
-                key=lambda base: max(
-                    (_data_final_registro(r) for r in processos_por_base[base]),
-                    default=datetime.min,
-                ),
-                reverse=True,
+            datas_entrada_unicas: List[date] = []
+            vistos_datas_entrada: Set[str] = set()
+            for item in grupo:
+                data_item = item.get("data_entrada_gerencia") or item.get("data_entrada")
+                if isinstance(data_item, datetime):
+                    data_item = data_item.date()
+                if not isinstance(data_item, date):
+                    continue
+                chave_data = data_item.isoformat()
+                if chave_data in vistos_datas_entrada:
+                    continue
+                vistos_datas_entrada.add(chave_data)
+                datas_entrada_unicas.append(data_item)
+            datas_entrada_unicas.sort(reverse=True)
+            principal["datas_entrada"] = datas_entrada_unicas
+            principal["data_entrada_display"] = (
+                " | ".join(d.strftime("%d/%m/%Y") for d in datas_entrada_unicas)
+                if datas_entrada_unicas
+                else "-"
             )
-            for base in bases_ordenadas:
-                grupo = sorted(processos_por_base[base], key=_data_final_registro, reverse=True)
-                grupo_total = len(grupo)
-                principal = dict(grupo[0]) if grupo else {}
-                principal["grupo_retorno"] = grupo_total > 1
-                principal["grupo_retorno_total"] = grupo_total
+            principal["pares_datas"] = pares_datas
 
-                # Consolidado: uma linha por processo base, com pares entrada/finalizacao por demanda.
-                pares_datas: List[Dict[str, object]] = []
-                vistos_pares: Set[str] = set()
-                cores_pares = (
-                    "pareado-1",
-                    "pareado-2",
-                    "pareado-3",
-                    "pareado-4",
-                    "pareado-5",
-                    "pareado-6",
-                )
-                grupo_por_entrada = sorted(
-                    grupo,
-                    key=lambda r: (
-                        (r.get("data_entrada_gerencia") or r.get("data_entrada"))
-                        if isinstance((r.get("data_entrada_gerencia") or r.get("data_entrada")), date)
-                        else datetime.min.date()
-                    ),
-                    reverse=True,
-                )
-                for idx_par, item in enumerate(grupo_por_entrada):
-                    data_entrada_item = item.get("data_entrada_gerencia") or item.get("data_entrada")
-                    if isinstance(data_entrada_item, datetime):
-                        data_entrada_item = data_entrada_item.date()
-                    data_final_item = item.get("finalizado_em")
-                    if isinstance(data_final_item, str):
-                        data_final_item = _parse_iso_datetime(data_final_item)
-                    if isinstance(data_final_item, date) and not isinstance(data_final_item, datetime):
-                        data_final_item = datetime.combine(data_final_item, datetime.min.time())
-                    chave_par = (
-                        f"{data_entrada_item.isoformat() if isinstance(data_entrada_item, date) else '-'}::"
-                        f"{data_final_item.isoformat() if isinstance(data_final_item, datetime) else '-'}::"
-                        f"{(item.get('gerencia_origem') or item.get('gerencia') or '').strip().lower()}"
-                    )
-                    if chave_par in vistos_pares:
+            gerencias_group: List[str] = []
+            for item in grupo:
+                valor = (item.get("gerencia") or item.get("gerencia_origem") or "").strip()
+                if not valor:
+                    continue
+                partes = [p.strip() for p in valor.split("->") if p.strip()]
+                if not partes:
+                    partes = [valor]
+                for parte in partes:
+                    if _normalizar_str(parte) in {"saida", "finalizado", "entrada", "cadastro"}:
                         continue
-                    vistos_pares.add(chave_par)
-                    cor = cores_pares[idx_par % len(cores_pares)]
-                    pares_datas.append(
-                        {
-                            "entrada": data_entrada_item,
-                            "entrada_str": (
-                                data_entrada_item.strftime("%d/%m/%Y")
-                                if isinstance(data_entrada_item, date)
-                                else "-"
-                            ),
-                            "finalizacao": data_final_item,
-                            "finalizacao_str": (
-                                data_final_item.strftime("%d/%m/%Y")
-                                if isinstance(data_final_item, datetime)
-                                else "-"
-                            ),
-                            "cor": cor,
-                        }
-                    )
+                    gerencias_group.append(parte)
+            gerencias_group = _ordenar_gerencias(gerencias_group)
+            if gerencias_group:
+                principal["gerencia"] = " -> ".join(gerencias_group)
 
-                datas_entrada_unicas: List[date] = []
-                vistos_datas_entrada: Set[str] = set()
-                for item in grupo:
-                    data_item = item.get("data_entrada_gerencia") or item.get("data_entrada")
-                    if isinstance(data_item, datetime):
-                        data_item = data_item.date()
-                    if not isinstance(data_item, date):
-                        continue
-                    chave_data = data_item.isoformat()
-                    if chave_data in vistos_datas_entrada:
-                        continue
-                    vistos_datas_entrada.add(chave_data)
-                    datas_entrada_unicas.append(data_item)
-                datas_entrada_unicas.sort(reverse=True)
-                principal["datas_entrada"] = datas_entrada_unicas
-                principal["data_entrada_display"] = (
-                    " | ".join(d.strftime("%d/%m/%Y") for d in datas_entrada_unicas)
-                    if datas_entrada_unicas
-                    else "-"
-                )
-                principal["pares_datas"] = pares_datas
-
-                # Gerencias envolvidas consolidadas do grupo inteiro.
-                gerencias_group: List[str] = []
-                for item in grupo:
-                    valor = (item.get("gerencia") or item.get("gerencia_origem") or "").strip()
-                    if not valor:
-                        continue
-                    partes = [p.strip() for p in valor.split("->") if p.strip()]
-                    if not partes:
-                        partes = [valor]
-                    for parte in partes:
-                        if _normalizar_str(parte) in {"saida", "finalizado", "entrada", "cadastro"}:
-                            continue
-                        gerencias_group.append(parte)
-                gerencias_group = _ordenar_gerencias(gerencias_group)
-                if gerencias_group:
-                    principal["gerencia"] = " -> ".join(gerencias_group)
-
-                processos.append(principal)
+            processos.append(principal)
 
         def _valores_coluna_processo_finalizado(
             registro: Dict[str, object], slug_coluna: str
@@ -8522,7 +8514,7 @@ def verificar_dados():
             int(total_filtrado)
             if filtros_coluna
             else (
-                int(total_finalizados_consulta)
+                int(paginacao_processos.total if paginacao_processos is not None else len(processos))
                 if filtros_consolidado_ativos
                 else int(total_finalizados_consolidados or total_finalizados_consulta)
             )
