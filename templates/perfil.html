@@ -51,7 +51,7 @@
  <option value="" {% if not current_user.gerencia_padrao %}selected{% endif %}>Sem gerência</option>
  {% endif %}
  {% for g in gerencias %}
- <option value="{{ g }}" {% if current_user.gerencia_padrao == g %}selected{% endif %}>{{ g }}</option>
+ <option value="{{ g }}" {% if current_user.gerencia_padrao == g %}selected{% endif %}>{{ nome_exibicao_gerencia(g) }}</option>
  {% endfor %}
  </select>
  </div>

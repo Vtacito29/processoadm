@@ -1,4 +1,4 @@
-﻿<!-- Arquivo: templates/login.html | Objetivo: autenticação e gestão básica de usuários -->
+<!-- Arquivo: templates/login.html | Objetivo: autenticação e gestão básica de usuários -->
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -87,7 +87,7 @@
  <select class="form-select" name="gerencia_padrao" id="cadastro-gerencia">
  <option value="">Selecione</option>
  {% for g in gerencias %}
- <option value="{{ g }}">{{ g }}</option>
+ <option value="{{ g }}">{{ nome_exibicao_gerencia(g) }}</option>
  {% endfor %}
  </select>
  {% endif %}
@@ -138,7 +138,7 @@ Selecione uma sugestão quando o nome já existir na lista. As sugestões exibid
  <label class="form-label">Gerências liberadas</label>
  <select class="form-select" name="gerencias_liberadas" multiple required size="6">
  {% for g in gerencias %}
- <option value="{{ g }}">{{ g }}</option>
+ <option value="{{ g }}">{{ nome_exibicao_gerencia(g) }}</option>
  {% endfor %}
  </select>
  <div class="form-text">Use Ctrl (ou Command no Mac) para selecionar uma ou mais gerências.</div>
@@ -238,7 +238,7 @@ Selecione uma sugestão quando o nome já existir na lista. As sugestões exibid
  <select class="form-select form-select-sm" name="gerencia_padrao">
  <option value="">Selecione</option>
  {% for g in gerencias %}
- <option value="{{ g }}" {% if g == usuario.gerencia_padrao %}selected{% endif %}>{{ g }}</option>
+ <option value="{{ g }}" {% if g == usuario.gerencia_padrao %}selected{% endif %}>{{ nome_exibicao_gerencia(g) }}</option>
  {% endfor %}
  </select>
  </div>
@@ -246,7 +246,7 @@ Selecione uma sugestão quando o nome já existir na lista. As sugestões exibid
  <label class="form-label small">Gerências liberadas</label>
  <select class="form-select form-select-sm" name="gerencias_liberadas" multiple required size="6">
  {% for g in gerencias %}
- <option value="{{ g }}" {% if g in usuario.gerencias %}selected{% endif %}>{{ g }}</option>
+ <option value="{{ g }}" {% if g in usuario.gerencias %}selected{% endif %}>{{ nome_exibicao_gerencia(g) }}</option>
  {% endfor %}
  </select>
  </div>

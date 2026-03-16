@@ -51,7 +51,7 @@
  <div class="fw-semibold">{{ current_user.nome or current_user.username }}</div>
  <div class="text-muted">Login: {{ current_user.username }}</div>
  <div class="text-muted">{{ current_user.email or '-' }}</div>
- <div class="text-muted">Gerência: {{ current_user.gerencia_padrao or '-' }}</div>
+ <div class="text-muted">Gerência: {{ nome_exibicao_gerencia(current_user.gerencia_padrao) or '-' }}</div>
  <div class="text-muted">
  Perfil:
  {% if current_user.is_admin %}Assessoria{% elif current_user.acesso_total %}Acesso total{% elif current_user.is_gerente %}Gerente{% else %}Usuário{% endif %}
@@ -200,7 +200,7 @@
  <label class="form-label">Gerências destino</label>
  {% if modo_edicao and not reenviar_devolvido %}
  <select class="form-select" disabled>
- <option selected>{{ processo.gerencia }}</option>
+ <option selected>{{ nome_exibicao_gerencia(processo.gerencia) }}</option>
  </select>
  {% else %}
  <div class="gerencia-picker {% if 'gerencias' in invalid %}is-invalid{% endif %}" data-selecionadas="{{ gerencias_sel|join(',') }}" data-invalid="{{ '1' if 'gerencias' in invalid else '' }}">
@@ -215,7 +215,7 @@
  {% for g in lista_gerencias_cadastro %}
  <button type="button" class="gerencia-chip" data-value="{{ g }}" aria-pressed="false">
  <span class="chip-order" aria-hidden="true"></span>
- <span class="chip-label">{{ g }}</span>
+ <span class="chip-label">{{ nome_exibicao_gerencia(g) }}</span>
  </button>
  {% endfor %}
  </div>
@@ -234,7 +234,7 @@
  <noscript>
  <select class="form-select mt-2" name="gerencias" multiple required size="6">
   {% for g in lista_gerencias_cadastro %}
- <option value="{{ g }}" {% if g in gerencias_sel %}selected{% endif %}>{{ g }}</option>
+ <option value="{{ g }}" {% if g in gerencias_sel %}selected{% endif %}>{{ nome_exibicao_gerencia(g) }}</option>
  {% endfor %}
  </select>
  <div class="form-text">Segure Ctrl/Command para selecionar mais de uma gerência. A primeira selecionada será a gerência inicial.</div>
@@ -480,11 +480,11 @@
  </div>
  <div class="col-md-4">
  <div class="text-muted small">Gerência</div>
- <div class="fw-semibold">{{ processo.gerencia or '-' }}</div>
+ <div class="fw-semibold">{{ nome_exibicao_gerencia(processo.gerencia) or '-' }}</div>
  </div>
  <div class="col-md-4">
  <div class="text-muted small">Destino SAÍDA</div>
- <div class="fw-semibold">{{ processo.tramitado_para or '-' }}</div>
+ <div class="fw-semibold">{{ nome_exibicao_gerencia(processo.tramitado_para) or '-' }}</div>
  </div>
  <div class="col-md-6">
  <div class="text-muted small">Assunto</div>
@@ -547,7 +547,7 @@
  <tbody>
  {% for item in demandas_relacionadas %}
  <tr>
- <td class="fw-semibold">{{ item.gerencia or "-" }}</td>
+ <td class="fw-semibold">{{ nome_exibicao_gerencia(item.gerencia) or "-" }}</td>
  <td>{{ item.numero_sei_base or item.numero_sei or "-" }}</td>
  <td>{{ item.status or "-" }}</td>
  <td>{{ item.coordenadoria or "-" }}</td>
@@ -588,7 +588,7 @@
  </div>
  <div class="row g-3">
  <div class="col-md-4">
- <label class="form-label">Data de entrada na {{ processo.gerencia }}</label>
+ <label class="form-label">Data de entrada na {{ nome_exibicao_gerencia(processo.gerencia) }}</label>
  <input class="form-control" type="date" value="{{ data_entrada_gerencia_atual|date_input }}" readonly>
  </div>
  <div class="col-12">
@@ -791,7 +791,7 @@
  <div class="select-dropdown" data-options-id="lista_devolver_para"></div>
  <datalist id="lista_devolver_para">
  {% for g in GERENCIAS %}
- {% if g != 'SAIDA' %}<option value="{{ g }}"></option>{% endif %}
+ {% if g != 'SAIDA' %}<option value="{{ nome_exibicao_gerencia(g) }}"></option>{% endif %}
  {% endfor %}
  </datalist>
  </div>

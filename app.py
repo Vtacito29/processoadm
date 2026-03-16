@@ -159,7 +159,7 @@ GERENCIA_PADRAO = "GABINETE"
 GERENCIAS_REVISAO = ["SAIDA"]
 GERENCIAS = [ger for ger in GERENCIAS_CANONICAS if ger not in {"ENTRADA", "SAIDA"}]
 GERENCIAS_DESTINOS = GERENCIAS + GERENCIAS_REVISAO
-GERENCIA_ALIAS_GABINETE = "Assessoria Técnica"
+GERENCIA_ALIAS_GABINETE = "ASSESSORIA"
 GERENCIAS_TRAMITE_EXIBICAO = (
     ["SAIDA"]
     + [ger for ger in GERENCIAS if ger != "GABINETE"]
@@ -2299,6 +2299,7 @@ def contexto_global():
         "GERENCIAS_TRAMITE_EXIBICAO": GERENCIAS_TRAMITE_EXIBICAO,
         "GERENCIA_ALIAS_GABINETE": GERENCIA_ALIAS_GABINETE,
         "GERENCIA_PADRAO": GERENCIA_PADRAO,
+        "nome_exibicao_gerencia": nome_exibicao_gerencia,
         "SITE_EM_CONFIGURACAO": SITE_EM_CONFIGURACAO,
         "notificacoes_recentes": notificacoes_recentes,
         "notificacoes_nao_lidas": notificacoes_nao_lidas,
@@ -2885,6 +2886,34 @@ def normalizar_coluna_importacao(valor: str) -> str:
     return re.sub(r"[^A-Z0-9]+", " ", base).strip()
 
 
+def nome_exibicao_gerencia(valor: Optional[object]) -> Optional[str]:
+    """Retorna o nome publico da gerencia sem alterar o codigo interno."""
+    if valor is None:
+        return None
+    texto = str(valor)
+    if not texto.strip():
+        return texto
+    partes = [parte.strip() for parte in texto.split("->")]
+    partes_formatadas = []
+    for parte in partes:
+        if not parte:
+            continue
+        parte_upper = (
+            unicodedata.normalize("NFKD", parte)
+            .encode("ascii", "ignore")
+            .decode("ascii")
+            .strip()
+            .upper()
+        )
+        if parte_upper in {"GABINETE", "ASSESSORIA", "ASSESSORIA TECNICA", "ACESSORIA TECNICA"}:
+            partes_formatadas.append(GERENCIA_ALIAS_GABINETE)
+        else:
+            partes_formatadas.append(parte)
+    if "->" in texto:
+        return " -> ".join(partes_formatadas)
+    return partes_formatadas[0] if partes_formatadas else texto
+
+
 def _limpar_cache_importacao() -> None:
     """Remove arquivos temporarios antigos de importacao."""
     if not IMPORT_CACHE:
@@ -3324,7 +3353,11 @@ def normalizar_gerencia(valor, *, permitir_entrada: bool = False) -> Optional[st
     )
     ascii_nome = " ".join(ascii_nome.split())
 
-    if "ACESSORIA TECNICA" in f" {ascii_nome} " or "ASSESSORIA TECNICA" in f" {ascii_nome} ":
+    if (
+        "ACESSORIA TECNICA" in f" {ascii_nome} "
+        or "ASSESSORIA TECNICA" in f" {ascii_nome} "
+        or ascii_nome == "ASSESSORIA"
+    ):
         return "GABINETE"
     if ascii_nome == "ENTRADA":
         return "ENTRADA" if permitir_entrada else GERENCIA_PADRAO
@@ -3971,7 +4004,7 @@ def montar_texto_evento_historico(
     if tipo == "devolucao_gabinete":
         acao = _flexao_acao(termo, "devolvido", "devolvida")
         return (
-            f"{termo} {acao} para GABINETE por {usuario}. Motivo: {motivo or '-'}."
+            f"{termo} {acao} para {GERENCIA_ALIAS_GABINETE} por {usuario}. Motivo: {motivo or '-'}."
         )
 
     acao = _flexao_acao(termo, "movido", "movida")
@@ -10735,7 +10768,7 @@ def mover_processo(processo_id: int):
 @app.route("/processo/<int:processo_id>/devolver-gabinete", methods=["POST"])
 @login_required
 def devolver_para_gabinete(processo_id: int):
-    """Devolve demanda para triagem do gabinete (aba de devolvidos)."""
+    """Devolve demanda para triagem da Assessoria (aba de devolvidos)."""
     if SITE_EM_CONFIGURACAO:
         flash("Devolucao indisponivel enquanto o sistema estiver em configuracao.", "info")
         return redirect(url_for("index"))
@@ -10759,7 +10792,7 @@ def devolver_para_gabinete(processo_id: int):
     dados_extra["devolucao_em"] = datetime.utcnow().isoformat()
     processo.dados_extra = dados_extra
     processo.gerencia = "GABINETE"
-    processo.status = "Devolvido ao Gabinete"
+    processo.status = f"Devolvido a {GERENCIA_ALIAS_GABINETE}"
     processo.assigned_to = None
     processo.responsavel_equipe = None
     processo.tramitado_para = None
@@ -10776,9 +10809,9 @@ def devolver_para_gabinete(processo_id: int):
     )
     db.session.commit()
     if origem == "GABINETE":
-        flash("Processo movido para a aba de devolvidos do Gabinete.", "success")
+        flash(f"Processo movido para a aba de devolvidos da {GERENCIA_ALIAS_GABINETE}.", "success")
     else:
-        flash("Processo devolvido para o Gabinete (aba de devolvidos).", "success")
+        flash(f"Processo devolvido para a {GERENCIA_ALIAS_GABINETE} (aba de devolvidos).", "success")
     return redirect(url_for("gerencia", nome_gerencia=origem or processo.gerencia, aba="interacoes"))
 
 
@@ -10792,11 +10825,11 @@ def reenviar_processo_devolvido(processo_id: int):
 
     processo = Processo.query.get_or_404(processo_id)
     if not usuario_tem_liberacao_gerencia("GABINETE", usuario=current_user):
-        flash("Apenas usuarios do GABINETE podem tratar devolvidos.", "warning")
+        flash(f"Apenas usuarios da {GERENCIA_ALIAS_GABINETE} podem tratar devolvidos.", "warning")
         return redirect(url_for("gerencia", nome_gerencia="GABINETE", aba="interacoes"))
 
     if not usuario_pode_editar_gerencia("GABINETE"):
-        flash("Sem permissão para tratar devolvidos do gabinete.", "warning")
+        flash(f"Sem permissão para tratar devolvidos da {GERENCIA_ALIAS_GABINETE}.", "warning")
         return redirect(url_for("gerencia", nome_gerencia="GABINETE", aba="devolvidos"))
 
     dados_extra = dict(processo.dados_extra or {})
@@ -11030,18 +11063,18 @@ def reenviar_processo_devolvido(processo_id: int):
 @app.route("/processo/<int:processo_id>/devolvido/acao", methods=["POST"])
 @login_required
 def acao_processo_devolvido(processo_id: int):
-    """Permite excluir ou reenviar processo devolvido no gabinete."""
+    """Permite excluir ou reenviar processo devolvido na Assessoria."""
     if SITE_EM_CONFIGURACAO:
         flash("Acao indisponivel enquanto o sistema estiver em configuracao.", "info")
         return redirect(url_for("index"))
 
     processo = Processo.query.get_or_404(processo_id)
     if not usuario_tem_liberacao_gerencia("GABINETE", usuario=current_user):
-        flash("Apenas usuarios do GABINETE podem tratar devolvidos.", "warning")
+        flash(f"Apenas usuarios da {GERENCIA_ALIAS_GABINETE} podem tratar devolvidos.", "warning")
         return redirect(url_for("gerencia", nome_gerencia="GABINETE", aba="interacoes"))
 
     if not usuario_pode_editar_gerencia("GABINETE"):
-        flash("Sem permissão para tratar devolvidos do gabinete.", "warning")
+        flash(f"Sem permissão para tratar devolvidos da {GERENCIA_ALIAS_GABINETE}.", "warning")
         return redirect(url_for("gerencia", nome_gerencia="GABINETE", aba="devolvidos"))
 
     dados_extra = dict(processo.dados_extra or {})
@@ -11731,7 +11764,7 @@ def _responder_pergunta_geral_assistente(pergunta: str) -> Optional[str]:
     if "passou por" in texto or "passaram por" in texto:
         if not gerencia:
             return (
-                "Qual gerencia voce quer analisar? Exemplos: GABINETE, GEPLAN, GEENG."
+                f"Qual gerencia voce quer analisar? Exemplos: {GERENCIA_ALIAS_GABINETE}, GEPLAN, GEENG."
             )
         consulta = Movimentacao.query.filter(
             or_(

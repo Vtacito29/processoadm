@@ -42,7 +42,7 @@
  <div class="fw-semibold">{{ current_user.nome or current_user.username }}</div>
  <div class="text-muted">Login: {{ current_user.username }}</div>
  <div class="text-muted">{{ current_user.email or '-' }}</div>
- <div class="text-muted">Gerência: {{ current_user.gerencia_padrao or '-' }}</div>
+ <div class="text-muted">Gerência: {{ nome_exibicao_gerencia(current_user.gerencia_padrao) or '-' }}</div>
  <div class="text-muted">
  Perfil:
  {% if current_user.is_admin %}Assessoria{% elif current_user.acesso_total %}Acesso total{% elif current_user.is_gerente %}Gerente{% else %}Usuário{% endif %}

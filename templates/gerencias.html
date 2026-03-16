@@ -1,4 +1,4 @@
-﻿<!-- Arquivo: templates/gerencias.html | Objetivo: painel principal por gerencia (ativos/finalizados/devolvidos) -->
+<!-- Arquivo: templates/gerencias.html | Objetivo: painel principal por gerencia (ativos/finalizados/devolvidos) -->
 <!DOCTYPE html>
 
 
@@ -11,7 +11,7 @@
  <meta charset="UTF-8">
 
 
- <title>Painel de Processos - {{ gerencia }}</title>
+ <title>Painel de Processos - {{ nome_exibicao_gerencia(gerencia) }}</title>
 
 
  <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -100,7 +100,7 @@
  <div class="fw-semibold">{{ current_user.nome or current_user.username }}</div>
  <div class="text-muted">Login: {{ current_user.username }}</div>
  <div class="text-muted">{{ current_user.email or '-' }}</div>
- <div class="text-muted">Gerência: {{ current_user.gerencia_padrao or '-' }}</div>
+ <div class="text-muted">Gerência: {{ nome_exibicao_gerencia(current_user.gerencia_padrao) or '-' }}</div>
  <div class="text-muted">
  Perfil:
  {% if current_user.is_admin %}Assessoria{% elif current_user.acesso_total %}Acesso total{% elif current_user.is_gerente %}Gerente{% else %}Usuário{% endif %}
@@ -209,7 +209,7 @@
  <div>
 
 
- <h1 class="h4 mb-1">Painel de Processos - {{ gerencia }}</h1>
+ <h1 class="h4 mb-1">Painel de Processos - {{ nome_exibicao_gerencia(gerencia) }}</h1>
 
 
  <p class="text-muted mb-0">Visualize processos ativos e finalizados desta gerência.</p>
@@ -525,7 +525,7 @@
  {% else %}
 
 
- <th data-col-key="entrada_gabinete"><div class="resizable">Data de entrada no GABINETE</div></th>
+          <th data-col-key="entrada_gabinete"><div class="resizable">Data de entrada na ASSESSORIA</div></th>
 
 
  {% endif %}
@@ -612,7 +612,7 @@
  </a>
  <form class="action-item-form form-devolver-gabinete" method="post" action="{{ url_for('devolver_para_gabinete', processo_id=processo.id) }}">
  <input type="hidden" name="motivo" value="">
- <button class="icon-btn danger btn-devolver-gabinete" type="submit" data-número="{{ numero_display }}" aria-label="Devolver o processo {{ numero_display }} para a aba de devolvidos" title="Devolver para o Gabinete">
+                        <button class="icon-btn danger btn-devolver-gabinete" type="submit" data-número="{{ numero_display }}" aria-label="Devolver o processo {{ numero_display }} para a aba de devolvidos" title="Devolver para a ASSESSORIA">
  <i class="bi bi-arrow-counterclockwise"></i>
  </button>
  </form>
@@ -654,18 +654,18 @@
  {% if gerencia == 'SAIDA' %}
  {% if gerencias_env %}
  {% for ger in gerencias_env %}
- <span class="gerencia-chip{% if ger in gerencias_abertas %} aberta{% endif %}"{% if ger in gerencias_abertas %} title="{{ tooltip_demanda_aberta }}"{% endif %}>{{ ger }}</span>
+ <span class="gerencia-chip{% if ger in gerencias_abertas %} aberta{% endif %}"{% if ger in gerencias_abertas %} title="{{ tooltip_demanda_aberta }}"{% endif %}>{{ nome_exibicao_gerencia(ger) }}</span>
  {% endfor %}
  {% else %}
- <span class="gerencia-chip">{{ origens_saida.get(processo.id) or processo.gerencia }}</span>
+ <span class="gerencia-chip">{{ nome_exibicao_gerencia(origens_saida.get(processo.id) or processo.gerencia) }}</span>
  {% endif %}
  {% else %}
  {% if gerencias_env %}
  {% for ger in gerencias_env %}
- <span class="gerencia-chip{% if ger in gerencias_abertas %} aberta{% endif %}">{{ ger }}</span>
+ <span class="gerencia-chip{% if ger in gerencias_abertas %} aberta{% endif %}">{{ nome_exibicao_gerencia(ger) }}</span>
  {% endfor %}
  {% else %}
- <span class="gerencia-chip">{{ processo.gerencia }}</span>
+ <span class="gerencia-chip">{{ nome_exibicao_gerencia(processo.gerencia) }}</span>
  {% endif %}
  {% endif %}
  </div>
@@ -1056,7 +1056,7 @@
 <th data-col-key="status" data-col-default-hidden="1" style="display:none;"><div class="resizable">Status</div></th>
 <th data-col-key="responsavel_adm" data-col-default-hidden="1" style="display:none;"><div class="resizable">Responsável Adm</div></th>
 <th data-col-key="classificacao_institucional" data-col-default-hidden="1" style="display:none;"><div class="resizable">Classificação institucional</div></th>
-<th data-col-key="entrada_gabinete" data-col-default-hidden="1" style="display:none;"><div class="resizable">Data entrada GABINETE</div></th>
+<th data-col-key="entrada_gabinete" data-col-default-hidden="1" style="display:none;"><div class="resizable">Data entrada ASSESSORIA</div></th>
 <th data-col-key="descricao_melhorada" data-col-default-hidden="1" style="display:none;"><div class="resizable">Descrição melhorada</div></th>
 <th data-col-key="coordenadoria" data-col-default-hidden="1" style="display:none;"><div class="resizable">Coordenadoria</div></th>
 <th data-col-key="equipe_area" data-col-default-hidden="1" style="display:none;"><div class="resizable">Equipe / Área</div></th>
@@ -1111,9 +1111,9 @@
 <td style="display:none;"><div class="text-truncate process-assunto" title="{{ snapshot.get('concessionaria') or processo.concessionaria or '-' }}">{{ snapshot.get('concessionaria') or processo.concessionaria or "-" }}</div></td>
 <td style="display:none;">
 {% if processo.gerencia == 'SAIDA' and gerencia != 'SAIDA' %}
-{{ gerencia }}
+{{ nome_exibicao_gerencia(gerencia) }}
 {% else %}
-{{ processo.gerencia or "-" }}
+{{ nome_exibicao_gerencia(processo.gerencia) or "-" }}
 {% endif %}
 </td>
 <td style="display:none;">{{ snapshot_status or processo.status or "Finalizado" }}</td>
@@ -1220,9 +1220,9 @@
  <span class="resumo-label">Gerência</span>
  <span class="resumo-value">
  {% if processo.gerencia == 'SAIDA' and gerencia != 'SAIDA' %}
- {{ gerencia }}
+ {{ nome_exibicao_gerencia(gerencia) }}
  {% else %}
- {{ processo.gerencia or "-" }}
+ {{ nome_exibicao_gerencia(processo.gerencia) or "-" }}
  {% endif %}
  </span>
  </div>
@@ -1253,7 +1253,7 @@
  </div>
  <div class="col-md-6 col-lg-4">
  <div class="resumo-box resumo-critico">
- <span class="resumo-label">Data de entrada no GABINETE</span>
+                  <span class="resumo-label">Data de entrada na ASSESSORIA</span>
  <span class="resumo-value">{{ calcular_data_entrada_na_gerencia(processo, 'GABINETE')|date_br if calcular_data_entrada_na_gerencia(processo, 'GABINETE') else "-" }}</span>
  </div>
  </div>
@@ -1512,7 +1512,7 @@
  </tr>
  {% else %}
  <tr>
- <td colspan="7" class="text-center text-muted py-4">Nenhum processo devolvido no Gabinete.</td>
+                <td colspan="7" class="text-center text-muted py-4">Nenhum processo devolvido na ASSESSORIA.</td>
  </tr>
  {% endfor %}
  </tbody>
@@ -1830,7 +1830,7 @@
  <div class="modal-content">
  <div class="modal-header">
  <div>
- <h5 class="modal-title">Devolver para o Gabinete</h5>
+        <h5 class="modal-title">Devolver para a ASSESSORIA</h5>
  <div class="text-muted small" id="textoDevolverSelecionado">Informe o motivo da devolução.</div>
  </div>
  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
