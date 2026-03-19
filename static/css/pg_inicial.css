@@ -717,40 +717,6 @@ footer a:hover {
     color: var(--cor-primaria-suave);
 }
 
-/* =========================== Assistente (chat) =========================== */
-.chat-panel {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 12px;
-    overflow-y: auto;
-    max-height: 60vh;
-}
-.chat-message {
-    display: flex;
-    margin-bottom: 10px;
-}
-.chat-message .chat-text {
-    padding: 10px 12px;
-    border-radius: 12px;
-    max-width: 100%;
-    background: #e2e8f0;
-    color: #0f172a;
-}
-.chat-message.user {
-    justify-content: flex-end;
-}
-.chat-message.user .chat-text {
-    background: #2563eb;
-    color: #fff;
-}
-.chat-message.bot .chat-text {
-    background: #e2e8f0;
-}
-.chat-form textarea {
-    resize: vertical;
-}
-
 /* =========================== Ajustes responsivos =========================== */
 @media (max-width: 991px) {
     .hero-banner {

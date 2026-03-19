@@ -74,6 +74,7 @@ IMPORT_COMMIT_BATCH_DEFAULT = 250
 IMPORT_TEMP_DB_MAX_MB = 2
 
 
+# Campos aceitos durante importacao/exportacao e usados tambem para sugerir mapeamento.
 def _env_int(nome: str, padrao: int) -> int:
     """Le inteiro de variavel de ambiente com fallback seguro."""
     valor = os.environ.get(nome)
@@ -900,6 +901,8 @@ def _gerar_senha_temporaria(nome: str, data_base: Optional[datetime] = None) -> 
 
 
 # === Ilustracoes por gerencia (assets estaticos) ===
+# Esse bloco isola a descoberta de arquivos para que a UI consiga trocar imagens
+# sem alterar as telas ou hardcode em templates.
 def _listar_ilustracoes_disponiveis() -> Dict[str, str]:
     """Monta um dicionario slug->caminho relativo para as imagens existentes."""
     ilustracoes = {}
@@ -948,19 +951,6 @@ def buscar_usuario_por_login(identificador: str) -> Optional["Usuario"]:
             Usuario.query.filter(func.lower(Usuario.email) == identificador).first()
         )
     return usuario
-
-
-def gerar_username_unico(nome: str, email: str) -> str:
-    """Gera um username unico a partir do nome ou email."""
-    base = _slugificar(nome) or _slugificar(email.split("@")[0] if email else "")
-    if not base:
-        base = f"user{int(datetime.utcnow().timestamp())}"
-    username = base
-    contador = 1
-    while buscar_usuario_por_login(username):
-        username = f"{base}{contador}"
-        contador += 1
-    return username
 
 
 def usuario_pode_configurar_campos(gerencia: Optional[str]) -> bool:
@@ -1218,6 +1208,8 @@ def _montar_opcoes_usuario_cadastro() -> tuple[
     List[str], Dict[str, List[str]], List[str], Dict[str, List[str]], Dict[str, List[str]]
 ]:
     """Monta opcoes e sugestoes para tela de cadastro de usuarios."""
+    # A tela de usuarios depende dessas estruturas para montar selects dinamicos
+    # coerentes com a combinacao gerencia -> coordenadoria -> equipe -> pessoas.
     coords_coletadas: List[str] = []
     mapa_equipes: Dict[str, List[str]] = {}
     mapa_equipes_slugs: Dict[str, Set[str]] = {}
@@ -1340,14 +1332,6 @@ def serializar_campos_extra(campos: List["CampoExtra"]) -> List[Dict[str, str]]:
     ]
 
 
-def gerar_mapa_campos_extra() -> Dict[str, List[Dict[str, str]]]:
-    """Retorna mapa gerencia->campos extras serializados."""
-    return {
-        gerencia: serializar_campos_extra(lista)
-        for gerencia, lista in obter_campos_por_gerencia().items()
-    }
-
-
 def obter_campos_por_gerencia() -> Dict[str, List["CampoExtra"]]:
     """Retorna os campos extras agrupados pela gerencia."""
     campos = CampoExtra.query.order_by(CampoExtra.criado_em.asc()).all()
@@ -1362,13 +1346,6 @@ def listar_campos_gerencia(gerencia: str) -> List["CampoExtra"]:
     if not gerencia:
         return []
     return CampoExtra.query.filter_by(gerencia=gerencia).order_by(CampoExtra.criado_em.asc()).all()
-
-
-def obter_status_por_gerencia(gerencia: Optional[str]) -> List[str]:
-    """Retorna status configurados para a gerencia informada."""
-    if not gerencia:
-        return []
-    return STATUS_POR_GERENCIA.get(gerencia, [])
 
 
 def obter_coordenadorias_por_gerencia(gerencia: Optional[str]) -> List[str]:
@@ -1685,23 +1662,6 @@ def _ordenar_nomes_unicos(nomes: List[str]) -> List[str]:
     return resultado
 
 
-def listar_usuarios_por_gerencia(gerencia: Optional[str]) -> List["Usuario"]:
-    """Retorna usuarios ativos da gerencia informada."""
-    if not gerencia:
-        return []
-    ger_norm = normalizar_gerencia(gerencia, permitir_entrada=True)
-    usuarios = Usuario.query.order_by(Usuario.nome.asc()).all()
-    return [
-        usuario
-        for usuario in usuarios
-        if bool(getattr(usuario, "aparece_atribuido_sei", False))
-        and normalizar_gerencia(
-            getattr(usuario, "gerencia_padrao", None), permitir_entrada=True
-        )
-        == ger_norm
-    ]
-
-
 def listar_usuarios_com_liberacao_gerencia(gerencia: Optional[str]) -> List["Usuario"]:
     """Retorna todos os usuarios que possuem liberacao para a gerencia."""
     if not gerencia:
@@ -2013,6 +1973,11 @@ login_manager.login_message_category = "warning"
 
 
 # === Models ===
+# Os models abaixo concentram o estado persistido do sistema:
+# - Usuario controla autenticacao/permissoes
+# - Processo representa a demanda viva
+# - Movimentacao registra o historico auditavel
+# - CampoExtra permite configuracao dinamica por gerencia
 class Usuario(UserMixin, db.Model):
     """Representa um usuario autenticado capaz de operar o sistema."""
 
@@ -2313,6 +2278,7 @@ def contexto_global():
 
 
 # === Autenticacao e perfil ===
+# Essas rotas cobrem login, cadastro administrativo, troca de senha e perfil.
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """Tela de autenticacao e gestao de usuarios."""
@@ -2868,6 +2834,8 @@ def perfil():
 
 
 # === Utilitarios de normalizacao e parsing ===
+# A maior parte dos filtros, importacoes e comparacoes textuais passa por estas
+# funcoes para manter consistencia entre dados digitados, importados e exibidos.
 def normalizar_chave(valor: str) -> str:
     """Remove acentos e normaliza texto para comparacoes consistentes."""
     return (
@@ -4157,16 +4125,6 @@ def serializar_processo_para_relatorio(processo: Processo) -> Dict[str, object]:
     }
 
 
-def obter_opcoes_painel_finalizados() -> Dict[str, List[str]]:
-    """Monta os valores exibidos nos selects de filtro da tela de verificacao."""
-    return {
-        "gerencias": GERENCIAS,
-        "coordenadorias": coletar_valores_distintos(Processo.coordenadoria),
-        "equipes": coletar_valores_distintos(Processo.equipe_area),
-        "interessados": coletar_valores_distintos(Processo.interessado),
-    }
-
-
 def garantir_usuario_padrao():
     """Cria um usuario administrador inicial quando o banco esta vazio."""
     perfil = DEFAULT_ADMIN_PERFIL or "admin"
@@ -4298,6 +4256,8 @@ def preencher_planilhador_padrao():
 
 
 # === Importacao de dados e inicializacao do banco ===
+# Este trecho prepara o banco, corrige dados legados e filtra subconjuntos
+# especiais como devolvidos da Assessoria/Gabinete.
 def inicializar():
     """Garante estrutura inicial do banco, dados base e normalizacoes."""
     if RESET_DATABASE_ON_START:
@@ -4621,9 +4581,12 @@ def filtro_trilha_gerencias(valores):
 
 
 # === Rotas principais (Dashboard e listagens) ===
+# Aqui mora a navegacao principal do sistema: dashboard, APIs de filtro e listas.
 @app.route("/")
 def index():
     """Renderiza o dashboard principal com filtros e paginacao."""
+    # O dashboard combina filtros simples com filtros de coluna serializados em JSON
+    # para manter ordenacao e selecoes quando o usuario pagina ou exporta.
     filtro_gerencia_bruto = request.args.get("gerencia", "")
     filtro_gerencia = normalizar_gerencia(filtro_gerencia_bruto)
     filtro_sei = request.args.get("sei", "").strip()
@@ -4931,7 +4894,10 @@ def index():
         filtro_colunas_cf=filtros_coluna_raw,
         now=hoje,
         now_plus_7=hoje + timedelta(days=7),
-        extras_por_gerencia=gerar_mapa_campos_extra(),
+        extras_por_gerencia={
+            gerencia: serializar_campos_extra(lista)
+            for gerencia, lista in obter_campos_por_gerencia().items()
+        },
         pode_exportar_global=usuario_pode_exportar_global(),
         pode_importar_global=usuario_pode_importar_global(),
         pode_cadastrar_processo=usuario_pode_cadastrar_processo(),
@@ -5275,6 +5241,9 @@ def exportar_geral():
 @login_required
 def importar_excel():
     """Importa processos a partir de uma planilha Excel."""
+    # O fluxo ocorre em duas etapas:
+    # 1) upload e leitura da planilha
+    # 2) confirmacao do mapeamento e gravacao em lotes no banco
     if SITE_EM_CONFIGURACAO:
         flash("Importacao de processos indisponivel durante a configuracao.", "info")
         return redirect(url_for("index"))
@@ -5781,6 +5750,8 @@ def importar_excel():
 @app.route("/gerencia/<string:nome_gerencia>")
 def gerencia(nome_gerencia):
     """Lista processos ativos de uma gerencia especifica."""
+    # Esta view e uma das mais importantes do sistema:
+    # ela monta filtros, abas, tabelas, contagens, opcoes dinamicas e paginacao.
     gerencia_alvo = normalizar_gerencia(nome_gerencia, permitir_entrada=True)
     if not gerencia_alvo or gerencia_alvo == "ENTRADA":
         flash("Gerência informada é inválida.", "warning")
@@ -6744,6 +6715,8 @@ def api_gerencia_column_options(nome_gerencia: str):
     filtros_coluna.pop(col_slug, None)
 
     def aplicar_filtros_processo(consulta):
+        # Todos os filtros visiveis na UI convergem para este helper, o que evita
+        # divergencias entre tabela principal, exportacao e sugestoes de coluna.
         if filtro_sei:
             consulta = consulta.filter(Processo.numero_sei.ilike(f"%{filtro_sei}%"))
         if filtro_coordenadoria:
@@ -7183,10 +7156,13 @@ def gerencia_campos(nome_gerencia):
 
 
 # === CRUD/Acoes do processo ===
+# A partir daqui entram os fluxos de criacao, edicao, finalizacao, reenvio e atribuicao.
 @app.route("/processo/novo", methods=["GET", "POST"])
 @login_required
 def novo_processo():
     """Cria novo processo atribuindo diretamente a gerencia escolhida."""
+    # O cadastro inicial ja prepara defaults de data, responsavel ADM e listas de apoio
+    # para reduzir preenchimento manual na entrada do processo.
     if SITE_EM_CONFIGURACAO:
         flash(
             "O cadastro de processos sera liberado apos a configuracao do banco de dados.",
@@ -7501,6 +7477,8 @@ def inspecionar_numero_processo():
 @app.route("/verificar-dados")
 def verificar_dados():
     """Exibe painel com processos finalizados e filtros dinâmicos."""
+    # Essa tela funciona como um historico consolidado; por isso aplica filtros
+    # sobre snapshots de finalizacao e nao apenas sobre o estado atual do processo.
     filtro_gerencia = normalizar_gerencia(request.args.get("gerencia"), permitir_entrada=True)
     coordenadoria = limpar_texto(request.args.get("coordenadoria"), "")
     equipe = limpar_texto(request.args.get("equipe"), "")
@@ -8593,7 +8571,12 @@ def verificar_dados():
             "finalizados": int(total_finalizados_indicador),
             "tempo_medio_dias": tempo_medio_dias,
         }
-        opcoes = obter_opcoes_painel_finalizados()
+        opcoes = {
+            "gerencias": GERENCIAS,
+            "coordenadorias": coletar_valores_distintos(Processo.coordenadoria),
+            "equipes": coletar_valores_distintos(Processo.equipe_area),
+            "interessados": coletar_valores_distintos(Processo.interessado),
+        }
         campos_extra_labels = {campo.slug: campo.label for campo in CampoExtra.query.all()}
         campos_extra_saida = listar_campos_gerencia("SAIDA")
         trilhas_gerencias = {
@@ -9680,6 +9663,8 @@ def _render_tela_edicao_processo(
     scroll_y: str = "",
 ):
     """Centraliza o contexto da tela de edicao para evitar divergencias entre fluxos."""
+    # Este renderer serve como ponto unico para GETs vindos de edicao normal,
+    # reenvio, devolucao e cenarios da SAIDA, mantendo o template alinhado.
     opcoes_responsavel_adm = obter_responsaveis_adm_disponiveis()
     pode_editar = usuario_pode_editar_processo(processo)
     somente_visualizacao = not pode_editar
@@ -9687,6 +9672,8 @@ def _render_tela_edicao_processo(
     demandas_relacionadas: List[Dict[str, object]] = []
     demandas_ficha: List[Dict[str, object]] = []
     if processo.gerencia == "SAIDA" and processo.numero_sei_base:
+        # Quando o processo esta na SAIDA, a tela precisa mostrar a trilha completa
+        # de demandas relacionadas para evitar finalizacao ou devolucao inconsistente.
         origem_saida = normalizar_gerencia(obter_origem_saida(processo))
         chave_referencia = obter_chave_processo_relacional(processo)
         relacionados_mesma_base = [
@@ -10012,7 +9999,7 @@ def _render_tela_edicao_processo(
         opcoes_tipo_processo=TIPOS_PROCESSO,
         opcoes_interessados=INTERESSADOS,
         opcoes_responsavel_adm=opcoes_responsavel_adm,
-        opcoes_status=obter_status_por_gerencia(processo.gerencia),
+        opcoes_status=STATUS_POR_GERENCIA.get(processo.gerencia, []),
         opcoes_classificacao=CLASSIFICACOES_INSTITUCIONAIS,
         opcoes_coordenadorias=obter_coordenadorias_por_gerencia_base(processo.gerencia),
         opcoes_equipes=obter_equipes_por_coordenadoria_base(processo.coordenadoria),
@@ -10029,6 +10016,8 @@ def _render_tela_edicao_processo(
 @login_required
 def editar_processo(processo_id: int):
     """Permite revisar campos complementares de um processo existente."""
+    # O POST reaproveita a mesma rota para salvar edicoes simples e tambem para
+    # preparar outros fluxos, como devolucao pela SAIDA.
     if SITE_EM_CONFIGURACAO:
         flash(
             "A edicao de processos estara disponivel apos concluirmos a configuracao do banco.",
@@ -10325,6 +10314,11 @@ def atualizar_classificacao(processo_id: int):
 @login_required
 def finalizar_processo(processo_id: int):
     """Registra a conclusao do processo e opcionalmente salva um comentario."""
+    # "Finalizar" aqui significa encerrar a etapa na gerencia atual.
+    # Dependendo do destino informado, isso pode:
+    # - mandar a demanda para SAIDA
+    # - criar nova demanda em outra gerencia
+    # - concluir definitivamente na SAIDA
     if SITE_EM_CONFIGURACAO:
         flash("Finalizacao de processos sera liberada apos configuracao do banco.", "info")
         return redirect(url_for("index"))
@@ -10429,8 +10423,9 @@ def finalizar_processo(processo_id: int):
             )
 
     if destino:
-        # Finaliza etapa na gerencia atual (sempre envia para SAIDA).
-        # Se houver destino diferente de SAIDA, cria uma nova demanda na gerencia escolhida.
+        # Finaliza a etapa atual e sempre registra passagem pela SAIDA.
+        # Se o usuario escolheu uma gerencia de destino, nasce uma nova demanda
+        # nessa gerencia com snapshot do estado atual para manter rastreabilidade.
         snapshot = {
             "numero_sei": processo.numero_sei,
             "numero_sei_base": processo.numero_sei_base,
@@ -10769,6 +10764,8 @@ def mover_processo(processo_id: int):
 @login_required
 def devolver_para_gabinete(processo_id: int):
     """Devolve demanda para triagem da Assessoria (aba de devolvidos)."""
+    # Esse fluxo nao exclui o processo: ele apenas marca metadados de devolucao
+    # para que a Assessoria o trate depois na propria aba dedicada.
     if SITE_EM_CONFIGURACAO:
         flash("Devolucao indisponivel enquanto o sistema estiver em configuracao.", "info")
         return redirect(url_for("index"))
@@ -10819,6 +10816,8 @@ def devolver_para_gabinete(processo_id: int):
 @login_required
 def reenviar_processo_devolvido(processo_id: int):
     """Exibe formulario para reenviar processo devolvido e cria novas demandas."""
+    # O reenvio aproveita o processo devolvido como origem e recria as demandas
+    # selecionadas, mantendo o historico de devolucao intacto para auditoria.
     if SITE_EM_CONFIGURACAO:
         flash("Acao indisponivel enquanto o sistema estiver em configuracao.", "info")
         return redirect(url_for("index"))
@@ -11165,6 +11164,8 @@ def acao_processo_devolvido(processo_id: int):
 @login_required
 def atribuir_processo(processo_id: int):
     """Permite que usuarios assumam ou liberem processos."""
+    # A atribuicao respeita contexto da gerencia/coordenadoria/equipe para evitar
+    # que um processo seja assumido por alguem fora da area responsavel.
     if SITE_EM_CONFIGURACAO:
         flash("Atribuições estarão disponíveis após a configuração do banco.", "info")
         return redirect(url_for("index"))
@@ -11395,877 +11396,8 @@ def gerenciar_notificacoes():
     return redirect(request.referrer or url_for("index"))
 
 
-def _resumo_processo_assistente(processo: Processo) -> str:
-    """Monta um resumo curto para o assistente responder."""
-    partes = [
-        f"Numero SEI: {processo.numero_sei_base}",
-        f"Gerência: {processo.gerencia}",
-    ]
-    if processo.assigned_to:
-        partes.append(f"Atribuido para: {processo.assigned_to.nome or processo.assigned_to.username}")
-    if processo.status:
-        partes.append(f"Status: {processo.status}")
-    if processo.prazo_equipe:
-        partes.append(f"Prazo: {processo.prazo_equipe.strftime('%d/%m/%Y')}")
-    if processo.data_entrada:
-        partes.append(f"Entrada: {processo.data_entrada.strftime('%d/%m/%Y')}")
-    if processo.finalizado_em:
-        partes.append(f"Finalizado em: {processo.finalizado_em.strftime('%d/%m/%Y %H:%M')}")
-    historico = sorted(processo.movimentacoes, key=lambda m: m.criado_em or datetime.min, reverse=True)[:2]
-    if historico:
-        partes.append("Ultimos movimentos:")
-        for mov in historico:
-            partes.append(
-                f"- {mov.de_gerencia} -> {mov.para_gerencia} em "
-                f"{mov.criado_em.strftime('%d/%m/%Y %H:%M') if mov.criado_em else '-'}"
-            )
-    return "; ".join(partes)
 
 
-def _normalizar_texto_assistente(texto: str) -> str:
-    """Normaliza texto para heuristica simples do assistente."""
-    return (
-        unicodedata.normalize("NFKD", texto or "")
-        .encode("ascii", "ignore")
-        .decode("ascii")
-        .lower()
-        .strip()
-    )
-
-
-def _extrair_periodo_assistente(pergunta: str) -> Dict[str, Optional[datetime]]:
-    """Extrai periodo simples a partir da pergunta (ultima semana/mes/ano, etc.)."""
-    texto = _normalizar_texto_assistente(pergunta)
-    agora = datetime.utcnow()
-    inicio = None
-    fim = None
-    legenda = ""
-
-    if "hoje" in texto:
-        inicio = datetime.combine(agora.date(), datetime.min.time())
-        fim = agora
-        legenda = "hoje"
-        return {"inicio": inicio, "fim": fim, "legenda": legenda}
-
-    match = re.search(r"ultim[oa]s?\s+(\d+)\s+dias", texto)
-    if match:
-        dias = int(match.group(1))
-        inicio = agora - timedelta(days=max(dias, 1))
-        fim = agora
-        legenda = f"nos ultimos {dias} dias"
-        return {"inicio": inicio, "fim": fim, "legenda": legenda}
-
-    match = re.search(r"ultim[oa]s?\s+(\d+)\s+seman", texto)
-    if match:
-        semanas = int(match.group(1))
-        inicio = agora - timedelta(days=max(semanas, 1) * 7)
-        fim = agora
-        legenda = f"nas ultimas {semanas} semanas"
-        return {"inicio": inicio, "fim": fim, "legenda": legenda}
-
-    match = re.search(r"ultim[oa]s?\s+(\d+)\s+mes", texto)
-    if match:
-        meses = int(match.group(1))
-        inicio = agora - timedelta(days=max(meses, 1) * 30)
-        fim = agora
-        legenda = f"nos ultimos {meses} meses"
-        return {"inicio": inicio, "fim": fim, "legenda": legenda}
-
-    match = re.search(r"ultim[oa]s?\s+(\d+)\s+ano", texto)
-    if match:
-        anos = int(match.group(1))
-        inicio = agora - timedelta(days=max(anos, 1) * 365)
-        fim = agora
-        legenda = f"nos ultimos {anos} anos"
-        return {"inicio": inicio, "fim": fim, "legenda": legenda}
-
-    if "ultima semana" in texto or "ultimo semana" in texto:
-        inicio = agora - timedelta(days=7)
-        fim = agora
-        legenda = "na ultima semana"
-    elif "ultimo mes" in texto:
-        inicio = agora - timedelta(days=30)
-        fim = agora
-        legenda = "no ultimo mes"
-    elif "ultimo ano" in texto:
-        inicio = agora - timedelta(days=365)
-        fim = agora
-        legenda = "no ultimo ano"
-    elif "este mes" in texto:
-        inicio = datetime(agora.year, agora.month, 1)
-        fim = agora
-        legenda = "neste mes"
-    elif "mes passado" in texto:
-        primeiro_mes_atual = datetime(agora.year, agora.month, 1)
-        ano = agora.year if agora.month > 1 else agora.year - 1
-        mes = agora.month - 1 if agora.month > 1 else 12
-        inicio = datetime(ano, mes, 1)
-        fim = primeiro_mes_atual - timedelta(seconds=1)
-        legenda = "no mes passado"
-    elif "este ano" in texto:
-        inicio = datetime(agora.year, 1, 1)
-        fim = agora
-        legenda = "neste ano"
-    elif "ano passado" in texto:
-        inicio = datetime(agora.year - 1, 1, 1)
-        fim = datetime(agora.year, 1, 1) - timedelta(seconds=1)
-        legenda = "no ano passado"
-
-    return {"inicio": inicio, "fim": fim, "legenda": legenda}
-
-
-def _extrair_gerencia_assistente(pergunta: str) -> Optional[str]:
-    """Extrai uma gerencia mencionada na pergunta."""
-    texto = _normalizar_texto_assistente(pergunta).upper()
-    for ger in GERENCIAS_DESTINOS + ["GABINETE", "SAIDA"]:
-        if ger in texto:
-            return ger
-    return None
-
-
-def _extrair_nome_usuario_assistente(pergunta: str) -> Optional[str]:
-    """Extrai nome de usuario a partir de expressoes como 'pelo fulano'."""
-    texto = _normalizar_texto_assistente(pergunta)
-    tokens = texto.split()
-    stop = {
-        "no",
-        "na",
-        "nos",
-        "nas",
-        "em",
-        "de",
-        "do",
-        "da",
-        "dos",
-        "das",
-        "para",
-        "por",
-        "pelo",
-        "pela",
-        "ultimo",
-        "ultima",
-        "ultimos",
-        "ultimas",
-        "mes",
-        "meses",
-        "ano",
-        "anos",
-        "semana",
-        "semanas",
-        "dia",
-        "dias",
-        "gerencia",
-        "processo",
-        "processos",
-        "cadastrados",
-        "cadastrado",
-        "finalizados",
-        "finalizado",
-    }
-    for i, tok in enumerate(tokens):
-        if tok in {"por", "pelo", "pela"}:
-            nome_tokens = []
-            for proximo in tokens[i + 1 :]:
-                if proximo in stop:
-                    break
-                nome_tokens.append(proximo)
-                if len(nome_tokens) >= 3:
-                    break
-            if nome_tokens:
-                return " ".join(nome_tokens)
-    return None
-
-
-def _buscar_usuario_assistente(nome: str) -> Optional[Usuario]:
-    """Busca usuario por nome ou username aproximado."""
-    if not nome:
-        return None
-    alvo = _normalizar_texto_assistente(nome)
-    if not alvo:
-        return None
-    usuarios = Usuario.query.order_by(Usuario.nome.asc()).all()
-    for usuario in usuarios:
-        if alvo == _normalizar_texto_assistente(usuario.username):
-            return usuario
-        if alvo == _normalizar_texto_assistente(usuario.nome):
-            return usuario
-    for usuario in usuarios:
-        if alvo in _normalizar_texto_assistente(usuario.username):
-            return usuario
-        if alvo in _normalizar_texto_assistente(usuario.nome):
-            return usuario
-    return None
-
-
-def _pergunta_parece_ajuda_site(pergunta: str) -> bool:
-    """Indica se a pergunta parece ser sobre uso do site."""
-    texto = _normalizar_texto_assistente(pergunta)
-    if not texto:
-        return False
-    gatilhos = [
-        "como ",
-        "onde ",
-        "qual menu",
-        "qual botao",
-        "o que e",
-        "para que serve",
-        "passo a passo",
-        "ajuda",
-        "funciona",
-        "como usar",
-        "como acessar",
-        "como entrar",
-    ]
-    if any(gatilho in texto for gatilho in gatilhos):
-        return True
-    termos_site = [
-        "login",
-        "senha",
-        "usuario",
-        "permiss",
-        "perfil",
-        "novo processo",
-        "cadastrar",
-        "criar processo",
-        "editar",
-        "visualizar",
-        "atribuir",
-        "reatribuir",
-        "desatribuir",
-        "finalizar",
-        "devolver",
-        "reenviar",
-        "exportar",
-        "importar",
-        "historico",
-        "verificar dados",
-        "dashboard",
-        "inicio",
-        "gerencia",
-        "campos extras",
-        "campo extra",
-        "filtro",
-        "buscar",
-        "pesquisar",
-        "assistente",
-        "meus processos",
-        "tela",
-        "pagina",
-        "botao",
-        "menu",
-        "card",
-        "metricas",
-        "tempo medio",
-    ]
-    return any(termo in texto for termo in termos_site)
-
-
-def _montar_passos_confirmacao(titulo: str, filtros: List[str]) -> str:
-    """Monta orientacao curta para confirmar no painel."""
-    passos = [
-        "1) Va em Inicio e clique em Exportar Excel.",
-        "2) Selecione o escopo e as colunas necessarias.",
-        "3) Abra no Excel e aplique os filtros desejados.",
-    ]
-    if filtros:
-        passos.insert(2, f"2) Marque colunas que permitam filtrar por: {', '.join(filtros)}.")
-    return f" Para confirmar com mais detalhes, siga: {' '.join(passos)}"
-
-
-def _responder_pergunta_geral_assistente(pergunta: str) -> Optional[str]:
-    """Responde perguntas gerais com contagens simples."""
-    texto = _normalizar_texto_assistente(pergunta)
-    if not texto:
-        return None
-    if "tempo medio" in texto:
-        metricas = obter_metricas_processos()
-        tempo_medio_dias = metricas.get("tempo_medio_dias")
-        if tempo_medio_dias is None:
-            return "Não h? dados suficientes para calcular o tempo m?dio agora."
-        return f"Tempo medio geral: {tempo_medio_dias:.1f} dia(s)."
-    if not any(chave in texto for chave in ["quantos", "quantidade", "total"]):
-        return None
-
-    periodo = _extrair_periodo_assistente(pergunta)
-    inicio = periodo.get("inicio")
-    fim = periodo.get("fim")
-    legenda_periodo = periodo.get("legenda")
-    gerencia = _extrair_gerencia_assistente(pergunta)
-    nome_usuario = _extrair_nome_usuario_assistente(pergunta)
-    usuario = _buscar_usuario_assistente(nome_usuario) if nome_usuario else None
-
-    def _label_periodo():
-        return f" {legenda_periodo}" if legenda_periodo else ""
-
-    if "cadastr" in texto or "registr" in texto:
-        if nome_usuario and not usuario:
-            return (
-                f"Não encontrei o usuário '{nome_usuario}'. Informe o nome ou username exato."
-            )
-        consulta = Movimentacao.query.filter(Movimentacao.tipo == "cadastro")
-        if usuario:
-            consulta = consulta.filter(
-                func.lower(Movimentacao.usuario) == usuario.username.lower()
-            )
-        if gerencia:
-            consulta = consulta.filter(Movimentacao.para_gerencia == gerencia)
-        if inicio:
-            consulta = consulta.filter(Movimentacao.criado_em >= inicio)
-        if fim:
-            consulta = consulta.filter(Movimentacao.criado_em <= fim)
-        total = (
-            consulta.with_entities(func.count(func.distinct(Movimentacao.processo_id)))
-            .scalar()
-            or 0
-        )
-        partes = [f"Encontrei {total} processo(s) cadastrados"]
-        if usuario:
-            partes.append(f"por {usuario.nome or usuario.username}")
-        if gerencia:
-            partes.append(f"na gerencia {gerencia}")
-        partes.append(_label_periodo())
-        filtros = ["Data de entrada", "Responsável Adm", "Gerência"]
-        return " ".join([p for p in partes if p]).strip() + "." + _montar_passos_confirmacao(
-            "cadastros", filtros
-        )
-
-    if "finaliz" in texto:
-        consulta = Processo.query.filter(Processo.finalizado_em.isnot(None))
-        if gerencia:
-            consulta = consulta.filter(Processo.gerencia == gerencia)
-        if inicio:
-            consulta = consulta.filter(Processo.finalizado_em >= inicio)
-        if fim:
-            consulta = consulta.filter(Processo.finalizado_em <= fim)
-        total = consulta.count()
-        partes = [f"Encontrei {total} processo(s) finalizados"]
-        if gerencia:
-            partes.append(f"na gerencia {gerencia}")
-        partes.append(_label_periodo())
-        filtros = ["Finalizado em", "Gerência"]
-        return " ".join([p for p in partes if p]).strip() + "." + _montar_passos_confirmacao(
-            "finalizados", filtros
-        )
-
-    if "sistema" in texto or "site" in texto or "base" in texto or "banco" in texto:
-        consulta = Processo.query
-        if inicio:
-            consulta = consulta.filter(Processo.criado_em >= inicio)
-        if fim:
-            consulta = consulta.filter(Processo.criado_em <= fim)
-        total = consulta.count()
-        partes = [f"Encontrei {total} processo(s) no sistema"]
-        partes.append(_label_periodo())
-        filtros = ["Data de cadastro"]
-        return " ".join([p for p in partes if p]).strip() + "." + _montar_passos_confirmacao(
-            "processos", filtros
-        )
-
-    if "passou por" in texto or "passaram por" in texto:
-        if not gerencia:
-            return (
-                f"Qual gerencia voce quer analisar? Exemplos: {GERENCIA_ALIAS_GABINETE}, GEPLAN, GEENG."
-            )
-        consulta = Movimentacao.query.filter(
-            or_(
-                Movimentacao.de_gerencia == gerencia,
-                Movimentacao.para_gerencia == gerencia,
-            )
-        )
-        if inicio:
-            consulta = consulta.filter(Movimentacao.criado_em >= inicio)
-        if fim:
-            consulta = consulta.filter(Movimentacao.criado_em <= fim)
-        total = (
-            consulta.with_entities(func.count(func.distinct(Movimentacao.processo_id)))
-            .scalar()
-            or 0
-        )
-        partes = [f"Encontrei {total} processo(s) que passaram por {gerencia}"]
-        partes.append(_label_periodo())
-        filtros = ["Gerência", "Data de entrada"]
-        return " ".join([p for p in partes if p]).strip() + "." + _montar_passos_confirmacao(
-            "movimentacoes", filtros
-        )
-
-    if any(
-        chave in texto
-        for chave in [
-            "ativo",
-            "ativos",
-            "em andamento",
-            "em aberto",
-            "aberto",
-            "abertos",
-            "caixa",
-            "fila",
-            "pendente",
-            "pendentes",
-        ]
-    ):
-        consulta = Processo.query.filter(Processo.finalizado_em.is_(None))
-        if gerencia:
-            consulta = consulta.filter(Processo.gerencia == gerencia)
-        if inicio:
-            consulta = consulta.filter(Processo.data_entrada >= inicio.date())
-        if fim:
-            consulta = consulta.filter(Processo.data_entrada <= fim.date())
-        total = consulta.count()
-        partes = [f"Encontrei {total} processo(s) ativos"]
-        if gerencia:
-            partes.append(f"na gerencia {gerencia}")
-        partes.append(_label_periodo())
-        filtros = ["Gerência", "Data de entrada"]
-        return " ".join([p for p in partes if p]).strip() + "." + _montar_passos_confirmacao(
-            "ativos", filtros
-        )
-
-    if gerencia:
-        consulta = Processo.query.filter(Processo.gerencia == gerencia)
-        if inicio:
-            consulta = consulta.filter(Processo.data_entrada >= inicio.date())
-        if fim:
-            consulta = consulta.filter(Processo.data_entrada <= fim.date())
-        total = consulta.count()
-        partes = [f"Encontrei {total} processo(s) na gerencia {gerencia}"]
-        partes.append(_label_periodo())
-        filtros = ["Gerência", "Data de entrada"]
-        return " ".join([p for p in partes if p]).strip() + "." + _montar_passos_confirmacao(
-            "gerencia", filtros
-        )
-
-    return None
-
-
-def _responder_pergunta_site_assistente(pergunta: str) -> Optional[str]:
-    """Responde perguntas sobre uso do site e funcionalidades."""
-    texto = _normalizar_texto_assistente(pergunta)
-    if not texto:
-        return None
-
-    def tem(*termos: str) -> bool:
-        return any(termo in texto for termo in termos)
-
-    if tem("senha", "trocar senha", "redefinir", "resetar", "mudar senha"):
-        return (
-            "Use a opcao 'Trocar senha' no menu do usuario. "
-            "No primeiro acesso o sistema pede uma senha definitiva."
-        )
-
-    if tem("editar perfil", "meu perfil", "atualizar perfil"):
-        return (
-            "Use a opcao 'Editar perfil' no menu do usuario para atualizar nome, email e equipe."
-        )
-
-    if tem("cadastrar usuario", "cadastro usuario", "novo usuario", "criar usuario"):
-        return (
-            "Assessoria, gerentes e o administrador principal podem cadastrar usuarios. "
-            "No menu do usuário, clique em 'Cadastrar usuário' e informe os dados e permissões."
-        )
-
-    if tem("permiss", "perfil"):
-        return (
-            "Perfis disponiveis: Usuario, Gerente e Assessoria. "
-            "Acesso total e um perfil especial com acesso geral (configuracao separada). "
-            "Permissoes extras incluem cadastrar processo, exportar e importar planilhas."
-        )
-
-    if tem("login", "entrar", "acesso"):
-        return (
-            "Para entrar, use a tela de Login (/login) com usuario ou email e senha."
-        )
-
-    if tem("novo processo", "cadastrar processo", "criar processo", "registrar processo"):
-        return (
-            "No painel Inicio, clique em 'Novo processo', preencha o formulario e salve. "
-            "Se o botão não aparecer, seu perfil pode não ter permissão."
-        )
-
-    if tem("editar", "visualizar", "ficha tecnica", "detalhe", "detalhes"):
-        return (
-            "No painel da gerencia, localize o processo e use o icone 'Editar' (lapis). "
-            "Para apenas visualizar, use o icone de visualizacao/ficha tecnica."
-        )
-
-    if tem("atribuir", "reatribuir", "desatribuir") or (
-        "responsavel" in texto and tem("como", "mudar", "alterar")
-    ):
-        return (
-            "No painel da gerencia, clique no botao 'Atribuir' do processo, "
-            "escolha o usuario e confirme. Para remover, use 'Desatribuir'."
-        )
-
-    if tem("finalizar", "encerrar", "concluir"):
-        return (
-            "No painel da gerencia, use o icone 'Finalizar' do processo "
-            "ou abra o processo e finalize na secao de finalizacao."
-        )
-
-    if tem("devolver", "devolvido", "reenviar"):
-        return (
-            "Use o icone 'Devolver' no painel da gerencia. "
-            "Processos devolvidos aparecem em 'Processos Devolvidos'. "
-            "Para reenviar, abra o processo devolvido e use 'Reenviar'."
-        )
-
-    if tem("importar") and tem("exportar"):
-        return (
-            "No Inicio ha os botoes 'Importar Excel' e 'Exportar Excel' para entrada e saida de planilhas."
-        )
-
-    if tem("importar", "importacao", "planilha"):
-        return (
-            "No painel Inicio, clique em 'Importar Excel' e envie a planilha."
-        )
-
-    if tem("exportar", "exportacao", "relatorio", "excel"):
-        return (
-            "No painel Inicio, clique em 'Exportar Excel' para exportacao geral. "
-            "Dentro de uma gerencia, use 'Exportar Excel' do painel da gerencia."
-        )
-
-    if tem("historico", "verificar dados"):
-        return (
-            "No topo do painel, clique em 'Historico de Processos' para ver processos finalizados, "
-            "demandas e filtros."
-        )
-
-    if tem("meus processos"):
-        return (
-            "No topo do painel, use o menu 'Meus Processos' para ver processos atribuidos a voce."
-        )
-
-    if tem("campos extras", "campo extra", "configurar campos"):
-        return (
-            "No painel da gerencia, use 'Configurar campos extras' para cadastrar campos personalizados."
-        )
-
-    if tem("filtro", "buscar", "pesquisar", "sei"):
-        return (
-            "Nos paineis ha campos de busca e filtros por SEI, gerencia, coordenadoria, equipe, "
-            "responsavel e status. Preencha os campos e aplique."
-        )
-
-    if tem("gerencia", "gerencias", "painel de processos", "acessar gerencia"):
-        return (
-            "Na pagina Inicio, os cards das gerencias permitem clicar em 'Acessar' para abrir o painel."
-        )
-
-    if tem("dashboard", "inicio", "metricas", "tempo medio", "andamento", "finalizados"):
-        return (
-            "No Inicio (Dashboard) voce ve metricas de andamento, finalizados e tempo medio. "
-            "Os cards sao clicaveis para filtrar a lista."
-        )
-
-    if tem("assistente", "chat"):
-        return (
-            "O assistente responde perguntas sobre processos e sobre o sistema. "
-            "Digite sua pergunta e, se for um processo especifico, informe o numero SEI."
-        )
-
-    if tem("ajuda", "duvida", "duvidas", "manual"):
-        return (
-            "Posso ajudar com cadastro, edição, atribuição, finalização, devolução, "
-            "exportacao/importacao, historico, usuarios, permissoes e filtros."
-        )
-
-    if tem("o que e", "para que serve", "como funciona", "sobre o sistema", "sobre o site"):
-        return (
-            "O Controle de Processos organiza e acompanha processos por gerencia, prazos, "
-            "responsaveis e historico."
-        )
-
-    return None
-
-
-def _pergunta_exige_numero(pergunta: str) -> bool:
-    """Indica se a pergunta parece ser sobre um processo especifico."""
-    texto = _normalizar_texto_assistente(pergunta)
-    if not texto:
-        return False
-    if _pergunta_parece_ajuda_site(pergunta):
-        return False
-    padroes_gerais = [
-        r"\bquantos?\b",
-        r"\bquantidade\b",
-        r"\btotal\b",
-        r"\bpor\s+gerencia\b",
-        r"\bpor\s+equipe\b",
-        r"\bpor\s+coordenadoria\b",
-        r"\bpor\s+area\b",
-        r"\bpor\s+assunto\b",
-        r"\bpor\s+status\b",
-        r"\bprocessos\b",
-        r"\bgerencias\b",
-        r"\bmedia\b",
-        r"\btempo\s+medio\b",
-        r"\branking\b",
-        r"\blist(ar|a|agem)?\b",
-        r"\bestat\b",
-    ]
-    if any(re.search(padrao, texto) for padrao in padroes_gerais):
-        return False
-    padroes_especificos = [
-        r"\bprocesso\b",
-        r"\bsei\b",
-        r"\bnumero\b",
-        r"\bprazo\b",
-        r"\bresponsavel\b",
-        r"\batribu",
-        r"\bstatus\b",
-        r"\bassunto\b",
-        r"\bfinaliz",
-        r"\bmoviment",
-        r"\bhistoric",
-        r"\bentrada\b",
-        r"\bconcessionaria\b",
-        r"\binteressado\b",
-    ]
-    return any(re.search(padrao, texto) for padrao in padroes_especificos)
-
-
-def _gerar_resposta_assistente(pergunta: str, processo: Optional[Processo]) -> str:
-    """Gera uma resposta simples baseada nos dados locais do processo."""
-    if not processo:
-        return "Não encontrei um processo com essas informações. Informe o número SEI completo para uma resposta precisa."
-    resumo = _resumo_processo_assistente(processo)
-    texto = _normalizar_texto_assistente(pergunta)
-    if not texto:
-        return resumo
-
-    def _fmt_data(valor):
-        if not valor:
-            return None
-        if isinstance(valor, datetime):
-            return valor.strftime("%d/%m/%Y %H:%M")
-        return valor.strftime("%d/%m/%Y")
-
-    if "prazo" in texto:
-        prazo = processo.prazo_equipe or processo.prazo
-        if prazo:
-            rotulo = "Prazo da equipe" if processo.prazo_equipe else "Prazo"
-            return (
-                f"{rotulo}: {_fmt_data(prazo)}. "
-                f"Status atual: {processo.status or 'sem status'}. {resumo}"
-            )
-        return f"O processo nao tem prazo cadastrado. {resumo}"
-
-    if "status" in texto:
-        status = processo.status or "sem status"
-        data_status = _fmt_data(processo.data_status)
-        if data_status:
-            return f"Status: {status} (desde {data_status}). {resumo}"
-        return f"Status: {status}. {resumo}"
-
-    if "finalizado por" in texto or "quem finalizou" in texto:
-        if processo.finalizado_por:
-            return f"Finalizado por: {processo.finalizado_por}. {resumo}"
-        if processo.finalizado_em:
-            return f"O processo foi finalizado em {_fmt_data(processo.finalizado_em)}. {resumo}"
-        return f"O processo ainda nao foi finalizado. {resumo}"
-
-    if "finaliz" in texto:
-        if processo.finalizado_em:
-            return f"O processo foi finalizado em {_fmt_data(processo.finalizado_em)}. {resumo}"
-        return f"O processo ainda nao foi finalizado. {resumo}"
-
-    if "assunto" in texto:
-        return f"O assunto e: {processo.assunto}. {resumo}"
-
-    if "interessad" in texto:
-        return f"Interessado: {processo.interessado}. {resumo}"
-
-    if "concessionaria" in texto:
-        valor = processo.concessionaria or "nao informada"
-        return f"Concessionária: {valor}. {resumo}"
-
-    if "classific" in texto:
-        valor = processo.classificacao_institucional or processo.descricao or "nao informada"
-        return f"Classificacao institucional: {valor}. {resumo}"
-
-    if "descricao melhorada" in texto:
-        valor = processo.descricao_melhorada or processo.descricao or "nao informada"
-        return f"Descrição melhorada: {valor}. {resumo}"
-
-    if "descricao" in texto:
-        valor = processo.descricao or "nao informada"
-        return f"Descricao: {valor}. {resumo}"
-
-    if "observacao" in texto or "observacoes" in texto:
-        valor = processo.observacao or processo.observacoes_complementares or "nao informada"
-        return f"Observacoes: {valor}. {resumo}"
-
-    if "responsavel" in texto and ("adm" in texto or "administr" in texto):
-        valor = processo.responsavel_adm or "nao informado"
-        return f"Responsavel adm: {valor}. {resumo}"
-
-    if "responsavel" in texto and ("equipe" in texto or "area" in texto or "coorden" in texto):
-        valor = processo.responsavel_equipe or "nao informado"
-        return f"Responsavel da equipe: {valor}. {resumo}"
-
-    if "atribu" in texto or "responsavel" in texto:
-        if processo.assigned_to:
-            return (
-                f"O processo esta atribuido para {processo.assigned_to.nome or processo.assigned_to.username}. "
-                f"{resumo}"
-            )
-        if processo.responsavel_equipe:
-            return f"Responsavel da equipe: {processo.responsavel_equipe}. {resumo}"
-        return f"O processo não está atribuído. {resumo}"
-
-    if "area" in texto or "coorden" in texto or "equipe" in texto:
-        partes = []
-        if processo.coordenadoria:
-            partes.append(f"Coordenadoria: {processo.coordenadoria}")
-        if processo.equipe_area:
-            partes.append(f"Equipe/Area: {processo.equipe_area}")
-        if processo.responsavel_equipe:
-            partes.append(f"Responsavel da equipe: {processo.responsavel_equipe}")
-        if not partes:
-            partes.append("Nenhuma area ou coordenadoria cadastrada.")
-        return " ".join(partes) + f" {resumo}"
-
-    if "data entrada" in texto or "entrada" in texto:
-        valor = _fmt_data(processo.data_entrada)
-        if valor:
-            return f"Entrada: {valor}. {resumo}"
-        return f"Data de entrada nao informada. {resumo}"
-
-    if "tipo" in texto and "processo" in texto:
-        valor = processo.tipo_processo or "nao informado"
-        return f"Tipo de processo: {valor}. {resumo}"
-
-    if "palavra" in texto:
-        valor = processo.palavras_chave or "nao informadas"
-        return f"Palavras-chave: {valor}. {resumo}"
-
-    if "tramitado" in texto:
-        valor = processo.tramitado_para or "nao informado"
-        return f"Tramitado para: {valor}. {resumo}"
-
-    if "data saida" in texto or "saida" in texto:
-        valor = _fmt_data(processo.data_saida)
-        if valor:
-            return f"Data de saida: {valor}. {resumo}"
-        return f"Data de saida nao informada. {resumo}"
-
-    if "campo extra" in texto or "campos extras" in texto or "dados extra" in texto:
-        extras = processo.dados_extra or {}
-        extras = {
-            str(chave): valor
-            for chave, valor in extras.items()
-            if chave and valor and chave != "numero_sei_original"
-        }
-        if not extras:
-            return f"Não h? campos extras cadastrados. {resumo}"
-        pares = [f"{chave}: {valor}" for chave, valor in extras.items()]
-        return "Campos extras: " + "; ".join(pares) + f". {resumo}"
-
-    if "moviment" in texto or "historico" in texto:
-        return resumo
-
-    if "parad" in texto or "tempo parado" in texto or "ha quanto tempo" in texto:
-        referencias = [m.criado_em for m in processo.movimentacoes if m.criado_em]
-        base_data = None
-        if referencias:
-            base_data = max(referencias)
-        elif processo.atualizado_em:
-            base_data = processo.atualizado_em
-        elif processo.data_entrada:
-            base_data = datetime.combine(processo.data_entrada, datetime.min.time())
-        if base_data:
-            dias = (datetime.utcnow().date() - base_data.date()).days
-            return (
-                f"O processo esta parado ha cerca de {dias} dia(s) (ultima movimentacao em "
-                f"{_fmt_data(base_data)}). {resumo}"
-            )
-        return f"Não foi possível calcular o tempo parado. {resumo}"
-
-    return resumo
-
-
-@app.route("/assistente/responder", methods=["POST"])
-@login_required
-def assistente_responder():
-    """Responde perguntas rápidas sobre processos usando os dados locais."""
-    data = request.get_json(silent=True) or request.form
-    pergunta = (data.get("pergunta") or "").strip()
-    numero = (data.get("numero") or "").strip()
-    processo_id = data.get("processo_id")
-    processo = None
-    exige_numero = _pergunta_exige_numero(pergunta)
-
-    if exige_numero and not (numero or processo_id):
-        return jsonify(
-            {
-                "resposta": "Para perguntas sobre um processo especifico, informe o numero SEI.",
-                "referencia": None,
-                "gerencia": None,
-            }
-        )
-
-    if processo_id:
-        try:
-            processo = Processo.query.get(int(processo_id))
-        except Exception:
-            processo = None
-
-    if not processo and numero:
-        processo = (
-            Processo.query.filter(func.lower(Processo.numero_sei) == numero.lower())
-            .order_by(Processo.atualizado_em.desc())
-            .first()
-        )
-        if not processo:
-            processo = (
-                Processo.query.filter(Processo.numero_sei.ilike(f"%{numero}%"))
-                .order_by(Processo.atualizado_em.desc())
-                .first()
-            )
-
-    if not processo:
-        if exige_numero:
-            return jsonify(
-                {
-                    "resposta": "Não encontrei um processo com esse n?mero SEI. Verifique e tente novamente.",
-                    "referencia": None,
-                    "gerencia": None,
-                }
-            )
-        resposta_geral = _responder_pergunta_geral_assistente(pergunta)
-        if resposta_geral:
-            return jsonify(
-                {
-                    "resposta": resposta_geral,
-                    "referencia": None,
-                    "gerencia": None,
-                }
-            )
-        resposta_site = _responder_pergunta_site_assistente(pergunta)
-        if resposta_site:
-            return jsonify(
-                {
-                    "resposta": resposta_site,
-                    "referencia": None,
-                    "gerencia": None,
-                }
-            )
-        return jsonify(
-            {
-                "resposta": "Não consegui entender. Posso ajudar com processos (com número SEI), contagens gerais e uso do site (cadastro, edição, atribuição, finalização, devolução, exportação/importação, histórico, usuários e permissões).",
-                "referencia": None,
-                "gerencia": None,
-            }
-        )
-
-    resposta = _gerar_resposta_assistente(pergunta, processo)
-    return jsonify(
-        {
-            "resposta": resposta,
-            "referencia": processo.numero_sei if processo else None,
-            "gerencia": processo.gerencia if processo else None,
-        }
-    )
 
 
 @app.route("/processo/<int:processo_id>/campos-extra", methods=["POST"])
@@ -12309,6 +11441,8 @@ _APP_INICIALIZADO = False
 
 def preparar_app() -> Flask:
     """Executa rotinas de inicializacao apenas uma vez por processo."""
+    # Centralizar a inicializacao evita duplicar create_all/correcoes em
+    # diferentes pontos de entrada (flask run, gunicorn, imports diretos).
     global _APP_INICIALIZADO
     if _APP_INICIALIZADO:
         return app
