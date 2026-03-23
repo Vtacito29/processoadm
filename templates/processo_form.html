@@ -17,15 +17,14 @@
  <meta name="viewport" content="width=device-width, initial-scale=1">
  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
  <link href="{{ url_for('static', filename='css/global.css') }}" rel="stylesheet">
- <link href="{{ url_for('static', filename='css/table_column_filter.css') }}" rel="stylesheet">
  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
  <link href="{{ url_for('static', filename='css/processo_form.css') }}" rel="stylesheet">
 </head>
 <body>
-<!-- Barra simples com retorno rapido -->
+<!-- Barra simples com retorno rapido e navegacao basica -->
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
  <div class="container-fluid">
- <a class="navbar-brand" href="{{ url_for('index') }}">Controle de Processos</a>
+ <a class="navbar-brand" href="{{ url_for('index') }}">SIGEP - Sistema Integrado de Gestão de Processos</a>
  <div class="d-flex ms-auto gap-2 align-items-center">
  <a class="btn btn-outline-light btn-sm" href="{{ url_for('verificar_dados') }}">Histórico de Processos</a>
  {% if current_user.is_authenticated %}
@@ -68,7 +67,7 @@
  </div>
 </nav>
 
-<!-- Formulario principal de cadastro/edicao -->
+<!-- Formulario principal de cadastro/edicao/finalizacao -->
 {% set fd = form_data or {} %}
 {% set invalid = campos_invalidos or [] %}
 {% set gerencias_sel = selected_gerencias or [] %}
@@ -127,6 +126,7 @@
  
 
  <form method="post" autocomplete="off" id="processoForm" data-processo-form="1" data-view-only="{{ '1' if somente_visualizacao else '0' }}">
+  <!-- Hidden helpers usados para preservar contexto da tela entre salvamentos -->
  <input type="hidden" name="redirect_to" id="redirect_to" value="">
  <input type="hidden" name="scroll_y" id="scroll_y" value="{{ scroll_y or '' }}">
  <div class="row g-3">
@@ -272,7 +272,8 @@
  </div>
  </div>
 
-{% if modo_edicao %}
+ {% if modo_edicao %}
+  <!-- Blocos abaixo so aparecem na edicao porque dependem do estado atual do processo -->
  <hr class="my-4">
  {% if processo and processo.gerencia == 'SAIDA' %}
  <div class="card border-0 shadow-sm rounded-4 mb-4" id="ficha-tecnica">
@@ -1642,7 +1643,6 @@
  });
 </script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="{{ url_for('static', filename='js/table_column_filter.js') }}"></script>
 {% if modo_edicao and not SITE_EM_CONFIGURACAO and not somente_visualizacao and pode_finalizar_gerencia %}
 <script>
  const seletorTramite = document.getElementById("tramitado_para");

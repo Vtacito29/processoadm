@@ -1,3 +1,5 @@
+# Arquivo opcional para sugerir interessados no formulario.
+# Deixe uma opcao por linha, se quiser complementar os nomes vindos do banco.
 Concessionária ViaOeste
 Ministério da Saúde-Secretaria Especial de Saúde Indígena
 Prefeitura Municipal de Taquaral/SP

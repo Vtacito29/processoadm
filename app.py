@@ -19,6 +19,7 @@ import sys
 import site
 import tempfile
 import unicodedata
+import webbrowser
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from io import BytesIO
@@ -57,12 +58,38 @@ from werkzeug.security import check_password_hash, generate_password_hash
 # removed upload feature
 
 # === Caminhos e constantes basicas ===
-# Caminho base do projeto e local do banco SQLite
+# Caminho base do projeto e arquivos auxiliares locais
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-DB_PATH = os.path.join(BASE_DIR, "controle_processos.db")
 # Caminho onde as imagens de ilustracao ficam armazenadas
 STATIC_IMG_DIR = os.path.join(BASE_DIR, "static", "img")
 INTERESSADOS_PATH = os.path.join(BASE_DIR, "interessados.txt")
+DOTENV_PATH = os.path.join(BASE_DIR, ".env")
+
+
+def carregar_dotenv(caminho: str) -> None:
+    """Carrega variaveis de um .env simples sem sobrescrever o ambiente atual."""
+    if not os.path.exists(caminho):
+        return
+
+    try:
+        with open(caminho, "r", encoding="utf-8") as arquivo:
+            for linha in arquivo:
+                conteudo = linha.strip()
+                if not conteudo or conteudo.startswith("#") or "=" not in conteudo:
+                    continue
+                chave, valor = conteudo.split("=", 1)
+                chave = chave.strip()
+                valor = valor.strip()
+                if not chave or chave in os.environ:
+                    continue
+                if len(valor) >= 2 and valor[0] == valor[-1] and valor[0] in {'"', "'"}:
+                    valor = valor[1:-1]
+                os.environ[chave] = valor
+    except OSError as exc:
+        logger.warning("Nao foi possivel carregar o arquivo .env: %s", exc)
+
+
+carregar_dotenv(DOTENV_PATH)
 
 # Importacao com mapeamento de colunas
 IMPORT_CACHE_DIR = os.path.join(BASE_DIR, "tmp_imports")
@@ -881,6 +908,39 @@ def _carregar_lista_texto(caminho: str) -> List[str]:
 
 
 INTERESSADOS = _carregar_lista_texto(INTERESSADOS_PATH)
+
+
+def obter_opcoes_interessados() -> List[str]:
+    """Combina interessados do arquivo opcional com os ja cadastrados no banco."""
+    vistos = set()
+    opcoes: List[str] = []
+
+    for item in INTERESSADOS:
+        valor = (item or "").strip()
+        if not valor:
+            continue
+        chave = valor.casefold()
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        opcoes.append(valor)
+
+    try:
+        cadastrados = coletar_valores_distintos(Processo.interessado)
+    except Exception:
+        cadastrados = []
+
+    for item in cadastrados:
+        valor = (item or "").strip()
+        if not valor:
+            continue
+        chave = valor.casefold()
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        opcoes.append(valor)
+
+    return sorted(opcoes, key=lambda item: item.casefold())
 
 
 
@@ -1932,18 +1992,12 @@ def _env_bool(nome: str, padrao: bool) -> bool:
     return valor.strip().lower() in {"1", "true", "on", "yes"}
 
 
-DEFAULT_ADMIN_USER = os.environ.get("DEFAULT_ADMIN_USER", "vinicius.ferreira")
-DEFAULT_ADMIN_PASSWORD = os.environ.get("DEFAULT_ADMIN_PASSWORD", "123")
-DEFAULT_ADMIN_NAME = os.environ.get(
-    "DEFAULT_ADMIN_NAME", "Vinícius Tácito Cavalcante Fereira"
-)
-DEFAULT_ADMIN_EMAIL = os.environ.get(
-    "DEFAULT_ADMIN_EMAIL", "vinicius.ferreira@artesp.sp.gov.br"
-)
+DEFAULT_ADMIN_USER = os.environ.get("DEFAULT_ADMIN_USER", "admin")
+DEFAULT_ADMIN_PASSWORD = os.environ.get("DEFAULT_ADMIN_PASSWORD", "admin123")
+DEFAULT_ADMIN_NAME = os.environ.get("DEFAULT_ADMIN_NAME", "Administrador do Sistema")
+DEFAULT_ADMIN_EMAIL = os.environ.get("DEFAULT_ADMIN_EMAIL", "admin@sigep.local")
 DEFAULT_ADMIN_GERENCIA = os.environ.get("DEFAULT_ADMIN_GERENCIA", "GABINETE")
-DEFAULT_ADMIN_COORDENADORIA = os.environ.get(
-    "DEFAULT_ADMIN_COORDENADORIA", "Acessoria Técnica"
-)
+DEFAULT_ADMIN_COORDENADORIA = os.environ.get("DEFAULT_ADMIN_COORDENADORIA", "")
 DEFAULT_ADMIN_EQUIPE = os.environ.get("DEFAULT_ADMIN_EQUIPE", "")
 DEFAULT_ADMIN_PERFIL = os.environ.get("DEFAULT_ADMIN_PERFIL", "acesso_total").strip().lower()
 
@@ -1951,13 +2005,15 @@ DEFAULT_ADMIN_PERFIL = os.environ.get("DEFAULT_ADMIN_PERFIL", "acesso_total").st
 # Configuracao principal do Flask
 app = Flask(__name__)
 database_url = os.environ.get("DATABASE_URL", "").strip()
-# Render/Postgres pode fornecer URL com esquema `postgres://`, normaliza para SQLAlchemy.
+# Alguns provedores ainda usam `postgres://`; normaliza para SQLAlchemy.
 if database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
+if database_url.startswith("postgresql://") and "+psycopg" not in database_url.split("://", 1)[0]:
+    database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
 app.config.update(
     SECRET_KEY=os.environ.get("SECRET_KEY", "troque-esta-chave"),
-    SQLALCHEMY_DATABASE_URI=database_url or f"sqlite:///{DB_PATH}",
+    SQLALCHEMY_DATABASE_URI=database_url or "postgresql+psycopg://postgres:postgres@localhost:5432/sigep",
     SQLALCHEMY_TRACK_MODIFICATIONS=False,
     SQLALCHEMY_ENGINE_OPTIONS={
         "pool_pre_ping": True,
@@ -7315,7 +7371,7 @@ def novo_processo():
                 selected_gerencias=form_data.get("gerencias", []),
                 opcoes_concessionarias=CONCESSIONARIAS,
                 opcoes_tipo_processo=TIPOS_PROCESSO,
-                opcoes_interessados=INTERESSADOS,
+                opcoes_interessados=obter_opcoes_interessados(),
                 opcoes_responsavel_adm=opcoes_responsavel_adm,
                 analise_numero=analise_numero,
                 gerencias_cadastro=gerencias_cadastro,
@@ -7448,7 +7504,7 @@ def novo_processo():
         selected_gerencias=form_data.get("gerencias", []),
         opcoes_concessionarias=CONCESSIONARIAS,
         opcoes_tipo_processo=TIPOS_PROCESSO,
-        opcoes_interessados=INTERESSADOS,
+        opcoes_interessados=obter_opcoes_interessados(),
         opcoes_responsavel_adm=opcoes_responsavel_adm,
         analise_numero=analise_numero,
         gerencias_cadastro=gerencias_cadastro,
@@ -9997,7 +10053,7 @@ def _render_tela_edicao_processo(
         gerencias_com_demanda=gerencias_com_demanda,
         opcoes_concessionarias=CONCESSIONARIAS,
         opcoes_tipo_processo=TIPOS_PROCESSO,
-        opcoes_interessados=INTERESSADOS,
+        opcoes_interessados=obter_opcoes_interessados(),
         opcoes_responsavel_adm=opcoes_responsavel_adm,
         opcoes_status=STATUS_POR_GERENCIA.get(processo.gerencia, []),
         opcoes_classificacao=CLASSIFICACOES_INSTITUCIONAIS,
@@ -10980,7 +11036,7 @@ def reenviar_processo_devolvido(processo_id: int):
                 status_gerencias=status_gerencias,
                 opcoes_concessionarias=CONCESSIONARIAS,
                 opcoes_tipo_processo=TIPOS_PROCESSO,
-                opcoes_interessados=INTERESSADOS,
+                opcoes_interessados=obter_opcoes_interessados(),
                 opcoes_responsavel_adm=opcoes_responsavel_adm,
             )
 
@@ -11054,7 +11110,7 @@ def reenviar_processo_devolvido(processo_id: int):
         status_gerencias=status_gerencias,
         opcoes_concessionarias=CONCESSIONARIAS,
         opcoes_tipo_processo=TIPOS_PROCESSO,
-        opcoes_interessados=INTERESSADOS,
+        opcoes_interessados=obter_opcoes_interessados(),
         opcoes_responsavel_adm=opcoes_responsavel_adm,
     )
 
@@ -11485,6 +11541,13 @@ def main():
     port = int(os.environ.get("FLASK_RUN_PORT") or os.environ.get("PORT") or 5000)
     debug_env = os.environ.get("FLASK_DEBUG") or os.environ.get("DEBUG") or ""
     debug = str(debug_env).strip().lower() in {"1", "true", "on", "yes"}
+    host_exibicao = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
+    url_local = f"http://{host_exibicao}:{port}"
+    print(f"Servidor iniciado em {url_local}")
+    try:
+        webbrowser.open(url_local)
+    except Exception:
+        print("Nao foi possivel abrir o navegador automaticamente.")
     flask_app.run(host=host, port=port, debug=debug)
 
 

@@ -37,13 +37,14 @@
 <body>
 
 
+<!-- Barra superior compartilhada: atalhos globais, notificacoes e perfil -->
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
 
 
  <div class="container-fluid">
 
 
- <a class="navbar-brand" href="{{ url_for('index') }}">Controle de Processos</a>
+ <a class="navbar-brand" href="{{ url_for('index') }}">SIGEP - Sistema Integrado de Gestão de Processos</a>
 
 
  <div class="d-flex ms-auto align-items-center gap-2">
@@ -294,6 +295,7 @@
  </div>
 
 
+ <!-- Abas principais da gerencia: ativos, finalizados e devolvidos -->
  <ul class="nav nav-tabs panel-tabs mb-3" role="tablist">
 
 
@@ -348,6 +350,7 @@
 
 
 
+ <!-- Cada aba abaixo renderiza uma visao diferente do mesmo conjunto de processos -->
  <div class="tab-content">
 
 
