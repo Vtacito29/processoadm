@@ -38,7 +38,7 @@
  </li>
  {% if current_user.is_authenticated %}
  <li class="nav-item">
- <a class="btn btn-outline-light btn-sm position-relative" id="btnMeusProcessos" href="{{ url_for('gerencia', nome_gerencia=gerencia_padrao_usuario or 'GABINETE', responsavel_id=current_user.id, ack_meus_processos=1) }}">
+ <a class="btn btn-outline-light btn-sm position-relative" id="btnMeusProcessos" href="{{ url_for('gerencia', nome_gerencia=gerencia_padrao_usuario or GERENCIA_PADRAO, responsavel_id=current_user.id, ack_meus_processos=1) }}">
  Meus Processos
  {% if meus_processos_novos %}
  <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="badgeMeusProcessos">
@@ -154,9 +154,9 @@
  </section>
  {% else %}
  <section class="mb-4">
- <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-4">
+ <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-4 justify-content-center gerencias-grid">
  {% for nome, total in contagens.items() %}
- <div class="col">
+ <div class="col gerencia-grid-item">
  {% set imagem = imagens_gerencias.get(nome) or imagem_gerencia_padrao %}
  <div class="card card-gerencia h-100 position-relative">
  <div class="card-media">
@@ -174,7 +174,7 @@
  </div>
  </div>
  {% endfor %}
- <div class="col">
+ <div class="col gerencia-grid-item">
  {% set imagem_saida = imagens_gerencias.get('SAIDA') or imagem_gerencia_padrao %}
  <div class="card card-gerencia card-saida h-100 border-success position-relative">
  <div class="card-media">

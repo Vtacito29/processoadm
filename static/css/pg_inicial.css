@@ -157,6 +157,14 @@ main {
 }
 
 /* =========================== Cards de gerencias =========================== */
+.gerencias-grid {
+    align-items: stretch;
+}
+
+.gerencia-grid-item {
+    display: flex;
+}
+
 .card-gerencia {
     border-radius: 1.25rem;
     border: 1px solid var(--borda-suave);
@@ -165,6 +173,7 @@ main {
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    width: 100%;
     transition: transform 0.22s ease, box-shadow 0.22s ease;
 }
 
@@ -193,7 +202,7 @@ main {
 }
 
 .card-gerencia .card-body {
-    padding: 0.5rem;
+    padding: 1rem 1rem 1.1rem;
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
@@ -208,16 +217,21 @@ main {
 .card-gerencia .card-title {
     color: var(--cinza-escuro);
     font-weight: 600;
+    letter-spacing: -0.01em;
 }
 
 .card-gerencia .text-muted {
     color: var(--cinza-suave) !important;
+    margin-bottom: 0;
 }
 
 .card-gerencia .badge {
     background: linear-gradient(135deg, var(--cor-primaria) 0%, var(--cor-acento) 100%);
     color: #fff;
     padding: 0.4rem 0.9rem;
+    min-width: 2.5rem;
+    text-align: center;
+    box-shadow: 0 10px 24px -16px rgba(127, 29, 29, 0.9);
 }
 
 .card-gerencia .btn-outline-primary {
@@ -237,6 +251,14 @@ main {
 
 .card-saida {
     background: linear-gradient(135deg, #636262 0%, #e5f5ec 100%);
+}
+
+@media (min-width: 992px) {
+    .gerencias-grid {
+        max-width: 1360px;
+        margin-left: auto;
+        margin-right: auto;
+    }
 }
 
 /* =========================== Filtros e tabela =========================== */

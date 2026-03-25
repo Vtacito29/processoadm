@@ -62,7 +62,7 @@
  {% if current_user.is_authenticated %}
 
 
- <a class="btn btn-outline-light btn-sm position-relative" id="btnMeusProcessos" href="{{ url_for('gerencia', nome_gerencia=gerencia_padrao_usuario or 'GABINETE', responsavel_id=current_user.id, ack_meus_processos=1) }}">
+ <a class="btn btn-outline-light btn-sm position-relative" id="btnMeusProcessos" href="{{ url_for('gerencia', nome_gerencia=gerencia_padrao_usuario or GERENCIA_PADRAO, responsavel_id=current_user.id, ack_meus_processos=1) }}">
 
 
  Meus Processos

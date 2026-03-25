@@ -182,7 +182,7 @@ ALIAS_PARA_CAMPO = {
 
 # Conjunto de gerencias conhecidas (ENTRADA apenas para normalizacao antiga)
 # Conjunto completo utilizado para normalizacao de nomes de gerencias
-GERENCIAS_CANONICAS = ["ENTRADA", "GABINETE", "GEENG", "GEPLAN", "GEDEX", "GEFOR", "SAIDA"]
+GERENCIAS_CANONICAS = ["ENTRADA", "GABINETE", "GEPER", "GEDEX", "GEFOR", "SAIDA"]
 GERENCIA_PADRAO = "GABINETE"
 GERENCIAS_REVISAO = ["SAIDA"]
 GERENCIAS = [ger for ger in GERENCIAS_CANONICAS if ger not in {"ENTRADA", "SAIDA"}]
@@ -293,25 +293,11 @@ STATUS_POR_GERENCIA = {
         "NÃO PERTINENTE",
         "ARQUIVO SUROD",
     ],
-    "GEENG": [
+    "GEPER": [
         "EM FILA DE ANÁLISE",
         "EM ANÁLISE",
         "AGUARDANDO RETORNO DA CONCESSIONÁRIA",
         "TRAMITADO PARA O GAB.-SUROD",
-        "TRAMITADO PARA A GEDEX",
-        "TRAMITADO PARA A GEFOR",
-        "TRAMITADO PARA A GEPLAN",
-        "SOBRESTADO",
-        "TRAMITADO PARA OUTRA ÁREA/SETOR",
-        "ARQUIVO",
-        "FINALIZADO",
-    ],
-    "GEPLAN": [
-        "EM FILA DE ANÁLISE",
-        "EM ANÁLISE",
-        "AGUARDANDO RETORNO DA CONCESSIONÁRIA",
-        "TRAMITADO PARA O GAB.-SUROD",
-        "TRAMITADO PARA A GEENG",
         "TRAMITADO PARA A GEFOR",
         "TRAMITADO PARA A GEDEX",
         "SOBRESTADO",
@@ -325,9 +311,8 @@ STATUS_POR_GERENCIA = {
         "AGUARDANDO RETORNO DA CONCESSIONÁRIA",
         "AGUARDANDO SUBSÍDIO DE OUTRA ÁREA",
         "TRAMITADO PARA O GAB.-SUROD",
-        "TRAMITADO PARA A GEENG",
         "TRAMITADO PARA A GEFOR",
-        "TRAMITADO PARA A GEPLAN",
+        "TRAMITADO PARA A GEPER",
         "SOBRESTADO",
         "ARQUIVADO",
         "CONCLUIDO POR ORIENTAÇÃO",
@@ -345,8 +330,7 @@ STATUS_POR_GERENCIA = {
         "ARQUIVADO",
         "CONTROLADO EM OUTRA PLANILHA",
         "TRAMITADO PARA O GAB.-SUROD",
-        "TRAMITADO PARA A GEENG",
-        "TRAMITADO PARA A GEPLAN",
+        "TRAMITADO PARA A GEPER",
         "TRAMITADO PARA A GEDEX",
         "FINALIZADO",
     ],
@@ -406,39 +390,14 @@ DESTINOS_SAIDA = [
 COORDENADORIAS_POR_GERENCIA = {
     "GABINETE": ["GAB_ASSESSORIA"],
     "GEDEX": ["GEDEX_ASSESSORIA"],
-    "GEPLAN": ["COTEC", "COREG"],
-    "GEFOR": ["COFOR", "COFIR", "COFEX"],
-    "GEENG": ["COINT", "COPRO", "GEENG_ADM"],
+    "GEPER": ["COPLER", "CORER"],
+    "GEFOR": ["COFOR", "COFIR", "COFEX","COFAD"],
 }
 EQUIPES_POR_COORDENADORIA = {
     "GAB_ASSESSORIA": ["ASSESSORIA_TÉCNICA", "ASSESSORIA_ADMINISTRATIVA"],
     "GEDEX_ASSESSORIA": ["SANCIONATÓRIO", "SEGUROS", "CONTROLE_EXTERNO", "NORMATIVO"],
-    "COTEC": [
-        "LT_01",
-        "LT_06",
-        "LT_07",
-        "LT_11",
-        "LT_12",
-        "LT_13",
-        "LT_16",
-        "LT_19",
-        "LT_20",
-        "LT_21",
-        "LT_22",
-        "LT_23",
-        "LT_24",
-        "LT_25",
-        "LT_26",
-        "LT_27",
-        "LT_28",
-        "LT_29",
-        "LT_30",
-        "LT_31",
-        "LT_32",
-        "LT_33",
-        "LT_34",
-    ],
-    "COREG": ["REGULATÓRIO"],
+    "COPLER": ["PLEITOS_DESEQUILÍBRIO",],
+    "CORER": ["REGULATÓRIO_CONTRATUAL"],
     "COFOR": [
         "EQUIPAMENTOS_COFOR",
         "OPERAÇÕES",
@@ -453,7 +412,6 @@ EQUIPES_POR_COORDENADORIA = {
     "COFEX": ["CONSERVAÇÃO", "CRONOGRAMA"],
     "COINT": ["ACESSOS", "FAIXA_DE_DOMINIO", "GEOMETRIA", "TRAFEGO", "SINALIZAÇÃO_E_SEGURANÇA_VIARIA"],
     "COPRO": ["DRENAGEM", "PAVIMENTO", "OAE", "EQUIPAMENTOS_COPRO", "GEOTECNIA"],
-    "GEENG_ADM": ["ADM"],
 }
 RESPONSAVEIS_POR_EQUIPE = {
     "EQUIPAMENTOS_COFOR": ["MARCILIO", "BRUNO", "FABRICIO", "JOSÉ TAVARES"],
@@ -2278,7 +2236,7 @@ def contexto_global():
             if gerencias_usuario
             else (
                 normalizar_gerencia(current_user.gerencia_padrao or "", permitir_entrada=True)
-                or "GABINETE"
+                or GERENCIA_PADRAO
             )
         )
         filtro_meus_processos = [
@@ -2931,6 +2889,8 @@ def nome_exibicao_gerencia(valor: Optional[object]) -> Optional[str]:
         )
         if parte_upper in {"GABINETE", "ASSESSORIA", "ASSESSORIA TECNICA", "ACESSORIA TECNICA"}:
             partes_formatadas.append(GERENCIA_ALIAS_GABINETE)
+        elif parte_upper == "GEPLAN":
+            partes_formatadas.append("GEPER")
         else:
             partes_formatadas.append(parte)
     if "->" in texto:
@@ -3388,11 +3348,16 @@ def normalizar_gerencia(valor, *, permitir_entrada: bool = False) -> Optional[st
     if ascii_nome == "SAIDA":
         return "SAIDA"
 
-    # Captura tokens ou ocorrencias dentro do texto (ex.: "GEPLAN - DOP", "Equipe GEDEX")
+    if ascii_nome in {"GEPLAN", "GEPER"}:
+        return "GEPER"
+
+    # Captura tokens ou ocorrencias dentro do texto (ex.: "GEPER - DOP", "Equipe GEDEX")
     tokens = [t for t in re.split(r"[^A-Z0-9]+", ascii_nome) if t]
     for token in tokens:
         if token == "ENTRADA":
             return "ENTRADA" if permitir_entrada else GERENCIA_PADRAO
+        if token == "GEPLAN":
+            return "GEPER"
         if token in GERENCIAS_DESTINOS:
             return token
 
@@ -3667,7 +3632,7 @@ def data_entrada_na_gerencia(processo: "Processo", gerencia: Optional[str]) -> O
 
 
 def ordenar_gerencias_preferencial(origem: List[str]) -> List[str]:
-    """Ordena gerencias na ordem visual padrao: GABINETE, GEENG, GEPLAN, GEDEX, GEFOR."""
+    """Ordena gerencias na ordem visual padrao: GABINETE, GEPER, GEDEX, GEFOR."""
     vistos = set()
     unicas: List[str] = []
     for nome in origem:
@@ -4914,7 +4879,7 @@ def index():
                 if gerencias_usuario
                 else (
                     normalizar_gerencia(current_user.gerencia_padrao or "", permitir_entrada=True)
-                    or "GABINETE"
+                    or GERENCIA_PADRAO
                 )
             )
             filtro_meus_processos = [
@@ -5003,7 +4968,7 @@ def api_atualizacoes_painel():
             if gerencias_usuario
             else (
                 normalizar_gerencia(current_user.gerencia_padrao or "", permitir_entrada=True)
-                or "GABINETE"
+                or GERENCIA_PADRAO
             )
         )
         filtro_meus_processos = [
@@ -6455,7 +6420,7 @@ def gerencia(nome_gerencia):
                 if gerencias_usuario
                 else (
                     normalizar_gerencia(current_user.gerencia_padrao or "", permitir_entrada=True)
-                    or "GABINETE"
+                    or GERENCIA_PADRAO
                 )
             )
             filtro_meus_processos = [

@@ -1554,13 +1554,7 @@ body {
     color: #b45309;
 }
 
-#tabelaProcessos td:nth-child(4) .gerencia-node[data-gerencia="GEENG"] {
-    background: #ecfeff;
-    border-color: #67e8f9;
-    color: #0e7490;
-}
-
-#tabelaProcessos td:nth-child(4) .gerencia-node[data-gerencia="GEPLAN"] {
+#tabelaProcessos td:nth-child(4) .gerencia-node[data-gerencia="GEPER"] {
     background: #dcfce7;
     border-color: #86efac;
     color: #15803d;
